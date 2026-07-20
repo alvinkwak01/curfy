@@ -1,31 +1,33 @@
-import { StyleSheet } from 'react-native';
+import { Colors } from '@/constants/colors';
+import { Fonts } from '@/constants/fonts';
+import { useAppStore } from '@/store/useAppStore';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
-import EditScreenInfo from '@/components/EditScreenInfo';
-import { Text, View } from '@/components/Themed';
+export default function SyndicateHome() {
+  const { streak, name } = useAppStore();
 
-export default function TabOneScreen() {
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Tab One</Text>
-      <View style={styles.separator} lightColor="#eee" darkColor="rgba(255,255,255,0.1)" />
-      <EditScreenInfo path="app/(tabs)/index.tsx" />
+      <Text style={styles.eye}>SYNDICATE ALPHA</Text>
+      <Text style={styles.welcome}>Welcome back, {name || 'Seeker'}</Text>
+      
+      <View style={styles.pulseCard}>
+        <Text style={styles.streakNum}>{streak}</Text>
+        <Text style={styles.streakLabel}>DAYS OF DISCIPLINE</Text>
+      </View>
+
+      <Text style={styles.status}>Next Lock: 11:30 PM</Text>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-  },
-  separator: {
-    marginVertical: 30,
-    height: 1,
-    width: '80%',
-  },
+  container: { flex: 1, backgroundColor: '#000', alignItems: 'center', justifyContent: 'center' },
+  eye: { fontFamily: Fonts.jakartaExtraBold, color: Colors.amber, fontSize: 12, letterSpacing: 2, marginBottom: 10 },
+  welcome: { fontFamily: Fonts.frauncesBold, color: '#fff', fontSize: 24 },
+  pulseCard: { marginVertical: 40, alignItems: 'center' },
+  streakNum: { fontFamily: Fonts.frauncesBold, color: Colors.amber, fontSize: 120 },
+  streakLabel: { fontFamily: Fonts.jakartaBold, color: '#444', fontSize: 14, letterSpacing: 1 },
+  status: { color: '#888', fontFamily: Fonts.jakarta }
 });
