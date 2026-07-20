@@ -1,24 +1,60 @@
-import { Colors, Fonts } from '@/constants/colors';
-import React from 'react';
-import { StyleSheet, Text, TouchableOpacity } from 'react-native';
+import React from "react";
+import {
+  ActivityIndicator,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  ViewStyle,
+} from "react-native";
+import { Colors, Fonts } from "@/constants/theme";
 
-export default function Btn({ label, onPress, variant = 'primary', disabled = false, style }: any) {
+interface BtnProps {
+  label: string;
+  onPress: () => void;
+  disabled?: boolean;
+  loading?: boolean;
+  style?: StyleProp<ViewStyle>;
+}
+
+export default function Btn({ label, onPress, disabled = false, loading = false, style }: BtnProps) {
+  const isDisabled = disabled || loading;
   return (
-    <TouchableOpacity 
-      style={[styles.btn, variant === 'amber' && styles.amber, disabled && styles.disabled, style]} 
+    <TouchableOpacity
+      style={[styles.btn, isDisabled && styles.disabled, style]}
       onPress={onPress}
-      disabled={disabled}
+      disabled={isDisabled}
       activeOpacity={0.8}
     >
-      <Text style={[styles.txt, variant === 'amber' && styles.amberTxt]}>{label}</Text>
+      {loading ? (
+        <ActivityIndicator color={Colors.background} />
+      ) : (
+        <Text style={[styles.txt, isDisabled && styles.disabledTxt]}>{label}</Text>
+      )}
     </TouchableOpacity>
   );
 }
 
 const styles = StyleSheet.create({
-  btn: { backgroundColor: Colors.card, borderWidth: 1.5, borderColor: Colors.border, borderRadius: 100, paddingVertical: 18, alignItems: 'center' },
-  amber: { backgroundColor: Colors.amber, borderColor: Colors.amber },
-  disabled: { opacity: 0.5 },
-  txt: { fontFamily: Fonts.jakartaBold, fontSize: 16, color: Colors.t },
-  amberTxt: { color: '#fff' }
+  btn: {
+    backgroundColor: Colors.primaryCyan,
+    borderRadius: 14,
+    paddingVertical: 18,
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
+  },
+  disabled: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  txt: {
+    fontFamily: Fonts.bold,
+    fontSize: 16,
+    color: "#000814",
+  },
+  disabledTxt: {
+    color: Colors.textGhost,
+  },
 });

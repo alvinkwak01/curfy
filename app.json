@@ -1,17 +1,17 @@
 {
   "expo": {
-    "name": "Hypnos",
+    "name": "DUSK",
     "slug": "Hypnos",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "hypnos",
-    "userInterfaceStyle": "automatic",
+    "scheme": "dusk",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#080810"
     },
     "ios": {
       "supportsTablet": true
@@ -31,7 +31,8 @@
     },
     "plugins": [
       "expo-router",
-      "expo-font"
+      "expo-font",
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true
