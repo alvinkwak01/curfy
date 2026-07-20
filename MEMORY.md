@@ -61,3 +61,19 @@ Running log of what happened each session, in order. This is history — for cur
   ```
 - Wire the blue-moon logo into `assets/images/icon.png` etc. once confirmed as final.
 - Final public app name still open (see `CONTEXT.md` §5) — not blocking.
+
+**Update, same day:** user ran all three commands successfully, launched the app, and saw it for the first time. Feedback: remove the Lumi owl mascot entirely — both the visual character and the name/personality from all copy, not just the graphic. Confirmed via a clarifying question (user chose "remove entirely" over "keep the voice, drop the picture").
+
+Removed in this pass:
+- `components/Mascot.tsx` no longer imported anywhere (Home, LockScreen, onboarding). File itself still exists on disk — **add to the next local cleanup command**: `rm -f components/Mascot.tsx`.
+- Onboarding reduced from 5 steps to 4 — the "Meet Lumi" step is gone entirely, not replaced.
+- All "Lumi"-referencing copy rewritten in `context/SleepContext.tsx` (notification titles/bodies, morning summary messages), `components/LockScreen.tsx` (streak message), `app/(tabs)/index.tsx` (countdown/mood text), `components/HoldButton.tsx` (one stage-4 guilt message), `app/onboarding.tsx` (bedtime step and name step hero text).
+- Ran `tsc --noEmit` after the edits (with the user's now-installed packages and post-cleanup file tree visible through the mount): **zero errors.**
+
+Next local command to run:
+```
+cd ~/Documents/Hypnos
+rm -f components/Mascot.tsx
+git add -A && git commit -m "Remove Lumi mascot and all references"
+```
+Then relaunch and confirm the Home and Lock screens look right without the character, and that onboarding flows correctly through 4 steps instead of 5.

@@ -6,9 +6,11 @@ This file is the source of truth for what this app is and where it stands. Read 
 
 ## 1. Product
 
-**Name:** DUSK. Mascot: **Lumi**, a small owl-like sleep guardian. Tagline: "Bedtime. For real."
+**Name:** DUSK. No mascot character. Tagline: "Bedtime. For real."
 
-**One-liner:** A bedtime-only phone lock. At your set bedtime, the phone locks behind a 120-second hold button that resets if you move or let go. Lumi (the mascot) guilt-trips you the whole time with escalating, increasingly unhinged commentary. It tracks a nightly streak, rates each night (Flawless / Slipped once / Tried hard / Chaotic), and sends a morning "report card" notification.
+**One-liner:** A bedtime-only phone lock. At your set bedtime, the phone locks behind a 120-second hold button that resets if you move or let go. The app guilt-trips you the whole time with escalating, increasingly unhinged commentary — no named character, just the app's voice. It tracks a nightly streak, rates each night (Flawless / Slipped once / Tried hard / Chaotic), and sends a morning "report card" notification.
+
+**2026-07-20, later in the same session:** the user saw the app running and asked to remove the "Lumi" owl mascot entirely — both the visual character and the name/personality from all copy. This reverses a core piece of the original blueprint (the mascot was a named, deliberate part of the spec), so it's called out here explicitly: **do not reintroduce "Lumi" or a mascot character without the user asking for it.** `components/Mascot.tsx` still exists on disk but is now unused/orphaned everywhere — nothing imports it. It's on the cleanup list in `MEMORY.md`.
 
 **This supersedes the earlier "Hypnos/Syndicate" direction** (amber palette, Fraunces/Jakarta fonts, "Enter the Syndicate" copy) that was sitting in this project folder. That was an earlier, abandoned experiment from April 2026. DUSK is a separate, later, far more fully-designed concept from May 2026 that the user explicitly wants back — see `MEMORY.md` Session 2 for how this was discovered.
 

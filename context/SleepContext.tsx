@@ -93,14 +93,14 @@ async function sendMorningSummary(
 
     if (streak >= 30 && escapes === 0) {
       title = `${streak} nights. Legendary.`;
-      body = `Flawless night, ${name}. Lumi has nothing left to say.`;
+      body = `Flawless night, ${name}. There's nothing left to say.`;
     } else if (streak >= 7 && escapes === 0) {
       title = "Last night's verdict: Flawless.";
-      body = `${streak}-night streak. Not a single escape. Lumi is genuinely impressed.`;
+      body = `${streak}-night streak. Not a single escape. Genuinely impressive.`;
     } else if (escapes === 0) {
       title = "Clean night.";
       body = streak > 1
-        ? `${streak}-night streak and counting, ${name}. Lumi is proud.`
+        ? `${streak}-night streak and counting, ${name}.`
         : `First clean night, ${name}. That's how it starts.`;
     } else if (escapes === 1) {
       title = "One slip. Still standing.";
@@ -110,13 +110,13 @@ async function sendMorningSummary(
     } else if (escapes === 2) {
       title = "Twice. Really.";
       body = streak > 0
-        ? `${streak}-night streak lives — barely. Lumi is watching closer tonight.`
-        : `Two escapes. No streak. Lumi is disappointed but not surprised.`;
+        ? `${streak}-night streak lives — barely. Someone's watching closer tonight.`
+        : `Two escapes. No streak. Disappointing, but not surprising.`;
     } else {
       title = `${escapes} escapes. Chaotic.`;
       body = streak > 0
         ? `${streak}-night streak somehow survives. How, ${name}? How.`
-        : `No streak. ${escapes} escapes. Lumi filed a formal complaint.`;
+        : `No streak. ${escapes} escapes. A formal complaint has been filed.`;
     }
 
     await Notifications.scheduleNotificationAsync({
@@ -147,7 +147,7 @@ async function scheduleBedtimeNotifications(bedtime: string) {
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "Lumi says goodnight soon",
+        title: "Bedtime soon",
         body: "Your bedtime is in 10 minutes. Finish up.",
         sound: true,
       },
@@ -161,7 +161,7 @@ async function scheduleBedtimeNotifications(bedtime: string) {
     await Notifications.scheduleNotificationAsync({
       content: {
         title: "DUSK activates in 2 minutes",
-        body: "Lumi is watching. Wrap it up.",
+        body: "Wrap it up. Lockdown starts soon.",
         sound: true,
       },
       trigger: {

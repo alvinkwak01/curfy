@@ -60,7 +60,7 @@ const GUILT_MESSAGES: string[][] = [
     "Genuinely impressive commitment to a bad decision.",
     "You've now spent longer trying to unlock this than most naps.",
     "Legend has it, some people just... go to sleep.",
-    "Lumi respects the dedication. Lumi does not approve.",
+    "This level of commitment deserves applause. And an intervention.",
     "Almost there. Whatever 'there' is supposed to accomplish.",
   ],
 ];

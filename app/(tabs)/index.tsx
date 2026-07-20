@@ -1,4 +1,3 @@
-import { Mascot } from "@/components/Mascot";
 import { StarBackground } from "@/components/StarBackground";
 import { Colors, Fonts } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
@@ -54,7 +53,7 @@ function getMilestoneBadge(streak: number): { label: string; color: string } | n
 function getMoodMessage(streak: number, unlocks: number): string {
   if (unlocks > 0) return `You unlocked ${unlocks}x tonight. Don't push it.`;
   if (streak > 3) return `${streak}-night streak. Don't ruin it now.`;
-  return "Tonight's the night. Lumi's ready.";
+  return "Tonight's the night.";
 }
 
 export default function Home() {
@@ -72,7 +71,6 @@ export default function Home() {
   const isImminent = minsLeft <= 2;
 
   const milestone = getMilestoneBadge(streak);
-  const mood = todayUnlocks > 2 ? "stern" : streak > 3 ? "happy" : "sleepy";
 
   const totalNights = sleepLog.length;
   const cleanNights = sleepLog.filter((e) => e.unlockAttempts === 0).length;
@@ -107,7 +105,7 @@ export default function Home() {
           >
             <Text style={[styles.countdownText, isUrgent && styles.countdownUrgentText]}>
               {isImminent
-                ? "Lumi activates NOW"
+                ? "Lockdown starts NOW"
                 : isUrgent
                 ? `${minsLeft}m until lockdown`
                 : `${hours}h ${mins}m until bedtime`}
@@ -115,8 +113,7 @@ export default function Home() {
           </View>
         </Animated.View>
 
-        <Animated.View entering={FadeInDown.duration(500).delay(200)} style={styles.mascotSection}>
-          <Mascot size={100} mood={mood} animate />
+        <Animated.View entering={FadeInDown.duration(500).delay(200)} style={styles.messageSection}>
           <Text style={styles.moodMessage}>{getMoodMessage(streak, todayUnlocks)}</Text>
         </Animated.View>
 
@@ -212,7 +209,7 @@ const styles = StyleSheet.create({
   },
   countdownText: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular },
   countdownUrgentText: { color: Colors.dangerRed },
-  mascotSection: { alignItems: "center", gap: 10 },
+  messageSection: { alignItems: "center", gap: 10 },
   moodMessage: {
     color: Colors.textMuted,
     fontSize: 14,

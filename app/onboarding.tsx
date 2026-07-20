@@ -1,5 +1,4 @@
 import Btn from "@/components/Btn";
-import { Mascot } from "@/components/Mascot";
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
 import { Colors, Fonts } from "@/constants/theme";
@@ -16,7 +15,7 @@ import {
 import Animated, { SlideInRight, SlideOutLeft } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const STEP_COUNT = 5;
+const STEP_COUNT = 4;
 
 function ProgressDots({ step }: { step: number }) {
   return (
@@ -75,11 +74,10 @@ export default function Onboarding() {
         >
           {step === 0 && <StepWakeUpCall />}
           {step === 1 && <StepHowItWorks />}
-          {step === 2 && <StepMeetLumi />}
-          {step === 3 && (
+          {step === 2 && (
             <StepSetBedtime bedtime={localBedtime} onChange={setLocalBedtime} />
           )}
-          {step === 4 && <StepName name={name} onChange={setName} />}
+          {step === 3 && <StepName name={name} onChange={setName} />}
         </Animated.View>
 
         <View style={styles.btnWrap}>
@@ -150,30 +148,12 @@ function StepHowItWorks() {
   );
 }
 
-function StepMeetLumi() {
-  return (
-    <View style={[styles.stepInner, { alignItems: "center" }]}>
-      <Badge>MEET YOUR GUARDIAN</Badge>
-      <Text style={[styles.hero, { textAlign: "center" }]}>Meet Lumi.</Text>
-      <Mascot size={120} mood="happy" animate />
-      <Text style={[styles.body, { textAlign: "center" }]}>
-        Lumi is your sleep guardian. Gentle until bedtime. Unyielding after
-        it. Lumi doesn't negotiate, doesn't snooze, and keeps score.
-      </Text>
-      <Text style={styles.quote}>
-        "Sleep is the ultimate flex. I'm here to help you earn it."
-      </Text>
-      <Text style={styles.attribution}>— Lumi, probably</Text>
-    </View>
-  );
-}
-
 function StepSetBedtime({ bedtime, onChange }: { bedtime: string; onChange: (v: string) => void }) {
   return (
     <View style={[styles.stepInner, { alignItems: "center" }]}>
       <Badge>SET YOUR BEDTIME</Badge>
       <Text style={[styles.hero, { textAlign: "center" }]}>
-        What time{"\n"}should Lumi{"\n"}show up?
+        What time{"\n"}does the{"\n"}lock kick in?
       </Text>
       <Text style={[styles.body, { textAlign: "center" }]}>
         Be honest. Pick a time you know you should actually be asleep.
@@ -193,10 +173,10 @@ function StepName({ name, onChange }: { name: string; onChange: (v: string) => v
     <View style={[styles.stepInner, { alignItems: "center" }]}>
       <Badge>ALMOST READY</Badge>
       <Text style={[styles.hero, { textAlign: "center" }]}>
-        What should{"\n"}Lumi call you?
+        What should{"\n"}we call you?
       </Text>
       <Text style={[styles.body, { textAlign: "center" }]}>
-        For your personal sleep log. Keep it honest — Lumi will use it.
+        For your personal sleep log. Keep it honest.
       </Text>
       <TextInput
         style={styles.nameInput}

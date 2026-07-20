@@ -8,7 +8,6 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { HoldButton } from "@/components/HoldButton";
-import { Mascot } from "@/components/Mascot";
 import { StarBackground } from "@/components/StarBackground";
 import { Colors, Fonts } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
@@ -33,7 +32,7 @@ function getStreakMessage(streak: number, unlocks: number): string {
   if (unlocks > 2) return `${streak}-night streak and you've already escaped. Disgusting.`;
   if (unlocks > 0) return `${streak}-night streak. You slipped once. Don't make it worse.`;
   if (streak >= 30) return `${streak} nights. You've ascended. Don't be stupid now.`;
-  if (streak >= 14) return `${streak}-night streak. Lumi is genuinely proud.`;
+  if (streak >= 14) return `${streak}-night streak. Genuinely impressive.`;
   if (streak >= 7) return `${streak} nights straight. You're actually doing it.`;
   if (streak >= 3) return `${streak}-night streak. Don't ruin it now.`;
   if (streak === 1) return "One night down. Let's make it two.";
@@ -91,12 +90,7 @@ export function LockScreen() {
         <Text style={styles.date}>{formatDate(now)}</Text>
       </View>
 
-      <View style={styles.mascotSection}>
-        <Mascot
-          size={100}
-          mood={todayUnlocks > 1 ? "stern" : streak >= 7 ? "happy" : "sleepy"}
-          animate
-        />
+      <View style={styles.messageSection}>
         <Text style={styles.streakMessage}>{streakMsg}</Text>
       </View>
 
@@ -183,7 +177,7 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     letterSpacing: 0.3,
   },
-  mascotSection: {
+  messageSection: {
     alignItems: "center",
     gap: 12,
     paddingHorizontal: 20,
