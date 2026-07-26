@@ -28,6 +28,10 @@ yarn-error.*
 
 # macOS
 .DS_Store
+
+# environment (real Supabase keys — see .env.example)
+.env
+.env.local
 *.pem
 
 # local env files

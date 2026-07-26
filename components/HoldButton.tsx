@@ -25,43 +25,43 @@ const AnimatedCircle = Animated.createAnimatedComponent(Circle);
 const GUILT_MESSAGES: string[][] = [
   // Stage 1 (0–25%): mild
   [
-    "Your pillow is literally RIGHT THERE.",
-    "The algorithm noticed. It thinks you're sad.",
-    "This could've been a nap by now.",
-    "Somewhere, a sleep scientist just felt a disturbance.",
-    "Your future self is drafting a complaint.",
-    "This is the longest two minutes of your evening. On purpose.",
-    "Tomorrow-you is watching this happen in real time.",
+    "Are you sure about this?",
+    "Wow. Still going.",
+    "That's a choice.",
+    "This is really happening, huh.",
+    "No rush. It's only your sleep schedule.",
+    "Bold of you.",
+    "Interesting decision so far.",
   ],
-  // Stage 2 (25–50%): sharper
+  // Stage 2 (25–50%): sharper, dry, more pointed
   [
-    "Your sleep debt is compounding faster than your savings.",
-    "Fun fact: you're 23% less attractive sleep-deprived.",
-    "This is the part where most people just put the phone down.",
-    "Your under-eye bags called. They'd like a word.",
-    "Every scroll tonight is a withdrawal from tomorrow's focus.",
-    "You could've been asleep for one of these attempts already.",
-    "Statistically, you're not going to read anything important right now.",
+    "You look ridiculous right now...",
+    "Really committing to this, huh.",
+    "Your thumb's dedicated. Everything else, less so.",
+    "This is the hill?",
+    "Cool. Cool cool cool.",
+    "Impressive persistence. Wrong direction, though.",
+    "Still holding. Still a bad idea.",
   ],
-  // Stage 3 (50–75%): dark
+  // Stage 3 (50–75%): direct commands, the mask drops
   [
-    "Your 8-year-old self would be disappointed.",
-    "Your immune system just started a GoFundMe.",
-    "This is the effort you're not putting into your sleep schedule.",
-    "Somewhere a cortisol graph just spiked.",
-    "You are actively choosing this over rest. Bold.",
-    "Your skin is filing this under 'reasons we look tired.'",
-    "At this rate you'll unlock right as you should be dreaming.",
+    "Just go to sleep.",
+    "Let's see some discipline.",
+    "Put the phone down.",
+    "You know better than this.",
+    "This ends now.",
+    "Enough.",
+    "Seriously. Stop.",
   ],
-  // Stage 4 (75–100%): unhinged respect
+  // Stage 4 (75–100%): last stretch, grudging acknowledgment, still not approving
   [
-    "At this point you're just running an experiment.",
-    "This is your villain origin story.",
-    "Genuinely impressive commitment to a bad decision.",
-    "You've now spent longer trying to unlock this than most naps.",
-    "Legend has it, some people just... go to sleep.",
-    "This level of commitment deserves applause. And an intervention.",
-    "Almost there. Whatever 'there' is supposed to accomplish.",
+    "Last chance to make a better choice.",
+    "You're about to win. Nobody's impressed.",
+    "This is the effort that could've been sleep.",
+    "Almost unlocked. Still a mistake.",
+    "Fine. Have it your way.",
+    "You really are doing this.",
+    "Your call. Not a good one.",
   ],
 ];
 
@@ -101,7 +101,10 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
   };
 
   const scheduleNextMessage = () => {
-    const delay = 3000 + Math.random() * 4000;
+    // Deliberately slow — this should feel like someone occasionally
+    // muttering a judgment, not a stream of one-liners. ~6-9 messages
+    // over the full 120s hold, not 20+.
+    const delay = 12000 + Math.random() * 8000;
     messageTimeoutRef.current = setTimeout(() => {
       setMessage(pickMessage(currentProgress()));
       scheduleNextMessage();

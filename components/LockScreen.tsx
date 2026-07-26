@@ -27,14 +27,14 @@ function formatDate(date: Date): string {
 }
 
 function getStreakMessage(streak: number, unlocks: number): string {
-  if (streak === 0 && unlocks === 0) return "First night. Make it count.";
-  if (streak === 0 && unlocks > 0) return "You broke your streak. Start over tonight.";
-  if (unlocks > 2) return `${streak}-night streak and you've already escaped. Disgusting.`;
-  if (unlocks > 0) return `${streak}-night streak. You slipped once. Don't make it worse.`;
-  if (streak >= 30) return `${streak} nights. You've ascended. Don't be stupid now.`;
-  if (streak >= 14) return `${streak}-night streak. Genuinely impressive.`;
+  if (streak === 0 && unlocks === 0) return "First night. Let's see what you've got.";
+  if (streak === 0 && unlocks > 0) return "You broke your streak. Start over. Actually try this time.";
+  if (unlocks > 2) return `${streak}-night streak and you've already escaped tonight. Wow.`;
+  if (unlocks > 0) return `${streak}-night streak. You slipped once. Don't make me say something.`;
+  if (streak >= 30) return `${streak} nights. Genuinely impressive. Don't blow it now.`;
+  if (streak >= 14) return `${streak}-night streak. Okay. I see you.`;
   if (streak >= 7) return `${streak} nights straight. You're actually doing it.`;
-  if (streak >= 3) return `${streak}-night streak. Don't ruin it now.`;
+  if (streak >= 3) return `${streak}-night streak. Don't get comfortable.`;
   if (streak === 1) return "One night down. Let's make it two.";
   return `${streak}-night streak. Hold the line.`;
 }
@@ -72,7 +72,7 @@ export function LockScreen() {
       <View style={styles.header}>
         <View style={styles.topBar}>
           <View>
-            <Text style={styles.appName}>DUSK</Text>
+            <Text style={styles.appName}>CURFY</Text>
             <Text style={styles.tagline}>Bedtime. For real.</Text>
           </View>
           {streak > 0 && (

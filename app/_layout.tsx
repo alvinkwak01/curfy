@@ -14,6 +14,7 @@ import "react-native-reanimated";
 
 import { LockScreen } from "@/components/LockScreen";
 import { Colors } from "@/constants/theme";
+import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { SleepProvider, useSleep } from "@/context/SleepContext";
 import Onboarding from "./onboarding";
 
@@ -48,10 +49,30 @@ export default function RootLayout() {
   }
 
   return (
-    <SleepProvider>
-      <RootLayoutNav />
-    </SleepProvider>
+    <AuthProvider>
+      <SleepProvider>
+        <StreakSync />
+        <RootLayoutNav />
+      </SleepProvider>
+    </AuthProvider>
   );
+}
+
+// Keeps each signed-in user's `profiles` row current (bedtime + both
+// streak numbers) so the global leaderboard and community bedtime chart
+// reflect reality without either screen having to know when something
+// changed. Renders nothing — it only needs both contexts in scope, which
+// requires it to sit inside both providers (see above).
+function StreakSync() {
+  const { bedtime, streak, longestStreak } = useSleep();
+  const { isSignedIn, syncProfile } = useAuth();
+
+  useEffect(() => {
+    if (!isSignedIn) return;
+    syncProfile(bedtime, streak, longestStreak);
+  }, [isSignedIn, bedtime, streak, longestStreak, syncProfile]);
+
+  return null;
 }
 
 function RootLayoutNav() {
@@ -79,6 +100,10 @@ function RootLayoutNav() {
         <Stack.Screen
           name="settings"
           options={{ presentation: "modal", headerShown: false }}
+        />
+        <Stack.Screen
+          name="preview-lock"
+          options={{ presentation: "fullScreenModal", headerShown: false }}
         />
       </Stack>
 

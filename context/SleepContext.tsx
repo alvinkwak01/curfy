@@ -9,6 +9,7 @@ import React, {
   useState,
 } from "react";
 import { AppState, Platform } from "react-native";
+import { useAuth } from "./AuthContext";
 
 const BEDTIME_KEY = "@dusk/bedtime";
 const USERNAME_KEY = "@dusk/username";
@@ -17,6 +18,22 @@ const SLEEP_LOG_KEY = "@dusk/sleep_log";
 const COOLDOWN_KEY = "@dusk/unlock_cooldown";
 const TODAY_UNLOCKS_KEY = "@dusk/today_unlocks";
 const MORNING_SENT_KEY = "@dusk/morning_sent_date";
+const MOTIVATION_KEY = "@dusk/motivation";
+const LONGEST_STREAK_KEY = "@dusk/longest_streak";
+
+// All keys wiped by deleteAccount(). Keep this in sync when adding new
+// persisted fields, or Delete Account will silently leave data behind.
+const ALL_STORAGE_KEYS = [
+  BEDTIME_KEY,
+  USERNAME_KEY,
+  ONBOARDING_KEY,
+  SLEEP_LOG_KEY,
+  COOLDOWN_KEY,
+  TODAY_UNLOCKS_KEY,
+  MORNING_SENT_KEY,
+  MOTIVATION_KEY,
+  LONGEST_STREAK_KEY,
+];
 
 export interface SleepEntry {
   id: string;
@@ -32,6 +49,8 @@ interface SleepContextType {
   setBedtime: (time: string) => Promise<void>;
   userName: string;
   setUserName: (name: string) => Promise<void>;
+  motivation: string;
+  setMotivation: (note: string) => Promise<void>;
   isOnboardingComplete: boolean;
   completeOnboarding: () => Promise<void>;
   sleepLog: SleepEntry[];
@@ -40,7 +59,17 @@ interface SleepContextType {
   unlockScreen: () => void;
   todayUnlocks: number;
   streak: number;
+  // Highest streak ever reached, independent of the current one — this is
+  // what backs the "All-Time Best" leaderboard sort. Never decreases,
+  // including when the current streak breaks.
+  longestStreak: number;
   isLoading: boolean;
+  // No real account system yet (see CONTEXT.md — local-only, no backend).
+  // signOut() re-triggers onboarding but keeps sleep history intact —
+  // it's the closest local equivalent until real sign-in exists.
+  signOut: () => Promise<void>;
+  // deleteAccount() wipes every persisted field back to a blank install.
+  deleteAccount: () => Promise<void>;
 }
 
 const SleepContext = createContext<SleepContextType | null>(null);
@@ -93,10 +122,10 @@ async function sendMorningSummary(
 
     if (streak >= 30 && escapes === 0) {
       title = `${streak} nights. Legendary.`;
-      body = `Flawless night, ${name}. There's nothing left to say.`;
+      body = `Flawless night, ${name}. Actually impressive.`;
     } else if (streak >= 7 && escapes === 0) {
       title = "Last night's verdict: Flawless.";
-      body = `${streak}-night streak. Not a single escape. Genuinely impressive.`;
+      body = `${streak}-night streak. Not a single escape. Look at you.`;
     } else if (escapes === 0) {
       title = "Clean night.";
       body = streak > 1
@@ -105,18 +134,18 @@ async function sendMorningSummary(
     } else if (escapes === 1) {
       title = "One slip. Still standing.";
       body = streak > 0
-        ? `${streak}-night streak survives, ${name}. Don't make it a habit.`
-        : `You escaped once. No streak. Tonight's a fresh start, ${name}.`;
+        ? `${streak}-night streak survives, ${name}. Barely.`
+        : `You escaped once. No streak. Fresh start tonight, ${name}.`;
     } else if (escapes === 2) {
-      title = "Twice. Really.";
+      title = "Twice. Interesting choice.";
       body = streak > 0
-        ? `${streak}-night streak lives — barely. Someone's watching closer tonight.`
-        : `Two escapes. No streak. Disappointing, but not surprising.`;
+        ? `${streak}-night streak lives — barely. We need to talk.`
+        : `Two escapes. No streak. That's rough, ${name}.`;
     } else {
-      title = `${escapes} escapes. Chaotic.`;
+      title = `${escapes} escapes. Wow.`;
       body = streak > 0
         ? `${streak}-night streak somehow survives. How, ${name}? How.`
-        : `No streak. ${escapes} escapes. A formal complaint has been filed.`;
+        : `No streak. ${escapes} escapes. Let's regroup, ${name}.`;
     }
 
     await Notifications.scheduleNotificationAsync({
@@ -147,8 +176,8 @@ async function scheduleBedtimeNotifications(bedtime: string) {
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "Bedtime soon",
-        body: "Your bedtime is in 10 minutes. Finish up.",
+        title: "Bedtime in 10",
+        body: "Wrap it up. You know what's coming.",
         sound: true,
       },
       trigger: {
@@ -160,8 +189,8 @@ async function scheduleBedtimeNotifications(bedtime: string) {
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "DUSK activates in 2 minutes",
-        body: "Wrap it up. Lockdown starts soon.",
+        title: "Two minutes.",
+        body: "Last call. Go to sleep.",
         sound: true,
       },
       trigger: {
@@ -200,36 +229,78 @@ function todayDateString(): string {
   return new Date().toISOString().split("T")[0];
 }
 
+// Collapses duplicate same-date entries into one. These shouldn't get
+// created going forward (see the guard in checkLock() below), but this
+// cleans up any that already exist on a device from before that fix —
+// keeps the earliest createdAt (so date/streak math doesn't shift) and
+// the worst unlockAttempts count seen for that date (so a real escape
+// recorded on one duplicate isn't lost).
+function dedupeSleepLog(log: SleepEntry[]): SleepEntry[] {
+  const byDate = new Map<string, SleepEntry>();
+  for (const entry of log) {
+    const existing = byDate.get(entry.date);
+    if (!existing) {
+      byDate.set(entry.date, entry);
+      continue;
+    }
+    const unlockAttempts = Math.max(existing.unlockAttempts, entry.unlockAttempts);
+    byDate.set(entry.date, {
+      ...existing,
+      unlockAttempts,
+      onTime: unlockAttempts === 0,
+      createdAt: Math.min(existing.createdAt, entry.createdAt),
+    });
+  }
+  return Array.from(byDate.values()).sort((a, b) => b.createdAt - a.createdAt);
+}
+
 export function SleepProvider({ children }: { children: React.ReactNode }) {
   const [bedtime, setBedtimeState] = useState("23:00");
   const [userName, setUserNameState] = useState("Sleeper");
+  const [motivation, setMotivationState] = useState("");
   const [isOnboardingComplete, setIsOnboardingComplete] = useState(false);
   const [sleepLog, setSleepLog] = useState<SleepEntry[]>([]);
   const [isLocked, setIsLocked] = useState(false);
   const [todayUnlocks, setTodayUnlocks] = useState(0);
+  const [longestStreak, setLongestStreak] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const cooldownUntil = useRef<number>(0);
   const lockedToday = useRef(false);
   const sleepLogRef = useRef<SleepEntry[]>([]);
   const todayUnlocksRef = useRef(0);
   const userNameRef = useRef("Sleeper");
+  // AuthProvider must be an ancestor of SleepProvider (see app/_layout.tsx)
+  // so signOut() here can also end the real Supabase session, not just
+  // reset the local onboarding flag.
+  const { signOutRemote } = useAuth();
 
   useEffect(() => {
     (async () => {
-      const [bt, un, oc, sl, cd, tu] = await Promise.all([
+      const [bt, un, oc, sl, cd, tu, mo, ls] = await Promise.all([
         AsyncStorage.getItem(BEDTIME_KEY),
         AsyncStorage.getItem(USERNAME_KEY),
         AsyncStorage.getItem(ONBOARDING_KEY),
         AsyncStorage.getItem(SLEEP_LOG_KEY),
         AsyncStorage.getItem(COOLDOWN_KEY),
         AsyncStorage.getItem(TODAY_UNLOCKS_KEY),
+        AsyncStorage.getItem(MOTIVATION_KEY),
+        AsyncStorage.getItem(LONGEST_STREAK_KEY),
       ]);
       if (bt) setBedtimeState(bt);
       if (un) setUserNameState(un);
+      if (mo) setMotivationState(mo);
       if (oc === "true") setIsOnboardingComplete(true);
       if (sl) {
         try {
-          setSleepLog(JSON.parse(sl));
+          const parsed: SleepEntry[] = JSON.parse(sl);
+          const deduped = dedupeSleepLog(parsed);
+          setSleepLog(deduped);
+          // Self-heal: if this load found and merged duplicates, persist
+          // the cleaned version immediately so the corrupted data doesn't
+          // keep coming back on every future load.
+          if (deduped.length !== parsed.length) {
+            AsyncStorage.setItem(SLEEP_LOG_KEY, JSON.stringify(deduped));
+          }
         } catch (_) {}
       }
       if (cd) cooldownUntil.current = parseInt(cd, 10);
@@ -242,6 +313,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
           }
         } catch (_) {}
       }
+      if (ls) setLongestStreak(parseInt(ls, 10) || 0);
       setIsLoading(false);
     })();
   }, []);
@@ -258,11 +330,19 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     const inWindow = isInBedtimeWindow(bedtime);
     if (inWindow && !isLocked) {
       setIsLocked(true);
-      if (!lockedToday.current) {
+      const today = todayDateString();
+      // The persisted log is the real source of truth for "already
+      // logged tonight" — lockedToday is just an in-memory fast path.
+      // It resets to false on any JS restart (Expo Go reload, force-quit,
+      // dev fast-refresh) while still inside the bedtime window, which
+      // used to cause a duplicate entry for the same night. Checking the
+      // actual log closes that gap regardless of why the flag drifted.
+      const alreadyLoggedToday = sleepLogRef.current.some((e) => e.date === today);
+      if (!lockedToday.current && !alreadyLoggedToday) {
         lockedToday.current = true;
         const entry: SleepEntry = {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
-          date: todayDateString(),
+          date: today,
           targetBedtime: bedtime,
           unlockAttempts: 0,
           onTime: true,
@@ -273,6 +353,8 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
           AsyncStorage.setItem(SLEEP_LOG_KEY, JSON.stringify(updated));
           return updated;
         });
+      } else {
+        lockedToday.current = true;
       }
     } else if (!inWindow && isLocked) {
       setIsLocked(false);
@@ -306,6 +388,11 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   const setUserName = async (name: string) => {
     setUserNameState(name);
     await AsyncStorage.setItem(USERNAME_KEY, name);
+  };
+
+  const setMotivation = async (note: string) => {
+    setMotivationState(note);
+    await AsyncStorage.setItem(MOTIVATION_KEY, note);
   };
 
   const completeOnboarding = async () => {
@@ -346,7 +433,62 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     });
   }, [todayUnlocks]);
 
+  // Sends the user back through onboarding and ends the real Supabase
+  // session (if any), but deliberately does NOT touch bedtime, name,
+  // motivation, or the sleep log — that's local history, not account
+  // data, and it survives a sign-out the same way it would on a device
+  // that's never been signed in at all.
+  const signOut = async () => {
+    setIsLocked(false);
+    lockedToday.current = false;
+    setIsOnboardingComplete(false);
+    await AsyncStorage.setItem(ONBOARDING_KEY, "false");
+    try {
+      await signOutRemote();
+    } catch (_) {}
+    if (Platform.OS !== "web") {
+      try {
+        await Notifications.cancelAllScheduledNotificationsAsync();
+      } catch (_) {}
+    }
+  };
+
+  // Full local wipe. Deliberately does NOT delete the remote account or
+  // profile row — deleting a Supabase auth user requires an admin-level
+  // call that can't run from the client with just the anon key. Logged
+  // as a follow-up in CONTEXT.md rather than silently left out.
+  const deleteAccount = async () => {
+    setIsLocked(false);
+    lockedToday.current = false;
+    cooldownUntil.current = 0;
+    setBedtimeState("23:00");
+    setUserNameState("Sleeper");
+    setMotivationState("");
+    setIsOnboardingComplete(false);
+    setSleepLog([]);
+    setTodayUnlocks(0);
+    setLongestStreak(0);
+    await AsyncStorage.multiRemove(ALL_STORAGE_KEYS);
+    try {
+      await signOutRemote();
+    } catch (_) {}
+    if (Platform.OS !== "web") {
+      try {
+        await Notifications.cancelAllScheduledNotificationsAsync();
+      } catch (_) {}
+    }
+  };
+
   const streak = computeStreak(sleepLog);
+
+  // Longest-ever streak never decreases, even when the current one
+  // breaks — this is what the "All-Time Best" leaderboard sorts on.
+  useEffect(() => {
+    if (streak > longestStreak) {
+      setLongestStreak(streak);
+      AsyncStorage.setItem(LONGEST_STREAK_KEY, streak.toString());
+    }
+  }, [streak, longestStreak]);
 
   return (
     <SleepContext.Provider
@@ -355,6 +497,8 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
         setBedtime,
         userName,
         setUserName,
+        motivation,
+        setMotivation,
         isOnboardingComplete,
         completeOnboarding,
         sleepLog,
@@ -363,7 +507,10 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
         unlockScreen,
         todayUnlocks,
         streak,
+        longestStreak,
         isLoading,
+        signOut,
+        deleteAccount,
       }}
     >
       {children}

@@ -13,6 +13,7 @@ import {
   View,
 } from "react-native";
 import Animated, { FadeIn, FadeInDown } from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 function getGreeting(name: string): string {
   const hour = new Date().getHours();
@@ -51,9 +52,9 @@ function getMilestoneBadge(streak: number): { label: string; color: string } | n
 }
 
 function getMoodMessage(streak: number, unlocks: number): string {
-  if (unlocks > 0) return `You unlocked ${unlocks}x tonight. Don't push it.`;
+  if (unlocks > 0) return `You've unlocked ${unlocks}x tonight. No judgment. Well — some judgment.`;
   if (streak > 3) return `${streak}-night streak. Don't ruin it now.`;
-  return "Tonight's the night.";
+  return "Tonight's the night. Assuming you're serious this time.";
 }
 
 export default function Home() {
@@ -77,7 +78,7 @@ export default function Home() {
   const totalEscapes = sleepLog.reduce((sum, e) => sum + e.unlockAttempts, 0);
 
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={["top"]}>
       <StarBackground />
       <ScrollView contentContainerStyle={styles.scroll}>
         <Animated.View entering={FadeIn.duration(600)} style={styles.headerRow}>
@@ -180,7 +181,7 @@ export default function Home() {
           </Animated.View>
         )}
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
