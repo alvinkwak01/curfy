@@ -87,7 +87,7 @@
                   }
                 },
                 {
-                  "bundleIdentifier": "com.alvinkwak.curfy.ActivityMonitorExtension",
+                  "bundleIdentifier": "com.alvinkwak.curfy.ActivityMonitor",
                   "targetName": "ActivityMonitorExtension",
                   "entitlements": {
                     "com.apple.developer.family-controls": true,
