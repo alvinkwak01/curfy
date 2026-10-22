@@ -42,11 +42,7 @@ public final class CurfyScreenTimeModule: Module {
             switch result {
             case .success(let tokens):
               curfyShieldStore.shield.applications = tokens
-              // Persist opaque tokens on-device so later milestones can restore
-              // the selection in DeviceActivityMonitor and exception handlers.
-              let selection = FamilyActivitySelection()
-              // Milestone 1 does not claim persistence or overnight scheduling.
-              _ = selection
+              // DeviceActivity scheduling and persistence are subsequent gates.
               promise.resolve(tokens.count)
             case .failure(let error):
               promise.reject("SELECTION_CANCELLED_OR_INVALID", error.localizedDescription)
