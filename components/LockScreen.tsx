@@ -4,6 +4,7 @@ import {
   StatusBar,
   StyleSheet,
   Text,
+  TouchableOpacity,
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -49,7 +50,7 @@ function getStreakEmoji(streak: number): string {
 }
 
 export function LockScreen() {
-  const { unlockScreen, todayUnlocks, streak } = useSleep();
+  const { unlockScreen, todayUnlocks, streak, devDismissLock } = useSleep();
   const insets = useSafeAreaInsets();
   const [now, setNow] = useState(new Date());
 
@@ -68,6 +69,21 @@ export function LockScreen() {
     <View style={[styles.container, { paddingTop: topPad + 16, paddingBottom: bottomPad + 16 }]}>
       {Platform.OS !== "web" && <StatusBar barStyle="light-content" />}
       <StarBackground />
+
+      {/* Dev-build-only escape hatch — real users never see this, since
+          `__DEV__` compiles to `false` in production. Settings has a
+          "Disable auto-lock" switch, but Settings is unreachable while
+          this modal covers the whole app, so the first-ever dismissal
+          needs a way out that doesn't route through Settings. */}
+      {__DEV__ && (
+        <TouchableOpacity
+          style={[styles.devSkip, { top: topPad + 16 }]}
+          onPress={devDismissLock}
+          hitSlop={10}
+        >
+          <Text style={styles.devSkipText}>DEV: Skip Lock</Text>
+        </TouchableOpacity>
+      )}
 
       <View style={styles.header}>
         <View style={styles.topBar}>
@@ -116,6 +132,23 @@ const styles = StyleSheet.create({
   },
   header: {
     width: "100%",
+  },
+  devSkip: {
+    position: "absolute",
+    right: 20,
+    zIndex: 10,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.warningAmber,
+    borderRadius: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  devSkipText: {
+    color: Colors.warningAmber,
+    fontSize: 11,
+    fontFamily: Fonts.bold,
+    letterSpacing: 0.5,
   },
   topBar: {
     flexDirection: "row",

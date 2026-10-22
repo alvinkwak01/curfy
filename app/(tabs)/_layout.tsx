@@ -34,6 +34,15 @@ export default function TabLayout() {
           ),
         }}
       />
+      <Tabs.Screen
+        name="journal"
+        options={{
+          title: "Journal",
+          tabBarIcon: ({ color, size }) => (
+            <Ionicons name="journal" color={color} size={size} />
+          ),
+        }}
+      />
     </Tabs>
   );
 }

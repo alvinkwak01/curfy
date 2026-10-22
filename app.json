@@ -14,7 +14,12 @@
       "backgroundColor": "#080810"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.alvinkwak.curfy",
+      "appleTeamId": "H735Q3WW8K",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
       "adaptiveIcon": {
@@ -32,10 +37,71 @@
     "plugins": [
       "expo-router",
       "expo-font",
-      "expo-notifications"
+      "expo-notifications",
+      "expo-web-browser",
+      [
+        "expo-build-properties",
+        {
+          "ios": {
+            "deploymentTarget": "15.1"
+          }
+        }
+      ],
+      [
+        "react-native-device-activity",
+        {
+          "appleTeamId": "H735Q3WW8K",
+          "appGroup": "group.com.alvinkwak.curfy",
+          "copyToTargetFolder": false
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "build": {
+          "experimental": {
+            "ios": {
+              "appExtensions": [
+                {
+                  "bundleIdentifier": "com.alvinkwak.curfy.ShieldConfiguration",
+                  "targetName": "ShieldConfiguration",
+                  "entitlements": {
+                    "com.apple.developer.family-controls": true,
+                    "com.apple.security.application-groups": [
+                      "group.com.alvinkwak.curfy"
+                    ]
+                  }
+                },
+                {
+                  "bundleIdentifier": "com.alvinkwak.curfy.ShieldAction",
+                  "targetName": "ShieldAction",
+                  "entitlements": {
+                    "com.apple.developer.family-controls": true,
+                    "com.apple.security.application-groups": [
+                      "group.com.alvinkwak.curfy"
+                    ]
+                  }
+                },
+                {
+                  "bundleIdentifier": "com.alvinkwak.curfy.ActivityMonitorExtension",
+                  "targetName": "ActivityMonitorExtension",
+                  "entitlements": {
+                    "com.apple.developer.family-controls": true,
+                    "com.apple.security.application-groups": [
+                      "group.com.alvinkwak.curfy"
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        },
+        "projectId": "b2e7be9d-3941-4f64-a20d-9b2f811ef1df"
+      }
     }
   }
 }

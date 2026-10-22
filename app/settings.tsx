@@ -1,14 +1,28 @@
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
-import { Colors, Fonts } from "@/constants/theme";
+import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
+import {
+  BLOCK_MODE_PRESETS,
+  BlockModeId,
+  configureBedtimeBlocking,
+  getSelectionCount,
+  selectionIdForMode,
+} from "@/lib/screenTime";
+import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
 import React, { useState } from "react";
 import {
+  ActivitySelectionMetadata,
+  DeviceActivitySelectionSheetViewPersisted,
+} from "react-native-device-activity";
+import {
   Alert,
+  NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   TouchableOpacity,
@@ -20,22 +34,59 @@ export default function Settings() {
   const {
     bedtime,
     setBedtime,
+    wakeTime,
+    setWakeTime,
+    blockMode,
+    setBlockMode,
     userName,
     setUserName,
     motivation,
     setMotivation,
     signOut,
     deleteAccount,
+    devSkipLock,
+    setDevSkipLock,
   } = useSleep();
   const [localBedtime, setLocalBedtime] = useState(bedtime);
+  const [localWakeTime, setLocalWakeTime] = useState(wakeTime);
+  const [localBlockMode, setLocalBlockMode] = useState<BlockModeId | null>(
+    (blockMode as BlockModeId) || null
+  );
   const [localName, setLocalName] = useState(userName);
   const [localMotivation, setLocalMotivation] = useState(motivation);
   const [saved, setSaved] = useState(false);
+  const [pickerMode, setPickerMode] = useState<BlockModeId | null>(null);
+  // Read once on mount from the native side (not persisted app state) —
+  // this is what actually lets the UI show "N apps blocked" without
+  // reopening the picker. Refreshed locally after any picker session.
+  const [appCounts, setAppCounts] = useState<Partial<Record<BlockModeId, number>>>(() => {
+    const counts: Partial<Record<BlockModeId, number>> = {};
+    for (const preset of BLOCK_MODE_PRESETS) {
+      const count = getSelectionCount(preset.id);
+      if (count !== null) counts[preset.id] = count;
+    }
+    return counts;
+  });
 
   const onSave = async () => {
     await setBedtime(localBedtime);
+    await setWakeTime(localWakeTime);
     await setUserName(localName.trim());
     await setMotivation(localMotivation.trim());
+    if (localBlockMode) {
+      await setBlockMode(localBlockMode);
+      try {
+        await configureBedtimeBlocking({
+          bedtime: localBedtime,
+          wakeTime: localWakeTime,
+          mode: localBlockMode,
+        });
+      } catch (_) {
+        // Best-effort, same reasoning as onboarding's next() — a failed
+        // reconfigure (e.g. access was revoked in iOS Settings) shouldn't
+        // block saving everything else.
+      }
+    }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaved(true);
     setTimeout(() => {
@@ -43,10 +94,23 @@ export default function Settings() {
     }, 800);
   };
 
+  const handlePickApps = (mode: BlockModeId) => {
+    setLocalBlockMode(mode);
+    setPickerMode(mode);
+  };
+
+  const handleSelectionChange = (event: NativeSyntheticEvent<ActivitySelectionMetadata>) => {
+    if (!pickerMode) return;
+    const { applicationCount, categoryCount } = event.nativeEvent;
+    setAppCounts((prev) => ({ ...prev, [pickerMode]: applicationCount + categoryCount }));
+  };
+
+  const activePreset = BLOCK_MODE_PRESETS.find((p) => p.id === pickerMode);
+
   const onSignOut = () => {
     Alert.alert(
       "Sign out?",
-      "There's no account to save your progress to yet, so this just resets setup. Your streak and sleep history stay on this device.",
+      "This just resets setup and takes you back through onboarding. Your streak, sleep history, and leaderboard spot all stay exactly as they are.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -113,6 +177,62 @@ export default function Settings() {
         </View>
 
         <View style={styles.section}>
+          <Text style={styles.label}>WAKE UP</Text>
+          <Text style={styles.hint}>Blocked apps unlock at this time every morning</Text>
+          <View style={{ marginTop: 12 }}>
+            <TimePicker value={localWakeTime} onChange={setLocalWakeTime} digitSize={48} />
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>BLOCKED APPS</Text>
+          <Text style={styles.hint}>What Curfy locks during your bedtime window</Text>
+          <View style={{ gap: 8, marginTop: 12 }}>
+            {BLOCK_MODE_PRESETS.map((preset) => {
+              const isSelected = localBlockMode === preset.id;
+              const count = appCounts[preset.id];
+              return (
+                <TouchableOpacity
+                  key={preset.id}
+                  onPress={() => handlePickApps(preset.id)}
+                  activeOpacity={0.85}
+                  style={[styles.presetCard, isSelected && styles.presetCardSelected]}
+                >
+                  <View style={[styles.presetIconWrap, isSelected && styles.presetIconWrapSelected]}>
+                    <Ionicons
+                      name={preset.icon}
+                      size={18}
+                      color={isSelected ? Colors.primaryCyan : Colors.textMuted}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.presetTitle}>{preset.title}</Text>
+                    <Text style={styles.presetDesc}>
+                      {count != null
+                        ? `${count} app${count === 1 ? "" : "s"} selected — tap to change`
+                        : "Tap to choose apps"}
+                    </Text>
+                  </View>
+                  {isSelected && (
+                    <Ionicons name="checkmark-circle" size={20} color={Colors.primaryCyan} />
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          {pickerMode && (
+            <DeviceActivitySelectionSheetViewPersisted
+              style={{ width: 1, height: 1, position: "absolute" }}
+              familyActivitySelectionId={selectionIdForMode(pickerMode)}
+              headerText={activePreset?.pickerHint}
+              onSelectionChange={handleSelectionChange}
+              onDismissRequest={() => setPickerMode(null)}
+            />
+          )}
+        </View>
+
+        <View style={styles.section}>
           <Text style={styles.label}>WHY ARE YOU DOING THIS?</Text>
           <Text style={styles.hint}>
             Shown back to you on the nights this is hard. Optional.
@@ -148,6 +268,27 @@ export default function Settings() {
             looking.
           </Text>
         </View>
+
+        {__DEV__ && (
+          <View style={styles.devSection}>
+            <View style={styles.devRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.label}>DISABLE AUTO-LOCK</Text>
+                <Text style={styles.hint}>
+                  Dev builds only — stops the real bedtime window from
+                  locking you out while you test other screens. Use
+                  "Preview Lock Screen" above to still see the lock UI.
+                </Text>
+              </View>
+              <Switch
+                value={devSkipLock}
+                onValueChange={setDevSkipLock}
+                trackColor={{ false: Colors.border, true: Colors.primaryCyan }}
+                thumbColor={Colors.textPrimary}
+              />
+            </View>
+          </View>
+        )}
 
         <TouchableOpacity
           style={[styles.saveBtn, saved && styles.saveBtnSaved]}
@@ -202,6 +343,28 @@ const styles = StyleSheet.create({
     minHeight: 60,
     textAlignVertical: "top",
   },
+  presetCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Layout.cardRadius,
+    padding: 12,
+  },
+  presetCardSelected: { borderColor: Colors.primaryCyan },
+  presetIconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: Colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  presetIconWrapSelected: { backgroundColor: "rgba(0,229,255,0.1)" },
+  presetTitle: { color: Colors.textPrimary, fontSize: 14, fontFamily: Fonts.semiBold, marginBottom: 1 },
+  presetDesc: { color: Colors.textMuted, fontSize: 12, fontFamily: Fonts.regular },
   notice: {
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -226,6 +389,14 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.regular,
     lineHeight: 17,
   },
+  devSection: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.warningAmber,
+    borderRadius: 14,
+    padding: 16,
+  },
+  devRow: { flexDirection: "row", alignItems: "center", gap: 12 },
   saveBtn: {
     backgroundColor: Colors.primaryCyan,
     borderRadius: 14,

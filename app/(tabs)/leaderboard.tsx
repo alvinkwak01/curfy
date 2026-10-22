@@ -1,5 +1,4 @@
 import { BedtimeHistogram } from "@/components/BedtimeHistogram";
-import Btn from "@/components/Btn";
 import { StarBackground } from "@/components/StarBackground";
 import { Colors, Fonts } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
@@ -11,7 +10,6 @@ import {
   FlatList,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -121,91 +119,8 @@ function LeaderboardRow({
   );
 }
 
-function JoinLeaderboardCard() {
-  const { userName } = useSleep();
-  const { signUp, signIn } = useAuth();
-  const [mode, setMode] = useState<"join" | "signin">("join");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [info, setInfo] = useState<string | null>(null);
-
-  const submit = async () => {
-    setError(null);
-    setInfo(null);
-    if (!email.trim() || !password) {
-      setError("Email and password, please. Both of them.");
-      return;
-    }
-    setLoading(true);
-    const result =
-      mode === "join"
-        ? await signUp(email.trim(), password, userName)
-        : await signIn(email.trim(), password);
-    setLoading(false);
-    if (result.error) {
-      // signUp() returns this specific message (not a real error) when
-      // email confirmation is required — show it as info, not a failure.
-      if (result.error.startsWith("Check your email")) {
-        setInfo(result.error);
-      } else {
-        setError(result.error);
-      }
-    }
-  };
-
-  return (
-    <View style={styles.authCard}>
-      <Text style={styles.authTitle}>
-        {mode === "join" ? "Join the leaderboard" : "Sign back in"}
-      </Text>
-      <Text style={styles.authSub}>
-        {mode === "join"
-          ? `Your streaks sync under "${userName || "Sleeper"}." Everyone can see your name and numbers — nothing else.`
-          : "Already have an account? Sign in to sync this device."}
-      </Text>
-
-      <TextInput
-        style={styles.authInput}
-        value={email}
-        onChangeText={setEmail}
-        placeholder="Email"
-        placeholderTextColor={Colors.textGhost}
-        autoCapitalize="none"
-        autoComplete="email"
-        keyboardType="email-address"
-      />
-      <TextInput
-        style={styles.authInput}
-        value={password}
-        onChangeText={setPassword}
-        placeholder="Password"
-        placeholderTextColor={Colors.textGhost}
-        secureTextEntry
-        autoCapitalize="none"
-      />
-
-      {error && <Text style={styles.authError}>{error}</Text>}
-      {info && <Text style={styles.authInfo}>{info}</Text>}
-
-      <Btn
-        label={mode === "join" ? "Create account" : "Sign in"}
-        onPress={submit}
-        loading={loading}
-      />
-
-      <TouchableOpacity onPress={() => setMode(mode === "join" ? "signin" : "join")}>
-        <Text style={styles.authToggle}>
-          {mode === "join" ? "Already have an account? Sign in" : "New here? Create an account"}
-        </Text>
-      </TouchableOpacity>
-    </View>
-  );
-}
-
 function GlobalLeaderboard() {
-  const { isSignedIn, isAuthLoading, session, fetchLeaderboard, fetchMyRank } = useAuth();
+  const { isSignedIn, session, fetchLeaderboard, fetchMyRank } = useAuth();
   const { streak, longestStreak, userName } = useSleep();
   const [metric, setMetric] = useState<Metric>("current_streak");
   const [profiles, setProfiles] = useState<LeaderboardProfile[]>([]);
@@ -346,8 +261,6 @@ function GlobalLeaderboard() {
           )}
         </View>
       )}
-
-      {isSupabaseConfigured && !isAuthLoading && !isSignedIn && <JoinLeaderboardCard />}
     </View>
   );
 }
@@ -683,36 +596,4 @@ const styles = StyleSheet.create({
   },
   communityAvgValue: { color: Colors.primaryCyan, fontSize: 32, fontFamily: Fonts.bold, marginTop: 2 },
   communityNote: { color: Colors.textGhost, fontSize: 12, fontFamily: Fonts.regular, marginTop: 6 },
-
-  // Join / sign in
-  authCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 18,
-    padding: 20,
-    gap: 10,
-    marginTop: 4,
-  },
-  authTitle: { color: Colors.textPrimary, fontSize: 17, fontFamily: Fonts.semiBold },
-  authSub: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular, lineHeight: 19, marginBottom: 4 },
-  authInput: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 14,
-    fontSize: 15,
-    fontFamily: Fonts.regular,
-    color: Colors.textPrimary,
-  },
-  authError: { color: Colors.dangerRed, fontSize: 12, fontFamily: Fonts.regular },
-  authInfo: { color: Colors.primaryCyan, fontSize: 12, fontFamily: Fonts.regular },
-  authToggle: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: Fonts.regular,
-    textAlign: "center",
-    marginTop: 2,
-  },
 });

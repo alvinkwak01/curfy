@@ -19,21 +19,42 @@ interface StarSpec {
   size: number;
   delay: number;
   duration: number;
+  minOpacity: number;
+  maxOpacity: number;
+  maxScale: number;
 }
 
 function Star({ spec }: { spec: StarSpec }) {
-  const opacity = useSharedValue(0.1);
+  const opacity = useSharedValue(spec.minOpacity);
+  const scale = useSharedValue(1);
 
   React.useEffect(() => {
     opacity.value = withDelay(
       spec.delay,
       withRepeat(
         withSequence(
-          withTiming(0.6 + Math.random() * 0.4, {
+          withTiming(spec.maxOpacity, {
             duration: spec.duration * 1000,
             easing: Easing.inOut(Easing.sin),
           }),
-          withTiming(0.1, {
+          withTiming(spec.minOpacity, {
+            duration: spec.duration * 1000,
+            easing: Easing.inOut(Easing.sin),
+          })
+        ),
+        -1,
+        true
+      )
+    );
+    scale.value = withDelay(
+      spec.delay,
+      withRepeat(
+        withSequence(
+          withTiming(spec.maxScale, {
+            duration: spec.duration * 1000,
+            easing: Easing.inOut(Easing.sin),
+          }),
+          withTiming(1, {
             duration: spec.duration * 1000,
             easing: Easing.inOut(Easing.sin),
           })
@@ -47,6 +68,7 @@ function Star({ spec }: { spec: StarSpec }) {
 
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
+    transform: [{ scale: scale.value }],
   }));
 
   return (
@@ -76,7 +98,10 @@ export function StarBackground() {
       top: Math.random() * height,
       size: 0.5 + Math.random() * 2.5,
       delay: Math.random() * 4000,
-      duration: 1.5 + Math.random() * 3,
+      duration: 1 + Math.random() * 2,
+      minOpacity: 0.08 + Math.random() * 0.07,
+      maxOpacity: 0.75 + Math.random() * 0.25,
+      maxScale: 1.2 + Math.random() * 0.3,
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [width, height]);

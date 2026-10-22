@@ -52,7 +52,13 @@ interface WheelProps {
  */
 function Wheel({ value, count, onChange, itemHeight, digitSize }: WheelProps) {
   const listRef = useRef<FlatList<number>>(null);
-  const data = useMemo(() => Array.from({ length: count }, (_, i) => i), [count]);
+  // Descending, not ascending — so the value sitting below the current
+  // selection (further down the list, reached by scrolling up/dragging
+  // your finger up) is always the next-LOWER number. That's the "lower
+  // number below" behavior wheel pickers are expected to have; with an
+  // ascending list, scrolling up would reveal higher numbers instead.
+  const flip = (n: number) => count - 1 - n;
+  const data = useMemo(() => Array.from({ length: count }, (_, i) => flip(i)), [count]);
   const isDragging = useRef(false);
   const lastValue = useRef(value);
 
@@ -63,16 +69,17 @@ function Wheel({ value, count, onChange, itemHeight, digitSize }: WheelProps) {
     if (isDragging.current) return;
     if (lastValue.current === value) return;
     lastValue.current = value;
-    listRef.current?.scrollToOffset({ offset: value * itemHeight, animated: true });
+    listRef.current?.scrollToOffset({ offset: flip(value) * itemHeight, animated: true });
   }, [value, itemHeight]);
 
   const snapToNearest = (offsetY: number) => {
     const index = Math.max(0, Math.min(count - 1, Math.round(offsetY / itemHeight)));
+    const newValue = flip(index);
     isDragging.current = false;
-    if (index !== lastValue.current) {
-      lastValue.current = index;
+    if (newValue !== lastValue.current) {
+      lastValue.current = newValue;
       Haptics.selectionAsync();
-      onChange(index);
+      onChange(newValue);
     } else {
       // Rounding safety: make sure it's sitting exactly on the line.
       listRef.current?.scrollToOffset({ offset: index * itemHeight, animated: true });
@@ -92,7 +99,7 @@ function Wheel({ value, count, onChange, itemHeight, digitSize }: WheelProps) {
         showsVerticalScrollIndicator={false}
         snapToInterval={itemHeight}
         decelerationRate="fast"
-        initialScrollIndex={value}
+        initialScrollIndex={flip(value)}
         initialNumToRender={count}
         nestedScrollEnabled
         getItemLayout={(_, index) => ({

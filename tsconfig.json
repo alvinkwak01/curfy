@@ -13,5 +13,12 @@
     "**/*.tsx",
     ".expo/types/**/*.ts",
     "expo-env.d.ts"
+  ],
+  // supabase/functions/** runs on Deno (Supabase Edge Functions), a
+  // separate runtime with its own globals and URL-based imports — not
+  // something this app's Node/RN tsconfig can or should type-check.
+  // Supabase's own CLI/deploy step handles that file's correctness.
+  "exclude": [
+    "supabase/functions/**"
   ]
 }

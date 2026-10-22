@@ -15,6 +15,7 @@ import "react-native-reanimated";
 import { LockScreen } from "@/components/LockScreen";
 import { Colors } from "@/constants/theme";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { JournalProvider } from "@/context/JournalContext";
 import { SleepProvider, useSleep } from "@/context/SleepContext";
 import Onboarding from "./onboarding";
 
@@ -49,28 +50,49 @@ export default function RootLayout() {
   }
 
   return (
-    <AuthProvider>
-      <SleepProvider>
-        <StreakSync />
-        <RootLayoutNav />
-      </SleepProvider>
-    </AuthProvider>
+    <JournalProvider>
+      <AuthProvider>
+        <SleepProvider>
+          <EnsureLeaderboardIdentity />
+          <StreakSync />
+          <RootLayoutNav />
+        </SleepProvider>
+      </AuthProvider>
+    </JournalProvider>
   );
 }
 
-// Keeps each signed-in user's `profiles` row current (bedtime + both
-// streak numbers) so the global leaderboard and community bedtime chart
-// reflect reality without either screen having to know when something
-// changed. Renders nothing — it only needs both contexts in scope, which
-// requires it to sit inside both providers (see above).
+// Every user is on the global leaderboard automatically — no visible
+// "Join"/create-account step. The first time onboarding finishes (i.e. a
+// display name exists) and there's no session yet, this silently signs
+// the device into an anonymous Supabase auth session and seeds a
+// `profiles` row with that name. Renders nothing; needs both contexts in
+// scope, same reasoning as StreakSync below.
+function EnsureLeaderboardIdentity() {
+  const { userName, isOnboardingComplete } = useSleep();
+  const { isSignedIn, isAuthLoading, ensureAnonymousProfile } = useAuth();
+
+  useEffect(() => {
+    if (!isOnboardingComplete || isAuthLoading || isSignedIn) return;
+    ensureAnonymousProfile(userName);
+  }, [isOnboardingComplete, isAuthLoading, isSignedIn, userName, ensureAnonymousProfile]);
+
+  return null;
+}
+
+// Keeps each signed-in user's `profiles` row current (bedtime, both streak
+// numbers, and display name) so the global leaderboard and community
+// bedtime chart reflect reality without either screen having to know when
+// something changed. Renders nothing — it only needs both contexts in
+// scope, which requires it to sit inside both providers (see above).
 function StreakSync() {
-  const { bedtime, streak, longestStreak } = useSleep();
+  const { bedtime, streak, longestStreak, userName } = useSleep();
   const { isSignedIn, syncProfile } = useAuth();
 
   useEffect(() => {
     if (!isSignedIn) return;
-    syncProfile(bedtime, streak, longestStreak);
-  }, [isSignedIn, bedtime, streak, longestStreak, syncProfile]);
+    syncProfile(bedtime, streak, longestStreak, userName);
+  }, [isSignedIn, bedtime, streak, longestStreak, userName, syncProfile]);
 
   return null;
 }
