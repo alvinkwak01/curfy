@@ -1,7 +1,7 @@
 # Curfy Engineering Playbook
 **Status:** Working engineering process. **Updated:** 2026-10-23. **Owner:** Solo builder, supported by AI coding agents.
 
-> Read this before directing agents. This file is about **how we engineer and verify Curfy**, not a claim that missing features are implemented. The observed source on main at commit \`9414394bbde2baf514a9882e35d1ccd865fd6687\` remains the technical baseline until newer commits are inspected.
+> Read this before directing agents. This file is about **how we engineer and verify Curfy**, not a claim that missing features are implemented. The observed source on main at commit `9414394bbde2baf514a9882e35d1ccd865fd6687` remains the technical baseline until newer commits are inspected.
 
 ## 0. Mission and engineering stance
 
@@ -16,16 +16,16 @@ Build a trustworthy, maintainable bedtime app while learning how to operate like
 ## 1. What is actually known, versus what is not
 
 Observed on GitHub as of 2026-10-23:
-- Public repository: \`alvinkwak01/curfy\`, default branch \`main\`.
+- Public repository: `alvinkwak01/curfy`, default branch `main`.
 - Expo SDK 54, React Native 0.81.5, React 19.1, TypeScript (strict), Expo Router and Supabase dependency.
-- Root navigator: \`app/_layout.tsx\`; bedtime state: \`context/SleepContext.tsx\`; long-press escape: \`components/HoldButton.tsx\`; in-app modal: \`components/LockScreen.tsx\`.
-- Existing \`package.json\` has no \`test\`, \`lint\`, or \`typecheck\` script; no \`.github/workflows\` was present on main.
-- Current lock uses React state, an in-app \`Modal\`, and a 30-second interval/foreground check; that **cannot shield another selected app at the OS level**.
-- A \`react-test-renderer\` dependency exists, but its presence does not mean functional test coverage exists.
+- Root navigator: `app/_layout.tsx`; bedtime state: `context/SleepContext.tsx`; long-press escape: `components/HoldButton.tsx`; in-app modal: `components/LockScreen.tsx`.
+- Existing `package.json` has no `test`, `lint`, or `typecheck` script; no `.github/workflows` was present on main.
+- Current lock uses React state, an in-app `Modal`, and a 30-second interval/foreground check; that **cannot shield another selected app at the OS level**.
+- A `react-test-renderer` dependency exists, but its presence does not mean functional test coverage exists.
 
 **Not verified:** clean TypeScript baseline, successful npm install, actual physical-iPhone behavior, Apple Family Controls entitlement/distribution permissions, functioning native selected-app shielding, EAS configuration for this repository, production security, current App Store approval, or a green CI run. Do not describe any of those as proven until evidence exists.
 
-**Product requirements decided after the older CONTEXT.md:** User wants OS-supported *individual-app* bedtime blocking; one app free and multiple for a prospective premium tier; a deliberate 120-second continuous hold to request a temporary escape; and an approximately 15-minute respite before re-shielding. Do not promise a capability Apple does not expose. Exact unlock flow on the system shield is **unproven** and needs a native feasibility spike on a real device. Authorization can be revoked by the device owner. The older \`CONTEXT.md\` statement accepting an in-app-only soft lock is **historical, superseded product intent**; do not silently implement it as the final solution. Update the older spec in a dedicated reviewable task once feasibility is established. Keep existing UX until a replacement is verified.
+**Product requirements decided after the older CONTEXT.md:** User wants OS-supported *individual-app* bedtime blocking; one app free and multiple for a prospective premium tier; a deliberate 120-second continuous hold to request a temporary escape; and an approximately 15-minute respite before re-shielding. Do not promise a capability Apple does not expose. Exact unlock flow on the system shield is **unproven** and needs a native feasibility spike on a real device. Authorization can be revoked by the device owner. The older `CONTEXT.md` statement accepting an in-app-only soft lock is **historical, superseded product intent**; do not silently implement it as the final solution. Update the older spec in a dedicated reviewable task once feasibility is established. Keep existing UX until a replacement is verified.
 
 No scheduled native enforcement should rely only on a React timer. Apple-approved frameworks/entitlements and App Store distribution limitations are gating constraints. **No private APIs, URL hacks, unsupported auto-opening of a shielded app, or claims that iOS restrictions are unbreakable.**
 
@@ -54,14 +54,14 @@ No scheduled native enforcement should rely only on a React timer. Apple-approve
 
 | User feature | Implementation evidence | How to verify / current status |
 |---|---|---|
-| Onboarding | \`app/onboarding.tsx\`, \`app/_layout.tsx\` | Fresh app state, finish onboarding; **not run in this audit** |
-| Home/bedtime | \`app/(tabs)/index.tsx\`, \`context/SleepContext.tsx\` | Set bedtime, background/reopen app, check schedule; **not run** |
-| Sleep history / streaks | \`app/(tabs)/leaderboard.tsx\`, \`context/SleepContext.tsx\` | Test cross-midnight, duplicate date, streak boundaries; **not run** |
-| Settings | \`app/settings.tsx\` | Change bedtime, sign out, test data deletion; **not run** |
-| Lock preview | \`app/preview-lock.tsx\` | Inspect preview UI; **not run** |
-| Current in-app lock | \`app/_layout.tsx\`, \`components/LockScreen.tsx\` | Starts an in-app modal; cannot block other apps; **code inspected** |
-| 120-second hold | \`components/HoldButton.tsx\` | Verify uninterrupted hold, early release resets, background/interruption behavior; **code inspected, device behavior not run** |
-| Remote auth/profile | \`context/AuthContext.tsx\`, \`lib/supabase.ts\`, \`supabase/schema.sql\` | Assess data access, authentication, RLS, signout/delete; **not audited** |
+| Onboarding | `app/onboarding.tsx`, `app/_layout.tsx` | Fresh app state, finish onboarding; **not run in this audit** |
+| Home/bedtime | `app/(tabs)/index.tsx`, `context/SleepContext.tsx` | Set bedtime, background/reopen app, check schedule; **not run** |
+| Sleep history / streaks | `app/(tabs)/leaderboard.tsx`, `context/SleepContext.tsx` | Test cross-midnight, duplicate date, streak boundaries; **not run** |
+| Settings | `app/settings.tsx` | Change bedtime, sign out, test data deletion; **not run** |
+| Lock preview | `app/preview-lock.tsx` | Inspect preview UI; **not run** |
+| Current in-app lock | `app/_layout.tsx`, `components/LockScreen.tsx` | Starts an in-app modal; cannot block other apps; **code inspected** |
+| 120-second hold | `components/HoldButton.tsx` | Verify uninterrupted hold, early release resets, background/interruption behavior; **code inspected, device behavior not run** |
+| Remote auth/profile | `context/AuthContext.tsx`, `lib/supabase.ts`, `supabase/schema.sql` | Assess data access, authentication, RLS, signout/delete; **not audited** |
 | OS-level selected-app shielding | **No native module/extension presently in repo** | **Missing**; requires device-tested feasibility before product claims |
 
 Maintain this map whenever a new feature or navigation route changes. Add screen reachability, test IDs where appropriate, expected state, and device-specific caveats after hands-on tests.
@@ -70,13 +70,13 @@ Maintain this map whenever a new feature or navigation route changes. Add screen
 
 **A. Scope.** Write: user problem, proposed behavior, exclusions, acceptance criteria, and risk level. No vague "improve the app" changes.
 
-**B. Inspect.** Read \`CONTEXT.md\`, relevant \`MEMORY.md\` sections, this playbook, \`AGENTS.md\`, and relevant source/tests. Cite exact files. Explicitly flag documentation contradicting more recent confirmed product decisions.
+**B. Inspect.** Read `CONTEXT.md`, relevant `MEMORY.md` sections, this playbook, `AGENTS.md`, and relevant source/tests. Cite exact files. Explicitly flag documentation contradicting more recent confirmed product decisions.
 
 **C. Plan.** State touched files, edge cases, verification commands, device tests, dependencies, money/time costs, and rollback. Prefer a tiny first PR. Do not automatically refactor unrelated code.
 
 **D. Implement.** Work on a named feature branch. Keep secrets out of prompts, code, logs, and PRs. Respect module boundaries and existing APIs. Do not create arbitrary package upgrades or persistent agents without a need.
 
-**E. Verify.** Run \`npm ci\`, \`npx tsc --noEmit\`, and any existing tests. Once a test suite is installed, run it. Where native behavior is involved, record device model/iOS/build version plus steps/outcome. Report pass/fail/not-run explicitly; never fabricate passing results. Tests must be allowed to fail—don't disable them to get green status.
+**E. Verify.** Run `npm ci`, `npx tsc --noEmit`, and any existing tests. Once a test suite is installed, run it. Where native behavior is involved, record device model/iOS/build version plus steps/outcome. Report pass/fail/not-run explicitly; never fabricate passing results. Tests must be allowed to fail—don't disable them to get green status.
 
 **F. Review.** Ask: did it implement the requirement, affect security/privacy, break onboarding, confuse time zones or midnight, create expensive network usage, or change 120-second/15-minute logic? Check the diff for accidental generated changes or secrets.
 
@@ -88,9 +88,9 @@ Maintain this map whenever a new feature or navigation route changes. Add screen
 
 **Gate 0 — repo hygiene (starting now):** a clean branch, narrowly scoped diff, no secrets, documented outcome.
 
-**Gate 1 — static check (starting now):** run \`npm ci\` then \`npx tsc --noEmit\` via GitHub Actions on PRs. This is **not a test suite**. If red because of existing errors, document and fix the baseline in a separate small PR. Never suppress failures just to merge.
+**Gate 1 — static check (starting now):** run `npm ci` then `npx tsc --noEmit` via GitHub Actions on PRs. This is **not a test suite**. If red because of existing errors, document and fix the baseline in a separate small PR. Never suppress failures just to merge.
 
-**Gate 2 — unit tests (next):** adopt Expo-supported \`jest-expo\` + Jest and \`@testing-library/react-native\` at versions compatible with **SDK 54**, using \`npx expo install ... --dev\`; replace \`react-test-renderer\` when validated. Start with 3–5 business-critical tests:
+**Gate 2 — unit tests (next):** adopt Expo-supported `jest-expo` + Jest and `@testing-library/react-native` at versions compatible with **SDK 54**, using `npx expo install ... --dev`; replace `react-test-renderer` when validated. Start with 3–5 business-critical tests:
 - 120-second hold: incomplete release resets; completion happens only once.
 - Bedtime window: before bedtime, after bedtime, crossing midnight, before/at 06:00.
 - Re-lock policy: respite duration / subsequent shielding state, once native logic exists.
@@ -117,7 +117,7 @@ Prefer extracting pure functions to make these cheap to test, **without changing
 **Default: one working agent; no swarm.** Pay for a second review agent only for risky architecture/native/security PRs. Human approval required before any paid tool, model subscription, cloud build, massive refactor, or bulk agent job.
 
 1. Set a personal monthly budget before using metered tools; begin with a small experiment, measure actual cost, then decide whether to increase. Track **tool, model, task, calls, cost, and value**.
-2. Read the necessary files once and give the agent small, concrete, verifiable tasks. Avoid repeatedly feeding whole repositories and \`MEMORY.md\` histories into every prompt.
+2. Read the necessary files once and give the agent small, concrete, verifiable tasks. Avoid repeatedly feeding whole repositories and `MEMORY.md` histories into every prompt.
 3. Use deterministic checks (typecheck, tests, lints) first; they're cheaper and more trustworthy than asking four models whether code works.
 4. Run local verification first; EAS device builds only when native behavior changes or milestone requires one. Avoid nightly build automation until there's a reason.
 5. Stop loops after a bounded number of attempts (for example 2–3). If still broken, request a focused diagnosis and evidence rather than escalating blind "try again" prompts.
@@ -163,8 +163,8 @@ Suggested truthful resume framing after evidence exists: **"Built and maintained
 
 1. **Foundation PR:** add playbook + AGENTS.md + TypeScript CI on a branch; inspect resulting CI output. *No product code modified.*
 2. **Fix baseline:** if typecheck fails, identify existing errors, write a short prioritized list, fix in isolated PR(s).
-3. **Testing harness:** add Expo-compatible test dependencies through \`expo install\` and update lockfile together; land 2 meaningful tests. No placeholder "test passes" tasks.
-4. **Native feasibility:** on separate \`spike/ios-screen-time-shield\` branch, demonstrate Apple-supported authorization + selected-app shielding + re-shield flow on a physical iPhone, noting entitlement constraints. **This is the launch-critical unknown.**
+3. **Testing harness:** add Expo-compatible test dependencies through `expo install` and update lockfile together; land 2 meaningful tests. No placeholder "test passes" tasks.
+4. **Native feasibility:** on separate `spike/ios-screen-time-shield` branch, demonstrate Apple-supported authorization + selected-app shielding + re-shield flow on a physical iPhone, noting entitlement constraints. **This is the launch-critical unknown.**
 5. **Feature-by-feature:** only after native feasibility evidence, implement a supported 120s challenge + respite that actually works with Apple's shield lifecycle.
 6. **Polish / security / release:** review Supabase data rules, login/deletion, store policy, performance, release distribution.
 7. **Showcase:** publish a concise technical case study from actual PRs and validations.
