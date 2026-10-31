@@ -11,7 +11,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const mod = { exports: {} };
 new Function("module", "exports", js)(mod, mod.exports);
-const { currentBedtimeWindow, nativeDateComponents } = mod.exports;
+const { currentBedtimeWindow, isBedtimeWindowActive, nativeDateComponents } = mod.exports;
 
 function at(text) { return new Date(text); }
 function check(start, end, date, expected) {
@@ -35,6 +35,8 @@ test("invalid/same endpoints are rejected rather than silently protecting 24 hou
   assert.throws(() => currentBedtimeWindow(new Date(), "23:00", "23:00"));
   assert.throws(() => currentBedtimeWindow(new Date(), "24:00", "06:00"));
   assert.throws(() => currentBedtimeWindow(new Date(), "bad", "06:00"));
+  assert.equal(isBedtimeWindowActive(new Date(), "23:00", "23:00"), false);
+  assert.equal(isBedtimeWindowActive(new Date(), "bad", "06:00"), false);
 });
 
 test("native date components retain the local instant and timezone offset", () => {
