@@ -2,7 +2,7 @@ import { StarBackground } from "@/components/StarBackground";
 import { Colors, Fonts } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import { currentBedtimeWindow } from "@/lib/bedtimeWindow";
-import { activeExceptionExpiresAt } from "@/lib/screenTime";
+import { activeExceptionExpiresAt, isSelectionShielded } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -77,6 +77,9 @@ export default function Home() {
   const inBedtimeWindow = !!blockMode &&
     currentBedtimeWindow(new Date(), bedtime, wakeTime) !== null;
   const exceptionExpiresAt = inBedtimeWindow ? activeExceptionExpiresAt() : null;
+  const isShielded = inBedtimeWindow && !exceptionExpiresAt &&
+    (blockMode === "social" || blockMode === "most" || blockMode === "custom") &&
+    isSelectionShielded(blockMode);
 
   const totalNights = sleepLog.length;
   const cleanNights = sleepLog.filter((e) => e.unlockAttempts === 0).length;
@@ -128,6 +131,17 @@ export default function Home() {
                   Scheduled to end at {new Date(exceptionExpiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                 </Text>
               </>
+            ) : !isShielded ? (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Open Settings to fix app shielding"
+                onPress={() => router.push("/settings")}
+              >
+                <Text style={styles.escapeLabel}>App blocking needs attention</Text>
+                <Text style={styles.escapeHint}>
+                  iOS isn't currently shielding your selected apps. Check Settings before attempting an unlock.
+                </Text>
+              </TouchableOpacity>
             ) : (
               <TouchableOpacity
                 accessibilityRole="button"
