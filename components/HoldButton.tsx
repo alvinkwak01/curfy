@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedProps,
@@ -72,7 +72,7 @@ function pickMessage(progress: number): string {
 }
 
 interface HoldButtonProps {
-  onUnlock: () => void;
+  onUnlock: () => void | Promise<void>;
   unlockCount: number;
 }
 
@@ -131,8 +131,18 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
       if (elapsed >= HOLD_DURATION_MS) {
         clearTimers();
         startTimeRef.current = null;
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onUnlock();
+        setIsHolding(false);
+        // Completion is only a request. Celebrate after the native
+        // unshield actually succeeds, not when the JS clock reaches zero.
+        Promise.resolve()
+          .then(() => onUnlock())
+          .then(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))
+          .catch(() => {
+            progress.value = withSpring(0);
+            scale.value = withSpring(1);
+            setDisplaySeconds(120);
+            setMessage("Unlock failed. Try holding again.");
+          });
       }
     }, 200);
   };
@@ -148,7 +158,19 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
     setMessage("Hold to unlock");
   };
 
-  useEffect(() => clearTimers, []);
+  // Backgrounding or an incoming call must terminate an in-progress hold.
+  // A paused JS interval must never finish the hold after returning to Curfy.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") {
+        handlePressOut();
+      }
+    });
+    return () => {
+      sub.remove();
+      clearTimers();
+    };
+  }, []);
 
   const animatedCircleProps = useAnimatedProps(() => ({
     strokeDashoffset: CIRCUMFERENCE * (1 - progress.value),
