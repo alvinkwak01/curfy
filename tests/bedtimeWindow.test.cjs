@@ -51,14 +51,14 @@ test("DST boundaries are based on local dates, not 24-hour arithmetic", () => {
     assert.equal(spring?.start.getDate(), 7);
     assert.equal(spring?.end.getDate(), 8);
     assert.equal(spring?.end.getHours(), 6);
-    // Spring-forward night is 7 hours, not 8.
-    assert.equal((spring.end - spring.start) / 3_600_000, 7);
+    // Spring-forward makes a 23:00–06:00 window 6 elapsed hours (normally 7).
+    assert.equal((spring.end - spring.start) / 3_600_000, 6);
 
     const fall = currentBedtimeWindow(at("2026-11-01T01:30:00"), "23:00", "06:00");
     assert.equal(fall?.start.getDate(), 31);
     assert.equal(fall?.end.getDate(), 1);
-    // Fall-back night is 9 hours, not 8.
-    assert.equal((fall.end - fall.start) / 3_600_000, 9);
+    // Fall-back makes a 23:00–06:00 window 8 elapsed hours (normally 7).
+    assert.equal((fall.end - fall.start) / 3_600_000, 8);
   } finally {
     if (previous === undefined) delete process.env.TZ;
     else process.env.TZ = previous;
