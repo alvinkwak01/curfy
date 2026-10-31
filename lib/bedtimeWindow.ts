@@ -4,7 +4,7 @@
  * Using Date constructors/setDate preserves local midnight/DST boundaries.
  */
 function parseTime(time: string): { hour: number; minute: number; minuteOfDay: number } {
-  const match = /^(\\d{2}):(\\d{2})$/.exec(time);
+  const match = /^(\d{2}):(\d{2})$/.exec(time);
   if (!match) throw new Error("Invalid time; expected HH:MM.");
   const hour = Number(match[1]);
   const minute = Number(match[2]);
