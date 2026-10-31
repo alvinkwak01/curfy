@@ -104,6 +104,9 @@ export async function configureBedtimeBlocking({
   if (getScreenTimeAccessStatus() !== "authorized") {
     throw new Error("Screen Time permission is required to protect selected apps.");
   }
+  // Reject equal/invalid endpoints rather than creating an ambiguous
+  // all-day interval or crashing the Home screen later.
+  currentBedtimeWindow(new Date(), bedtime, wakeTime);
   const selectedCount = getSelectionCount(mode);
   if (selectedCount === null || selectedCount < 1) {
     throw new Error("Choose at least one app in Apple's app picker before continuing.");
