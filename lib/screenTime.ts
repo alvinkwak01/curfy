@@ -155,7 +155,21 @@ export async function configureBedtimeBlocking({
 }
 
 export function stopBedtimeBlocking(): void {
+  cancelExceptionForScheduleChange();
+  // Stop may cause intervalDidEnd, so clear its native action first.
+  DeviceActivity.configureActions({
+    activityName: BEDTIME_ACTIVITY_NAME,
+    callbackName: "intervalDidStart",
+    actions: [],
+  });
+  DeviceActivity.configureActions({
+    activityName: BEDTIME_ACTIVITY_NAME,
+    callbackName: "intervalDidEnd",
+    actions: [],
+  });
   DeviceActivity.stopMonitoring([BEDTIME_ACTIVITY_NAME]);
+  // A user deleting their Curfy account must not leave orphaned app shields.
+  DeviceActivity.resetBlocks("curfy-stop-blocking");
 }
 
 // Reads back how many apps/categories are in a preset's already-persisted
@@ -181,6 +195,12 @@ type ActiveException = {
   expiresAt: number;
   bedtimeEndAt: number;
 };
+
+/** Returns the currently scheduled exception for UI display (not proof of unshielding). */
+export function activeExceptionExpiresAt(now = Date.now()): number | null {
+  const state = readException();
+  return state && state.expiresAt > now ? state.expiresAt : null;
+}
 
 function readException(): ActiveException | null {
   const state = DeviceActivity.userDefaultsGet<ActiveException>(EXCEPTION_STATE_KEY);
