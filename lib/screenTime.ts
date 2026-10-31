@@ -10,6 +10,7 @@
 // the JS side, but nothing here functions in Expo Go or the iOS Simulator
 // (Apple's Screen Time frameworks don't run in Simulator at all).
 import * as DeviceActivity from "react-native-device-activity";
+import { currentBedtimeWindow, nativeDateComponents } from "@/lib/bedtimeWindow";
 
 export type ScreenTimeAuthStatus = "notDetermined" | "authorized" | "denied";
 
@@ -109,6 +110,10 @@ export async function configureBedtimeBlocking({
   }
   const selectionId = selectionIdForMode(mode);
 
+  // A schedule change ends any prior exception; otherwise an obsolete
+  // one-off monitor could re-shield a superseded selection.
+  cancelExceptionForScheduleChange();
+
   DeviceActivity.configureActions({
     activityName: BEDTIME_ACTIVITY_NAME,
     callbackName: "intervalDidStart",
@@ -163,4 +168,176 @@ export function getSelectionCount(mode: BlockModeId): number | null {
   });
   if (!metadata) return null;
   return metadata.applicationCount + metadata.categoryCount;
+}
+
+/** One non-repeating native monitor per deliberate hold; JS timers alone are insufficient. */
+const EXCEPTION_ACTIVITY_PREFIX = "curfy-exception-";
+const EXCEPTION_STATE_KEY = "curfy-active-exception";
+export const EXCEPTION_DURATION_MS = 15 * 60 * 1000;
+
+type ActiveException = {
+  activityName: string | null;
+  selectionId: string;
+  expiresAt: number;
+  bedtimeEndAt: number;
+};
+
+function readException(): ActiveException | null {
+  const state = DeviceActivity.userDefaultsGet<ActiveException>(EXCEPTION_STATE_KEY);
+  if (!state || typeof state.selectionId !== "string" ||
+      typeof state.expiresAt !== "number" || typeof state.bedtimeEndAt !== "number" ||
+      (state.activityName !== null && typeof state.activityName !== "string")) {
+    return null;
+  }
+  return state;
+}
+
+function selectedAppShieldCount(selectionId: string): number {
+  const overlap = DeviceActivity.intersection(
+    { activitySelectionId: selectionId },
+    { currentBlocklist: true },
+    { stripToken: true }
+  );
+  if (!overlap) throw new Error("iOS couldn't confirm the current app restrictions.");
+  return overlap.applicationCount + overlap.categoryCount + overlap.webDomainCount;
+}
+
+function stopExceptionMonitor(state: ActiveException): void {
+  if (!state.activityName) return;
+  // Apple's stopMonitoring can itself produce intervalDidEnd. Remove its
+  // action FIRST, and the Swift extension additionally guards expired events.
+  DeviceActivity.configureActions({
+    activityName: state.activityName,
+    callbackName: "intervalDidEnd",
+    actions: [],
+  });
+  DeviceActivity.stopMonitoring([state.activityName]);
+}
+
+/**
+ * Completing the hold earns up to 15 minutes on the selected apps, never
+ * extending beyond this bedtime window. Apple's monitor requires >=15 minutes,
+ * so a hold within 15 minutes of wake time simply runs to the normal wake-end.
+ *
+ * The native extension is responsible for re-shielding after 15 minutes even
+ * if Curfy is terminated; JS reconciliation handles delayed system callbacks.
+ * The user must explicitly finish the hold before this function is called.
+ */
+export async function grantBedtimeException({
+  bedtime, wakeTime, mode, now = new Date(),
+}: {
+  bedtime: string;
+  wakeTime: string;
+  mode: BlockModeId;
+  now?: Date;
+}): Promise<number> {
+  if (getScreenTimeAccessStatus() !== "authorized") {
+    throw new Error("Screen Time access is needed to unlock protected apps.");
+  }
+  const window = currentBedtimeWindow(now, bedtime, wakeTime);
+  if (!window) throw new Error("Your selected apps are not in a bedtime blocking window.");
+  const selectionId = selectionIdForMode(mode);
+  if ((getSelectionCount(mode) ?? 0) < 1) {
+    throw new Error("Choose an app to protect in Settings first.");
+  }
+
+  // The hold is not a bypass for an unconfigured/broken native shield.
+  if (selectedAppShieldCount(selectionId) === 0) {
+    throw new Error("Your selected apps are not currently shielded by iOS.");
+  }
+
+  const previous = readException();
+  if (previous && previous.expiresAt > now.getTime()) {
+    throw new Error("An app-unlock exception is already active.");
+  }
+  if (previous) {
+    stopExceptionMonitor(previous);
+    DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
+  }
+
+  // End one second after the rounded-down start to guarantee at least
+  // Apple's minimum 15-minute interval in whole DateComponents.
+  const scheduledStart = new Date(Math.floor(now.getTime() / 1000) * 1000);
+  const scheduledEnd = new Date(scheduledStart.getTime() + EXCEPTION_DURATION_MS + 1000);
+  const needsMonitor = scheduledEnd.getTime() < window.end.getTime();
+  const activityName = needsMonitor
+    ? EXCEPTION_ACTIVITY_PREFIX + now.getTime()
+    : null;
+
+  const state: ActiveException = {
+    activityName,
+    selectionId,
+    expiresAt: needsMonitor ? scheduledEnd.getTime() : window.end.getTime(),
+    bedtimeEndAt: window.end.getTime(),
+  };
+
+  // Store in the native shared app group so the monitor extension can reject
+  // stale callbacks (including stopMonitoring) and never block after wake.
+  DeviceActivity.userDefaultsSet(EXCEPTION_STATE_KEY, state);
+  if (!readException()) {
+    throw new Error("iOS couldn't save the exception for native recovery.");
+  }
+
+  try {
+    if (activityName) {
+      DeviceActivity.configureActions({
+        activityName,
+        callbackName: "intervalDidEnd",
+        actions: [{ type: "blockSelection", familyActivitySelectionId: selectionId }],
+      });
+      await DeviceActivity.startMonitoring(activityName, {
+        intervalStart: nativeDateComponents(scheduledStart),
+        intervalEnd: nativeDateComponents(scheduledEnd),
+        repeats: false,
+      }, []);
+    }
+    // The third-party library catches native blocking exceptions, so verify
+    // resulting managed settings instead of assuming its call succeeded.
+    DeviceActivity.unblockSelection({ activitySelectionId: selectionId }, "curfy-120-second-hold");
+    if (selectedAppShieldCount(selectionId) > 0) {
+      throw new Error("iOS did not release the selected app restrictions.");
+    }
+    return state.expiresAt;
+  } catch (error) {
+    if (activityName) stopExceptionMonitor(state);
+    DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
+    // Fail closed: restore protection if partial native setup failed.
+    DeviceActivity.blockSelection({ activitySelectionId: selectionId }, "curfy-exception-rollback");
+    throw error;
+  }
+}
+
+/** Foreground/restart recovery for callbacks iOS may defer until device use. */
+export function reconcileBedtimeException(
+  bedtime: string, wakeTime: string, now = new Date()
+): void {
+  const state = readException();
+  if (!state || now.getTime() < state.expiresAt) return;
+
+  const withinBedtime = currentBedtimeWindow(now, bedtime, wakeTime) !== null;
+  if (getScreenTimeAccessStatus() !== "authorized") return;
+
+  if (withinBedtime) {
+    DeviceActivity.blockSelection(
+      { activitySelectionId: state.selectionId }, "curfy-exception-foreground-recovery"
+    );
+    if (selectedAppShieldCount(state.selectionId) === 0) return; // retry on next foreground
+  } else {
+    // The standard bedtime end should already have unshielded the apps.
+    // This also repairs an old exception callback that arrived late.
+    DeviceActivity.unblockSelection(
+      { activitySelectionId: state.selectionId }, "curfy-exception-bedtime-ended"
+    );
+    if (selectedAppShieldCount(state.selectionId) !== 0) return;
+  }
+  stopExceptionMonitor(state);
+  DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
+}
+
+/** Cancels an existing exception when a new bedtime/selection is saved. */
+function cancelExceptionForScheduleChange(): void {
+  const state = readException();
+  if (!state) return;
+  stopExceptionMonitor(state);
+  DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
 }
