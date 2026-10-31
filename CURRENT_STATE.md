@@ -19,6 +19,12 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 **Evidence:** source inspected against the current GitHub branch; changes checked for action ordering, guards, and success-path ordering. Apple's DeviceActivity documentation and the library's published example both register actions before monitoring starts. **Not verified:** TypeScript build on current commit, native compilation, live Screen Time shielding or start/end events on physical iPhone. Do not treat earlier EAS preview builds as proof of current commits.
 
+## Milestone: avoid locking Curfy itself (2026-10-31)
+
+- User observed that Curfy's full-screen in-app hold modal appeared while the selected app did not appear shielded. Root cause for the Curfy self-lock: `SleepContext.checkLock()` directly called `setIsLocked(true)` for every bedtime window, independent of native Screen Time behavior.
+- `context/SleepContext.tsx` now logs the current bedtime window but does **not** automatically display Curfy's own lock modal. Explicit preview remains accessible. This does **not** itself repair native shielding; verify selected app shield separately.
+- Static source checks only. The installed iPhone build predates this fix. No new EAS build was triggered.
+
 ## Known P0 gaps
 
 1. **Real-device proof:** select one nonessential app, schedule bedtime shortly ahead, close Curfy, confirm that app receives an iOS shield while a different app remains usable; verify it unblocks at scheduled end. Also check no-permission/empty-selection error.
