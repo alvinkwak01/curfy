@@ -35,6 +35,27 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     super.intervalDidEnd(for: activity)
     logger.log("intervalDidEnd")
 
+    // Curfy's 15-minute exception uses its own one-shot monitor.
+    // stopMonitoring can also trigger intervalDidEnd; ignored until expiry.
+    // Never let a delayed/stale callback re-shield apps after bedtime ends.
+    if activity.rawValue.hasPrefix("curfy-exception-") {
+      guard
+        let state = userDefaults?.dictionary(forKey: "curfy-active-exception"),
+        let currentName = state["activityName"] as? String,
+        let expiryMs = state["expiresAt"] as? Double,
+        let bedtimeEndMs = state["bedtimeEndAt"] as? Double,
+        currentName == activity.rawValue
+      else {
+        logger.log("Ignoring missing/stale Curfy exception callback")
+        return
+      }
+      let nowMs = Date().timeIntervalSince1970 * 1000
+      guard nowMs >= expiryMs && nowMs < bedtimeEndMs else {
+        logger.log("Ignoring Curfy exception end outside active bedtime restriction")
+        return
+      }
+    }
+
     self.executeActionsForEvent(
       activityName: activity.rawValue,
       callbackName: "intervalDidEnd",
