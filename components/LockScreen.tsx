@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import {
+  Alert,
   Platform,
   StatusBar,
   StyleSheet,
@@ -12,6 +13,7 @@ import { HoldButton } from "@/components/HoldButton";
 import { StarBackground } from "@/components/StarBackground";
 import { Colors, Fonts } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
+import { router } from "expo-router";
 
 function formatTime(date: Date): string {
   const h = date.getHours().toString().padStart(2, "0");
@@ -49,7 +51,7 @@ function getStreakEmoji(streak: number): string {
   return "🌟";
 }
 
-export function LockScreen() {
+export function LockScreen({ mode = "preview" }: { mode?: "preview" | "escape" }) {
   const { unlockScreen, todayUnlocks, streak, devDismissLock } = useSleep();
   const insets = useSafeAreaInsets();
   const [now, setNow] = useState(new Date());
@@ -61,6 +63,23 @@ export function LockScreen() {
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
   const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
+
+  const handleHoldComplete = async () => {
+    if (mode === "preview") {
+      Alert.alert("Preview complete", "This was only a preview. No apps were unlocked.");
+      return;
+    }
+    try {
+      await unlockScreen();
+      router.back();
+    } catch (error) {
+      Alert.alert(
+        "Couldn't unlock selected apps",
+        error instanceof Error ? error.message : "Please try again."
+      );
+      throw error;
+    }
+  };
 
   const streakMsg = getStreakMessage(streak, todayUnlocks);
   const emoji = getStreakEmoji(streak);
@@ -111,11 +130,13 @@ export function LockScreen() {
       </View>
 
       <View style={styles.buttonSection}>
-        <HoldButton onUnlock={unlockScreen} unlockCount={todayUnlocks} />
+        <HoldButton onUnlock={handleHoldComplete} unlockCount={todayUnlocks} />
       </View>
 
       <View style={styles.footer}>
-        <Text style={styles.footerNote}>Returns in 15 min if unlocked</Text>
+        <Text style={styles.footerNote}>
+          {mode === "preview" ? "Preview only — no apps will be unlocked" : "Selected apps re-lock after 15 minutes"}
+        </Text>
         <Text style={styles.callNote}>📞 Incoming calls always come through</Text>
       </View>
     </View>
