@@ -59,6 +59,15 @@ export function currentBedtimeWindow(
   return null;
 }
 
+/** Safe for display paths: a corrupted saved preference must not crash Home. */
+export function isBedtimeWindowActive(at: Date, bedtime: string, wakeTime: string): boolean {
+  try {
+    return currentBedtimeWindow(at, bedtime, wakeTime) !== null;
+  } catch {
+    return false;
+  }
+}
+
 export function nativeDateComponents(date: Date) {
   return {
     year: date.getFullYear(),
