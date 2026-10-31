@@ -69,24 +69,30 @@ export default function Settings() {
   });
 
   const onSave = async () => {
+    if (!localBlockMode) {
+      Alert.alert("Choose an app", "Select an app to protect before saving.");
+      return;
+    }
+    try {
+      await configureBedtimeBlocking({
+        bedtime: localBedtime,
+        wakeTime: localWakeTime,
+        mode: localBlockMode,
+      });
+    } catch (error) {
+      console.warn("[Curfy] Failed to update app shielding", error);
+      Alert.alert(
+        "App blocking wasn't updated",
+        error instanceof Error ? error.message : "Please try saving again."
+      );
+      return;
+    }
+    // Do not claim changes were saved when native protection failed.
     await setBedtime(localBedtime);
     await setWakeTime(localWakeTime);
     await setUserName(localName.trim());
     await setMotivation(localMotivation.trim());
-    if (localBlockMode) {
-      await setBlockMode(localBlockMode);
-      try {
-        await configureBedtimeBlocking({
-          bedtime: localBedtime,
-          wakeTime: localWakeTime,
-          mode: localBlockMode,
-        });
-      } catch (_) {
-        // Best-effort, same reasoning as onboarding's next() — a failed
-        // reconfigure (e.g. access was revoked in iOS Settings) shouldn't
-        // block saving everything else.
-      }
-    }
+    await setBlockMode(localBlockMode);
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     setSaved(true);
     setTimeout(() => {
