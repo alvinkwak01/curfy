@@ -85,6 +85,7 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
   const scale = useSharedValue(1);
 
   const startTimeRef = useRef<number | null>(null);
+  const unlockPendingRef = useRef(false);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -112,6 +113,7 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
   };
 
   const handlePressIn = () => {
+    if (unlockPendingRef.current || startTimeRef.current !== null) return;
     setIsHolding(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     scale.value = withSpring(0.95);
@@ -134,6 +136,7 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
         setIsHolding(false);
         // Completion is only a request. Celebrate after the native
         // unshield actually succeeds, not when the JS clock reaches zero.
+        unlockPendingRef.current = true;
         Promise.resolve()
           .then(() => onUnlock())
           .then(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))
@@ -142,6 +145,9 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
             scale.value = withSpring(1);
             setDisplaySeconds(120);
             setMessage("Unlock failed. Try holding again.");
+          })
+          .finally(() => {
+            unlockPendingRef.current = false;
           });
       }
     }, 200);
