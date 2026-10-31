@@ -1,6 +1,8 @@
 import { StarBackground } from "@/components/StarBackground";
 import { Colors, Fonts } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
+import { currentBedtimeWindow } from "@/lib/bedtimeWindow";
+import { activeExceptionExpiresAt } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -58,7 +60,7 @@ function getMoodMessage(streak: number, unlocks: number): string {
 }
 
 export default function Home() {
-  const { userName, streak, todayUnlocks, bedtime, sleepLog } = useSleep();
+  const { userName, streak, todayUnlocks, bedtime, wakeTime, blockMode, sleepLog } = useSleep();
   const [minsLeft, setMinsLeft] = useState(minutesUntil(bedtime));
 
   useEffect(() => {
@@ -72,6 +74,9 @@ export default function Home() {
   const isImminent = minsLeft <= 2;
 
   const milestone = getMilestoneBadge(streak);
+  const inBedtimeWindow = !!blockMode &&
+    currentBedtimeWindow(new Date(), bedtime, wakeTime) !== null;
+  const exceptionExpiresAt = inBedtimeWindow ? activeExceptionExpiresAt() : null;
 
   const totalNights = sleepLog.length;
   const cleanNights = sleepLog.filter((e) => e.unlockAttempts === 0).length;
@@ -113,6 +118,28 @@ export default function Home() {
             </Text>
           </View>
         </Animated.View>
+
+        {inBedtimeWindow && (
+          <View style={styles.escapeCard}>
+            {exceptionExpiresAt ? (
+              <>
+                <Text style={styles.escapeLabel}>Temporary app access is active</Text>
+                <Text style={styles.escapeHint}>
+                  Scheduled to end at {new Date(exceptionExpiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+                </Text>
+              </>
+            ) : (
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel="Begin uninterrupted 120-second hold to unlock selected apps"
+                onPress={() => router.push("/escape")}
+              >
+                <Text style={styles.escapeLabel}>Need a 15-minute exception?</Text>
+                <Text style={styles.escapeHint}>Hold continuously for 120 seconds to unlock selected apps.</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
 
         <Animated.View entering={FadeInDown.duration(500).delay(200)} style={styles.messageSection}>
           <Text style={styles.moodMessage}>{getMoodMessage(streak, todayUnlocks)}</Text>
@@ -210,6 +237,15 @@ const styles = StyleSheet.create({
   },
   countdownText: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular },
   countdownUrgentText: { color: Colors.dangerRed },
+  escapeCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 14,
+    padding: 16,
+  },
+  escapeLabel: { color: Colors.primaryCyan, fontSize: 16, fontFamily: Fonts.semiBold },
+  escapeHint: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular, marginTop: 6 },
   messageSection: { alignItems: "center", gap: 10 },
   moodMessage: {
     color: Colors.textMuted,
