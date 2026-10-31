@@ -190,7 +190,7 @@ const EXCEPTION_STATE_KEY = "curfy-active-exception";
 export const EXCEPTION_DURATION_MS = 15 * 60 * 1000;
 
 type ActiveException = {
-  activityName: string | null;
+  activityName: string;
   selectionId: string;
   expiresAt: number;
   bedtimeEndAt: number;
@@ -206,7 +206,7 @@ function readException(): ActiveException | null {
   const state = DeviceActivity.userDefaultsGet<ActiveException>(EXCEPTION_STATE_KEY);
   if (!state || typeof state.selectionId !== "string" ||
       typeof state.expiresAt !== "number" || typeof state.bedtimeEndAt !== "number" ||
-      (state.activityName !== null && typeof state.activityName !== "string")) {
+      typeof state.activityName !== "string") {
     return null;
   }
   return state;
@@ -282,7 +282,7 @@ export async function grantBedtimeException({
   const needsMonitor = scheduledEnd.getTime() < window.end.getTime();
   const activityName = needsMonitor
     ? EXCEPTION_ACTIVITY_PREFIX + now.getTime()
-    : null;
+    : "";
 
   const state: ActiveException = {
     activityName,
