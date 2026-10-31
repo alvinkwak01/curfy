@@ -454,6 +454,21 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     }
   }, [isLoading, isOnboardingComplete, bedtime, wakeTime]);
 
+  // Foreground-only safety net. The real re-shield is in iOS's native
+  // extension, so this interval is not required for a closed app to work.
+  useEffect(() => {
+    if (isLoading || !isOnboardingComplete) return;
+    const id = setInterval(() => {
+      if (AppState.currentState !== "active") return;
+      try {
+        reconcileBedtimeException(bedtime, wakeTime);
+      } catch (error) {
+        console.warn("[Curfy] Exception recovery needs retry", error);
+      }
+    }, 30000);
+    return () => clearInterval(id);
+  }, [isLoading, isOnboardingComplete, bedtime, wakeTime]);
+
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
