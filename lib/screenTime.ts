@@ -86,15 +86,11 @@ function timeToDateComponents(time: string): DeviceActivity.DateComponents {
   return { hour, minute };
 }
 
-// Schedules the actual block: apps in `mode`'s selection lock at `bedtime`
-// and unlock at `wakeTime`, every night, enforced by iOS itself via a
-// separate system process — this keeps running even if Curfy is killed,
-// which is the entire point (see CONTEXT.md §6c on why the old in-app lock
-// didn't do this). Also points the native shield's button at "openApp", so
-// tapping a blocked app during the window opens Curfy — which is what lets
-// the existing HoldButton/LockScreen screen double as the escape hatch
-// (Curfy's own bedtime-window check already shows that screen on open;
-// nothing about that logic needed to change for this to work).
+// Register the native start/end actions BEFORE starting monitoring.
+// DeviceActivity may invoke intervalDidStart immediately when the schedule
+// is already active, so starting it first can lose the very first shield.
+// The shield-to-Curfy handoff is still unverified on a physical iPhone:
+// "openApp" is a library action, not proof that iOS will open our app.
 export async function configureBedtimeBlocking({
   bedtime,
   wakeTime,
@@ -104,17 +100,14 @@ export async function configureBedtimeBlocking({
   wakeTime: string;
   mode: BlockModeId;
 }): Promise<void> {
+  if (getScreenTimeAccessStatus() !== "authorized") {
+    throw new Error("Screen Time permission is required to protect selected apps.");
+  }
+  const selectedCount = getSelectionCount(mode);
+  if (selectedCount === null || selectedCount < 1) {
+    throw new Error("Choose at least one app in Apple's app picker before continuing.");
+  }
   const selectionId = selectionIdForMode(mode);
-
-  await DeviceActivity.startMonitoring(
-    BEDTIME_ACTIVITY_NAME,
-    {
-      intervalStart: timeToDateComponents(bedtime),
-      intervalEnd: timeToDateComponents(wakeTime),
-      repeats: true,
-    },
-    []
-  );
 
   DeviceActivity.configureActions({
     activityName: BEDTIME_ACTIVITY_NAME,
@@ -140,6 +133,19 @@ export async function configureBedtimeBlocking({
         actions: [{ type: "openApp" }],
       },
     }
+  );
+
+  // Starting last matters: Apple may fire intervalDidStart right away.
+  // If monitoring fails, let onboarding/Settings show an error instead of
+  // silently marking an unprotected schedule as saved.
+  await DeviceActivity.startMonitoring(
+    BEDTIME_ACTIVITY_NAME,
+    {
+      intervalStart: timeToDateComponents(bedtime),
+      intervalEnd: timeToDateComponents(wakeTime),
+      repeats: true,
+    },
+    []
   );
 }
 
