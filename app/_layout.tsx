@@ -127,6 +127,10 @@ function RootLayoutNav() {
           name="preview-lock"
           options={{ presentation: "fullScreenModal", headerShown: false }}
         />
+        <Stack.Screen
+          name="escape"
+          options={{ presentation: "fullScreenModal", headerShown: false }}
+        />
       </Stack>
 
       <Modal visible={isLocked} animationType="fade" statusBarTranslucent>
