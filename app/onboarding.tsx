@@ -16,6 +16,7 @@ import { Ionicons } from "@expo/vector-icons";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   NativeSyntheticEvent,
   Platform,
@@ -125,23 +126,29 @@ export default function Onboarding() {
       setStep(step + 1);
       return;
     }
+    if (!blockMode) {
+      Alert.alert("Choose an app", "Select an app to protect before finishing setup.");
+      return;
+    }
+    try {
+      await configureBedtimeBlocking({
+        bedtime: localBedtime,
+        wakeTime: localWakeTime,
+        mode: blockMode,
+      });
+    } catch (error) {
+      console.warn("[Curfy] Failed to schedule app shielding", error);
+      Alert.alert(
+        "App blocking isn't ready",
+        error instanceof Error ? error.message : "Please try setting up app blocking again."
+      );
+      return;
+    }
+    // Only complete setup after the native schedule was accepted.
     await setBedtime(localBedtime);
     await setWakeTime(localWakeTime);
     await setUserName(name.trim());
-    if (blockMode) {
-      await persistBlockMode(blockMode);
-      try {
-        await configureBedtimeBlocking({
-          bedtime: localBedtime,
-          wakeTime: localWakeTime,
-          mode: blockMode,
-        });
-      } catch (_) {
-        // Best-effort — a failure here (e.g. Screen Time access was denied
-        // a few steps back) shouldn't block finishing onboarding. Settings
-        // is where this eventually needs a retry path.
-      }
-    }
+    await persistBlockMode(blockMode);
     await completeOnboarding();
   };
 
