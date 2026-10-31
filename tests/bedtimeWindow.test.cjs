@@ -44,13 +44,23 @@ test("native date components retain the intended local calendar date", () => {
 });
 
 test("DST boundaries are based on local dates, not 24-hour arithmetic", () => {
-  // Run the test with TZ=America/Los_Angeles.
-  const spring = currentBedtimeWindow(at("2026-03-08T03:30:00"), "23:00", "06:00");
-  assert.equal(spring?.start.getDate(), 7);
-  assert.equal(spring?.end.getDate(), 8);
-  assert.equal(spring?.end.getHours(), 6);
+  const previous = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    const spring = currentBedtimeWindow(at("2026-03-08T03:30:00"), "23:00", "06:00");
+    assert.equal(spring?.start.getDate(), 7);
+    assert.equal(spring?.end.getDate(), 8);
+    assert.equal(spring?.end.getHours(), 6);
+    // Spring-forward night is 7 hours, not 8.
+    assert.equal((spring.end - spring.start) / 3_600_000, 7);
 
-  const fall = currentBedtimeWindow(at("2026-11-01T01:30:00"), "23:00", "06:00");
-  assert.equal(fall?.start.getDate(), 31);
-  assert.equal(fall?.end.getDate(), 1);
+    const fall = currentBedtimeWindow(at("2026-11-01T01:30:00"), "23:00", "06:00");
+    assert.equal(fall?.start.getDate(), 31);
+    assert.equal(fall?.end.getDate(), 1);
+    // Fall-back night is 9 hours, not 8.
+    assert.equal((fall.end - fall.start) / 3_600_000, 9);
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
 });
