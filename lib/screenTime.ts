@@ -212,6 +212,17 @@ function readException(): ActiveException | null {
   return state;
 }
 
+/** Preflight prevents users from holding 120 seconds when iOS never shielded an app. */
+export function isSelectionShielded(mode: BlockModeId): boolean {
+  if (getScreenTimeAccessStatus() !== "authorized") return false;
+  try {
+    return selectedAppShieldCount(selectionIdForMode(mode)) > 0;
+  } catch (error) {
+    console.warn("[Curfy] Unable to inspect current native app shields", error);
+    return false;
+  }
+}
+
 function selectedAppShieldCount(selectionId: string): number {
   const overlap = DeviceActivity.intersection(
     { activitySelectionId: selectionId },
