@@ -36,6 +36,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-dev-client",
+        {
+          "launchMode": "launcher"
+        }
+      ],
       "expo-font",
       "expo-notifications",
       "expo-web-browser",
