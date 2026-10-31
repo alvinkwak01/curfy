@@ -52,13 +52,9 @@ interface WheelProps {
  */
 function Wheel({ value, count, onChange, itemHeight, digitSize }: WheelProps) {
   const listRef = useRef<FlatList<number>>(null);
-  // Descending, not ascending — so the value sitting below the current
-  // selection (further down the list, reached by scrolling up/dragging
-  // your finger up) is always the next-LOWER number. That's the "lower
-  // number below" behavior wheel pickers are expected to have; with an
-  // ascending list, scrolling up would reveal higher numbers instead.
-  const flip = (n: number) => count - 1 - n;
-  const data = useMemo(() => Array.from({ length: count }, (_, i) => flip(i)), [count]);
+  // Match native iOS picker direction: larger numbers sit below the
+  // selected value, and swiping up moves to larger values.
+  const data = useMemo(() => Array.from({ length: count }, (_, i) => i), [count]);
   const isDragging = useRef(false);
   const lastValue = useRef(value);
 
@@ -69,12 +65,12 @@ function Wheel({ value, count, onChange, itemHeight, digitSize }: WheelProps) {
     if (isDragging.current) return;
     if (lastValue.current === value) return;
     lastValue.current = value;
-    listRef.current?.scrollToOffset({ offset: flip(value) * itemHeight, animated: true });
+    listRef.current?.scrollToOffset({ offset: value * itemHeight, animated: true });
   }, [value, itemHeight]);
 
   const snapToNearest = (offsetY: number) => {
     const index = Math.max(0, Math.min(count - 1, Math.round(offsetY / itemHeight)));
-    const newValue = flip(index);
+    const newValue = index;
     isDragging.current = false;
     if (newValue !== lastValue.current) {
       lastValue.current = newValue;
@@ -99,7 +95,7 @@ function Wheel({ value, count, onChange, itemHeight, digitSize }: WheelProps) {
         showsVerticalScrollIndicator={false}
         snapToInterval={itemHeight}
         decelerationRate="fast"
-        initialScrollIndex={flip(value)}
+        initialScrollIndex={value}
         initialNumToRender={count}
         nestedScrollEnabled
         getItemLayout={(_, index) => ({
@@ -152,7 +148,7 @@ export function TimePicker({ value, onChange, digitSize = 56 }: TimePickerProps)
   return (
     <View style={styles.row}>
       <View style={styles.column}>
-        <TouchableOpacity onPress={() => setHours(1)} style={styles.arrowBtn}>
+        <TouchableOpacity onPress={() => setHours(-1)} style={styles.arrowBtn}>
           <Text style={styles.arrow}>▲</Text>
         </TouchableOpacity>
         <View style={{ width: columnWidth }}>
@@ -164,7 +160,7 @@ export function TimePicker({ value, onChange, digitSize = 56 }: TimePickerProps)
             digitSize={digitSize}
           />
         </View>
-        <TouchableOpacity onPress={() => setHours(-1)} style={styles.arrowBtn}>
+        <TouchableOpacity onPress={() => setHours(1)} style={styles.arrowBtn}>
           <Text style={styles.arrow}>▼</Text>
         </TouchableOpacity>
       </View>
@@ -172,7 +168,7 @@ export function TimePicker({ value, onChange, digitSize = 56 }: TimePickerProps)
       <Text style={[styles.colon, { fontSize: digitSize, lineHeight: itemHeight }]}>:</Text>
 
       <View style={styles.column}>
-        <TouchableOpacity onPress={() => setMinutes(1)} style={styles.arrowBtn}>
+        <TouchableOpacity onPress={() => setMinutes(-1)} style={styles.arrowBtn}>
           <Text style={styles.arrow}>▲</Text>
         </TouchableOpacity>
         <View style={{ width: columnWidth }}>
@@ -184,7 +180,7 @@ export function TimePicker({ value, onChange, digitSize = 56 }: TimePickerProps)
             digitSize={digitSize}
           />
         </View>
-        <TouchableOpacity onPress={() => setMinutes(-1)} style={styles.arrowBtn}>
+        <TouchableOpacity onPress={() => setMinutes(1)} style={styles.arrowBtn}>
           <Text style={styles.arrow}>▼</Text>
         </TouchableOpacity>
       </View>
