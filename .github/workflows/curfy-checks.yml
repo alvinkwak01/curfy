@@ -1,0 +1,27 @@
+name: Curfy code checks
+
+on:
+  push:
+    branches:
+      - feat/ios-shield-from-august
+  pull_request:
+    branches:
+      - backup/local-curfy-august
+
+jobs:
+  typescript-and-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      # The inherited lockfile currently predates the Expo 54 dev-client fix.
+      # Switch to npm ci after the Mac-generated lockfile is committed.
+      - run: npm install --ignore-scripts --no-audit --no-fund
+      - run: npm run test:unit
+        env:
+          TZ: America/Los_Angeles
+      - run: npx tsc --noEmit
