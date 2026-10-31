@@ -67,5 +67,9 @@ export function nativeDateComponents(date: Date) {
     hour: date.getHours(),
     minute: date.getMinutes(),
     second: date.getSeconds(),
+    // A one-shot exception is an elapsed-time interval. Preserve the
+    // offset of each endpoint so repeated local hours on DST fall-back
+    // resolve to the intended distinct instants in Apple's DateComponents.
+    timeZoneOffsetInSeconds: -date.getTimezoneOffset() * 60,
   };
 }
