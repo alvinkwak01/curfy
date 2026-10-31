@@ -1,6 +1,11 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
-import { stopBedtimeBlocking } from "@/lib/screenTime";
+import {
+  BlockModeId,
+  grantBedtimeException,
+  reconcileBedtimeException,
+  stopBedtimeBlocking,
+} from "@/lib/screenTime";
 import React, {
   createContext,
   useCallback,
@@ -83,7 +88,7 @@ interface SleepContextType {
   sleepLog: SleepEntry[];
   isLocked: boolean;
   lockScreen: () => void;
-  unlockScreen: () => void;
+  unlockScreen: () => Promise<void>;
   todayUnlocks: number;
   streak: number;
   // Highest streak ever reached, independent of the current one — this is
@@ -438,12 +443,32 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     return () => clearInterval(interval);
   }, [checkLock]);
 
+  // DeviceActivity callbacks can be deferred until the user next uses
+  // the device. Reconcile missed exception expiry whenever Curfy reopens.
+  useEffect(() => {
+    if (isLoading || !isOnboardingComplete) return;
+    try {
+      reconcileBedtimeException(bedtime, wakeTime);
+    } catch (error) {
+      console.warn("[Curfy] Exception recovery needs retry", error);
+    }
+  }, [isLoading, isOnboardingComplete, bedtime, wakeTime]);
+
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
-      if (state === "active") checkLock();
+      if (state === "active") {
+        checkLock();
+        if (isOnboardingComplete) {
+          try {
+            reconcileBedtimeException(bedtime, wakeTime);
+          } catch (error) {
+            console.warn("[Curfy] Exception recovery needs retry", error);
+          }
+        }
+      }
     });
     return () => sub.remove();
-  }, [checkLock]);
+  }, [checkLock, isOnboardingComplete, bedtime, wakeTime]);
 
   const setBedtime = async (time: string) => {
     setBedtimeState(time);
@@ -493,7 +518,17 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     setIsLocked(true);
   };
 
-  const unlockScreen = useCallback(() => {
+  const unlockScreen = useCallback(async () => {
+    if (blockMode !== "social" && blockMode !== "most" && blockMode !== "custom") {
+      throw new Error("Choose a protected app in Settings first.");
+    }
+    // Grant the actual OS-level exception BEFORE incrementing the escape
+    // counter or dismissing the hold UI. Failure must stay visible.
+    await grantBedtimeException({
+      bedtime,
+      wakeTime,
+      mode: blockMode as BlockModeId,
+    });
     const newCount = todayUnlocks + 1;
     setTodayUnlocks(newCount);
     setIsLocked(false);
@@ -519,7 +554,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       AsyncStorage.setItem(SLEEP_LOG_KEY, JSON.stringify(updated));
       return updated;
     });
-  }, [todayUnlocks]);
+  }, [todayUnlocks, bedtime, wakeTime, blockMode]);
 
   // Sends the user back through onboarding, but deliberately does NOT
   // touch bedtime, name, motivation, or the sleep log — that's local
