@@ -393,8 +393,10 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     if (cooldownUntil.current > now) return;
 
     const inWindow = isInBedtimeWindow(bedtime);
-    if (inWindow && !isLocked) {
-      setIsLocked(true);
+    // The native Screen Time shield protects selected apps. Never auto-lock
+    // Curfy itself: users must be able to open Settings and manage protection.
+    // Keep the daily log independent of the optional hold-screen preview.
+    if (inWindow && !lockedToday.current) {
       const today = todayDateString();
       // The persisted log is the real source of truth for "already
       // logged tonight" — lockedToday is just an in-memory fast path.
@@ -421,15 +423,14 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       } else {
         lockedToday.current = true;
       }
-    } else if (!inWindow && isLocked) {
-      setIsLocked(false);
+    } else if (!inWindow && lockedToday.current) {
       lockedToday.current = false;
       const currentLog = sleepLogRef.current;
       const escapes = todayUnlocksRef.current;
       const streak = computeStreak(currentLog);
       sendMorningSummary(userNameRef.current, escapes, streak);
     }
-  }, [bedtime, isOnboardingComplete, isLocked, devSkipLock]);
+  }, [bedtime, isOnboardingComplete, devSkipLock]);
 
   useEffect(() => {
     checkLock();
