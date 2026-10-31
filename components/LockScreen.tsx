@@ -135,7 +135,7 @@ export function LockScreen({ mode = "preview" }: { mode?: "preview" | "escape" }
 
       <View style={styles.footer}>
         <Text style={styles.footerNote}>
-          {mode === "preview" ? "Preview only — no apps will be unlocked" : "Selected apps re-lock after 15 minutes"}
+          {mode === "preview" ? "Preview only — no apps will be unlocked" : "Access lasts up to 15 minutes, ending at wake time"}
         </Text>
         <Text style={styles.callNote}>📞 Incoming calls always come through</Text>
       </View>
