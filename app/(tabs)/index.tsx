@@ -1,7 +1,7 @@
 import { StarBackground } from "@/components/StarBackground";
 import { Colors, Fonts } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
-import { currentBedtimeWindow } from "@/lib/bedtimeWindow";
+import { isBedtimeWindowActive } from "@/lib/bedtimeWindow";
 import { activeExceptionExpiresAt, isSelectionShielded } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -75,7 +75,7 @@ export default function Home() {
 
   const milestone = getMilestoneBadge(streak);
   const inBedtimeWindow = !!blockMode &&
-    currentBedtimeWindow(new Date(), bedtime, wakeTime) !== null;
+    isBedtimeWindowActive(new Date(), bedtime, wakeTime);
   const exceptionExpiresAt = inBedtimeWindow ? activeExceptionExpiresAt() : null;
   const isShielded = inBedtimeWindow && !exceptionExpiresAt &&
     (blockMode === "social" || blockMode === "most" || blockMode === "custom") &&
