@@ -1,7 +1,14 @@
-import React, { useEffect, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { StarBackground } from "@/components/StarBackground";
+import { HoldButton } from "@/components/HoldButton";
+import { Colors, Fonts } from "@/constants/theme";
+import { useSleep } from "@/context/SleepContext";
+import { router } from "expo-router";
+import React, { useState } from "react";
 import {
   Alert,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -9,259 +16,243 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { HoldButton } from "@/components/HoldButton";
-import { StarBackground } from "@/components/StarBackground";
-import { Colors, Fonts } from "@/constants/theme";
-import { useSleep } from "@/context/SleepContext";
-import { router } from "expo-router";
 
-function formatTime(date: Date): string {
-  const h = date.getHours().toString().padStart(2, "0");
-  const m = date.getMinutes().toString().padStart(2, "0");
-  return `${h}:${m}`;
-}
+type LockScreenProps = {
+  mode?: "preview" | "escape";
+  /** Leaving this screen never changes Screen Time restrictions or counts as an escape. */
+  onExit?: () => void;
+};
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
+/**
+ * The circular 120-second hold runs inside Curfy, not in Apple's shield
+ * extension. The user can leave this screen at any time without unlocking.
+ */
+export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
+  const { unlockScreen, todayUnlocks, devDismissLock } = useSleep();
+  const { top, bottom } = useSafeAreaInsets();
+  const [unlockPending, setUnlockPending] = useState(false);
+  const isPreview = mode === "preview";
 
-function getStreakMessage(streak: number, unlocks: number): string {
-  if (streak === 0 && unlocks === 0) return "First night. Let's see what you've got.";
-  if (streak === 0 && unlocks > 0) return "You broke your streak. Start over. Actually try this time.";
-  if (unlocks > 2) return `${streak}-night streak and you've already escaped tonight. Wow.`;
-  if (unlocks > 0) return `${streak}-night streak. You slipped once. Don't make me say something.`;
-  if (streak >= 30) return `${streak} nights. Genuinely impressive. Don't blow it now.`;
-  if (streak >= 14) return `${streak}-night streak. Okay. I see you.`;
-  if (streak >= 7) return `${streak} nights straight. You're actually doing it.`;
-  if (streak >= 3) return `${streak}-night streak. Don't get comfortable.`;
-  if (streak === 1) return "One night down. Let's make it two.";
-  return `${streak}-night streak. Hold the line.`;
-}
-
-function getStreakEmoji(streak: number): string {
-  if (streak === 0) return "💤";
-  if (streak < 3) return "🌙";
-  if (streak < 7) return "⭐";
-  if (streak < 14) return "🔥";
-  if (streak < 30) return "✨";
-  return "🌟";
-}
-
-export function LockScreen({ mode = "preview" }: { mode?: "preview" | "escape" }) {
-  const { unlockScreen, todayUnlocks, streak, devDismissLock } = useSleep();
-  const insets = useSafeAreaInsets();
-  const [now, setNow] = useState(new Date());
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
-
-  const handleHoldComplete = async () => {
-    if (mode === "preview") {
-      Alert.alert("Preview complete", "This was only a preview. No apps were unlocked.");
+  const finishHold = async () => {
+    if (isPreview) {
+      Alert.alert("Preview complete", "This was a preview. No apps were unlocked.");
       return;
     }
+    setUnlockPending(true);
     try {
+      // Only navigate after the native Screen Time exception succeeds.
       await unlockScreen();
-      router.back();
+      setUnlockPending(false);
+      router.replace("/(tabs)");
     } catch (error) {
+      setUnlockPending(false);
       Alert.alert(
         "Couldn't unlock selected apps",
         error instanceof Error ? error.message : "Please try again."
       );
+      // Propagate to HoldButton so it visibly resets after a native failure.
       throw error;
     }
   };
 
-  const streakMsg = getStreakMessage(streak, todayUnlocks);
-  const emoji = getStreakEmoji(streak);
-
   return (
-    <View style={[styles.container, { paddingTop: topPad + 16, paddingBottom: bottomPad + 16 }]}>
+    <View style={styles.screen}>
       {Platform.OS !== "web" && <StatusBar barStyle="light-content" />}
       <StarBackground />
-
-      {/* Dev-build-only escape hatch — real users never see this, since
-          `__DEV__` compiles to `false` in production. Settings has a
-          "Disable auto-lock" switch, but Settings is unreachable while
-          this modal covers the whole app, so the first-ever dismissal
-          needs a way out that doesn't route through Settings. */}
-      {__DEV__ && (
-        <TouchableOpacity
-          style={[styles.devSkip, { top: topPad + 16 }]}
-          onPress={devDismissLock}
-          hitSlop={10}
-        >
-          <Text style={styles.devSkipText}>DEV: Skip Lock</Text>
-        </TouchableOpacity>
-      )}
-
-      <View style={styles.header}>
+      <ScrollView
+        contentContainerStyle={[
+          styles.content,
+          { paddingTop: (Platform.OS === "web" ? 42 : top) + 16,
+            paddingBottom: (Platform.OS === "web" ? 24 : bottom) + 20 },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
         <View style={styles.topBar}>
-          <View>
-            <Text style={styles.appName}>CURFY</Text>
-            <Text style={styles.tagline}>Bedtime. For real.</Text>
-          </View>
-          {streak > 0 && (
-            <View style={styles.streakPill}>
-              <Text style={styles.streakEmoji}>{emoji}</Text>
-              <Text style={styles.streakCount}>{streak}</Text>
-              <Text style={styles.streakNights}>{streak === 1 ? "night" : "nights"}</Text>
+          <View style={styles.brand}>
+            <View style={styles.brandIcon}>
+              <Ionicons name="moon-outline" size={19} color={Colors.primaryCyan} />
             </View>
-          )}
+            <View>
+              <Text style={styles.brandName}>CURFY</Text>
+              <Text style={styles.brandTagline}>BEDTIME. FOR REAL.</Text>
+            </View>
+          </View>
+          {onExit ? (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Exit to Curfy Home without unlocking apps"
+              disabled={unlockPending}
+              onPress={onExit}
+              activeOpacity={0.75}
+              style={styles.exitTop}
+              hitSlop={8}
+            >
+              <Ionicons name="close" size={19} color={Colors.textPrimary} />
+              <Text style={styles.exitTopText}>Exit</Text>
+            </TouchableOpacity>
+          ) : __DEV__ ? (
+            <TouchableOpacity
+              onPress={devDismissLock}
+              style={styles.devExit}
+              accessibilityRole="button"
+              accessibilityLabel="Development: dismiss preview lock"
+            >
+              <Text style={styles.devExitText}>DEV: Skip</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
-      </View>
 
-      <View style={styles.clockSection}>
-        <Text style={styles.time}>{formatTime(now)}</Text>
-        <Text style={styles.date}>{formatDate(now)}</Text>
-      </View>
+        <View style={styles.hero}>
+          <View style={styles.eyebrow}>
+            <View style={styles.eyebrowDot} />
+            <Text style={styles.eyebrowText}>
+              {isPreview ? "ESCAPE SCREEN PREVIEW" : "YOUR BEDTIME BOUNDARY"}
+            </Text>
+          </View>
+          <Text style={styles.heading}>
+            {isPreview ? "A moment to\ndecide." : "Still want\nto go in?"}
+          </Text>
+          <Text style={styles.description}>
+            {isPreview
+              ? "This is the deliberate pause before an exception. Trying it here won't unlock any apps."
+              : "Hold the circle for two uninterrupted minutes to request up to 15 minutes of access."}
+          </Text>
+        </View>
 
-      <View style={styles.messageSection}>
-        <Text style={styles.streakMessage}>{streakMsg}</Text>
-      </View>
+        <View style={styles.holdCard}>
+          <View pointerEvents="none" style={styles.orbit} />
+          <View pointerEvents="none" style={styles.orbitInner} />
+          <View pointerEvents="none" style={styles.orbitMoon}>
+            <Ionicons name="moon" size={15} color={Colors.primaryCyan} />
+          </View>
+          <HoldButton onUnlock={finishHold} unlockCount={todayUnlocks} />
+        </View>
 
-      <View style={styles.buttonSection}>
-        <HoldButton onUnlock={handleHoldComplete} unlockCount={todayUnlocks} />
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerNote}>
-          {mode === "preview" ? "Preview only — no apps will be unlocked" : "Access lasts up to 15 minutes, ending at wake time"}
-        </Text>
-        <Text style={styles.callNote}>📞 Incoming calls always come through</Text>
-      </View>
+        <View style={styles.bottom}>
+          <View style={styles.resetHint}>
+            <Ionicons name="refresh-outline" size={16} color={Colors.textMuted} />
+            <Text style={styles.resetHintText}>Let go early and the timer starts over.</Text>
+          </View>
+          {onExit && (
+            <TouchableOpacity
+              onPress={onExit}
+              disabled={unlockPending}
+              accessibilityRole="button"
+              accessibilityLabel="Back to Home without unlocking apps"
+              activeOpacity={0.8}
+              style={[styles.homeButton, unlockPending && styles.homeButtonDisabled]}
+            >
+              <Ionicons name="arrow-back" size={19} color={Colors.textPrimary} />
+              <Text style={styles.homeButtonText}>Back to Home</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.footer}>
+            {unlockPending
+              ? "Requesting access from iOS…"
+              : isPreview
+              ? "Preview only · No apps will be unlocked"
+              : "No hold, no unlock. Your selected apps stay protected."}
+          </Text>
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    alignItems: "center",
+  screen: { flex: 1, backgroundColor: Colors.background },
+  content: {
+    flexGrow: 1,
     justifyContent: "space-between",
     paddingHorizontal: 24,
-  },
-  header: {
-    width: "100%",
-  },
-  devSkip: {
-    position: "absolute",
-    right: 20,
-    zIndex: 10,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.warningAmber,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  devSkipText: {
-    color: Colors.warningAmber,
-    fontSize: 11,
-    fontFamily: Fonts.bold,
-    letterSpacing: 0.5,
+    gap: 20,
   },
   topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    width: "100%",
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
   },
-  appName: {
-    color: Colors.primaryCyan,
-    fontSize: 13,
-    fontFamily: Fonts.bold,
-    letterSpacing: 6,
-    opacity: 0.8,
+  brand: { flexDirection: "row", alignItems: "center", gap: 10 },
+  brandIcon: {
+    width: 37, height: 37, borderRadius: 12,
+    justifyContent: "center", alignItems: "center",
+    backgroundColor: "#10202C", borderWidth: 1, borderColor: "#214358",
   },
-  tagline: {
-    color: Colors.textGhost,
-    fontSize: 10,
-    fontFamily: Fonts.regular,
-    letterSpacing: 1,
-    marginTop: 2,
-  },
-  streakPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  streakEmoji: {
-    fontSize: 14,
-  },
-  streakCount: {
-    color: Colors.primaryCyan,
-    fontSize: 15,
-    fontFamily: Fonts.bold,
-  },
-  streakNights: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: Fonts.regular,
-  },
-  clockSection: {
-    alignItems: "center",
-    gap: 6,
-  },
-  time: {
+  brandName: {
+    fontFamily: Fonts.bold, fontSize: 14, letterSpacing: 3.1,
     color: Colors.textPrimary,
-    fontSize: 64,
-    fontFamily: Fonts.bold,
-    letterSpacing: -2,
   },
-  date: {
-    color: Colors.textMuted,
-    fontSize: 15,
-    fontFamily: Fonts.regular,
-    letterSpacing: 0.3,
+  brandTagline: {
+    fontFamily: Fonts.medium, color: Colors.textMuted, fontSize: 9,
+    letterSpacing: 1.5, marginTop: 3,
   },
-  messageSection: {
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 20,
+  exitTop: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    borderWidth: 1, borderColor: "#333451", borderRadius: 18,
+    backgroundColor: "#121423", paddingVertical: 10, paddingHorizontal: 12,
+    minHeight: 44,
   },
-  streakMessage: {
-    color: "#8A8ABF",
-    fontSize: 14,
-    fontFamily: Fonts.regular,
+  exitTopText: { fontFamily: Fonts.semiBold, color: Colors.textPrimary, fontSize: 13 },
+  devExit: { padding: 10, borderRadius: 10, borderWidth: 1, borderColor: Colors.warningAmber },
+  devExitText: { fontFamily: Fonts.medium, fontSize: 12, color: Colors.warningAmber },
+  hero: { alignItems: "center", gap: 10, paddingHorizontal: 8 },
+  eyebrow: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: "rgba(0,229,255,0.055)", borderRadius: 20,
+    borderWidth: 1, borderColor: "#174252",
+    paddingHorizontal: 14, paddingVertical: 7,
+  },
+  eyebrowDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.primaryCyan },
+  eyebrowText: {
+    color: Colors.primaryCyan, fontFamily: Fonts.semiBold,
+    letterSpacing: 1.7, fontSize: 10,
+  },
+  heading: {
+    color: Colors.textPrimary, fontFamily: Fonts.bold,
+    fontSize: 40, lineHeight: 43, letterSpacing: -1.7,
     textAlign: "center",
-    lineHeight: 20,
   },
-  buttonSection: {
-    alignItems: "center",
+  description: {
+    maxWidth: 320, textAlign: "center",
+    color: "#A3A3C5", fontFamily: Fonts.regular,
+    fontSize: 14, lineHeight: 21,
   },
+  holdCard: {
+    minHeight: 282, alignItems: "center", justifyContent: "center",
+    alignSelf: "stretch",
+  },
+  orbit: {
+    position: "absolute", width: 273, height: 273, borderRadius: 137,
+    borderWidth: 1, borderColor: "rgba(0,229,255,0.075)",
+    backgroundColor: "rgba(0,229,255,0.018)",
+  },
+  orbitInner: {
+    position: "absolute", width: 235, height: 235, borderRadius: 118,
+    borderWidth: 1, borderColor: "rgba(123,47,255,0.10)",
+  },
+  orbitMoon: {
+    position: "absolute", top: 0, right: "17%",
+    width: 30, height: 30, borderRadius: 15,
+    backgroundColor: "#171731", borderColor: "#34365D", borderWidth: 1,
+    justifyContent: "center", alignItems: "center",
+  },
+  bottom: { alignItems: "center", gap: 16 },
+  resetHint: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 8, paddingHorizontal: 6,
+  },
+  resetHintText: {
+    color: "#8888AF", fontSize: 12, fontFamily: Fonts.regular,
+    textAlign: "center", flexShrink: 1,
+  },
+  homeButton: {
+    width: "100%", minHeight: 56, borderRadius: 16,
+    backgroundColor: "#17192C", borderWidth: 1, borderColor: "#393A60",
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 11,
+  },
+  homeButtonDisabled: { opacity: 0.4 },
+  homeButtonText: { fontFamily: Fonts.semiBold, fontSize: 16, color: Colors.textPrimary },
   footer: {
-    alignItems: "center",
-    gap: 6,
-  },
-  footerNote: {
-    color: Colors.textGhost,
-    fontSize: 12,
-    fontFamily: Fonts.regular,
-    textAlign: "center",
-    letterSpacing: 0.3,
-  },
-  callNote: {
-    color: Colors.textGhost,
-    fontSize: 11,
-    fontFamily: Fonts.regular,
-    textAlign: "center",
-    letterSpacing: 0.2,
+    fontFamily: Fonts.regular, color: Colors.textMuted,
+    fontSize: 11, textAlign: "center", lineHeight: 17,
   },
 });
