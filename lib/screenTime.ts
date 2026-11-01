@@ -386,7 +386,9 @@ export function reconcileBedtimeException(
     DeviceActivity.blockSelection(
       { activitySelectionId: state.selectionId }, "curfy-exception-foreground-recovery"
     );
-    if (selectedAppShieldCount(state.selectionId) === 0) return; // retry on next foreground
+    if (selectedAppShieldCount(state.selectionId) === 0 && !DeviceActivity.isShieldActive()) {
+      return; // neither token overlap nor native shield confirms reblocking; retry later
+    }
   } else {
     // The standard bedtime end should already have unshielded the apps.
     // This also repairs an old exception callback that arrived late.
