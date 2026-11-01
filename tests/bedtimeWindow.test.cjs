@@ -11,7 +11,7 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const mod = { exports: {} };
 new Function("module", "exports", js)(mod, mod.exports);
-const { currentBedtimeWindow, isBedtimeWindowActive, nativeDateComponents } = mod.exports;
+const { currentBedtimeWindow, isBedtimeWindowActive, nativeDateComponents, bedtimeNightKey } = mod.exports;
 
 function at(text) { return new Date(text); }
 function check(start, end, date, expected) {
@@ -76,6 +76,33 @@ test("DST boundaries are based on local dates, not 24-hour arithmetic", () => {
     assert.equal(endComponents.hour, 1);
     assert.equal(endComponents.minute, 10);
     assert.equal(endComponents.timeZoneOffsetInSeconds, -8 * 3600);
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+});
+
+test("local bedtime-night key stays constant across midnight and the 6am boundary", () => {
+  const previous = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    assert.equal(bedtimeNightKey(at("2026-10-31T23:30:00"), "23:00", "06:00"), "2026-10-31");
+    assert.equal(bedtimeNightKey(at("2026-11-01T01:30:00"), "23:00", "06:00"), "2026-10-31");
+    assert.equal(bedtimeNightKey(at("2026-11-01T05:59:59"), "23:00", "06:00"), "2026-10-31");
+    assert.equal(bedtimeNightKey(at("2026-11-01T06:00:00"), "23:00", "06:00"), "2026-11-01");
+  } finally {
+    if (previous === undefined) delete process.env.TZ;
+    else process.env.TZ = previous;
+  }
+});
+
+test("nightly logs honor user-configured morning end, including DST", () => {
+  const previous = process.env.TZ;
+  process.env.TZ = "America/Los_Angeles";
+  try {
+    assert.equal(bedtimeNightKey(at("2026-11-01T07:00:00"), "23:00", "08:00"), "2026-10-31");
+    assert.equal(bedtimeNightKey(at("2026-11-01T08:00:00"), "23:00", "08:00"), "2026-11-01");
+    assert.equal(bedtimeNightKey(at("2026-03-08T03:30:00"), "23:00", "06:00"), "2026-03-07");
   } finally {
     if (previous === undefined) delete process.env.TZ;
     else process.env.TZ = previous;
