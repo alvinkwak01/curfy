@@ -175,3 +175,14 @@ test("the installed shield no longer offers a broken Open Curfy button", async (
   assert.equal(updated[2].primary.actions, undefined);
   assert.match(updated[1].subtitle, /open Curfy from your Home Screen/);
 });
+
+test("native category re-shield clears the exception despite missing token overlap", async () => {
+  const f = fixture({ overlapReportsZero: true });
+  const now = new Date("2026-10-31T23:00:00");
+  const expiry = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2_000));
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+});
