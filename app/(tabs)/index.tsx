@@ -2,7 +2,7 @@ import { StarBackground } from "@/components/StarBackground";
 import { Colors, Fonts } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import { isBedtimeWindowActive } from "@/lib/bedtimeWindow";
-import { activeExceptionExpiresAt, isSelectionShielded } from "@/lib/screenTime";
+import { activeExceptionExpiresAt, getBedtimeProtectionStatus, BlockModeId } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -77,9 +77,12 @@ export default function Home() {
   const inBedtimeWindow = !!blockMode &&
     isBedtimeWindowActive(new Date(), bedtime, wakeTime);
   const exceptionExpiresAt = inBedtimeWindow ? activeExceptionExpiresAt() : null;
-  const isShielded = inBedtimeWindow && !exceptionExpiresAt &&
-    (blockMode === "social" || blockMode === "most" || blockMode === "custom") &&
-    isSelectionShielded(blockMode);
+  const protectionStatus = inBedtimeWindow && blockMode &&
+    (blockMode === "social" || blockMode === "most" || blockMode === "custom")
+    ? getBedtimeProtectionStatus(blockMode as BlockModeId)
+    : null;
+  const needsSetup = protectionStatus === "permission-required" ||
+    protectionStatus === "selection-required";
 
   const totalNights = sleepLog.length;
   const cleanNights = sleepLog.filter((e) => e.unlockAttempts === 0).length;
@@ -113,10 +116,12 @@ export default function Home() {
             ]}
           >
             <Text style={[styles.countdownText, isUrgent && styles.countdownUrgentText]}>
-              {isImminent
-                ? "Lockdown starts NOW"
+              {inBedtimeWindow
+                ? (exceptionExpiresAt ? "Your temporary exception is active" : "It's bedtime — protect your evening")
+                : isImminent
+                ? "Bedtime protection starts soon"
                 : isUrgent
-                ? `${minsLeft}m until lockdown`
+                ? `${minsLeft}m until bedtime`
                 : `${hours}h ${mins}m until bedtime`}
             </Text>
           </View>
@@ -131,15 +136,17 @@ export default function Home() {
                   Scheduled to end at {new Date(exceptionExpiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
                 </Text>
               </>
-            ) : !isShielded ? (
+            ) : needsSetup ? (
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel="Open Settings to fix app shielding"
+                accessibilityLabel="Open Settings to complete app protection setup"
                 onPress={() => router.push("/settings")}
               >
-                <Text style={styles.escapeLabel}>App blocking needs attention</Text>
+                <Text style={styles.escapeLabel}>Finish app protection setup</Text>
                 <Text style={styles.escapeHint}>
-                  iOS isn't currently shielding your selected apps. Check Settings before attempting an unlock.
+                  {protectionStatus === "permission-required"
+                    ? "Screen Time permission is needed. Open Settings to grant access."
+                    : "Choose the app you want to protect in Settings."}
                 </Text>
               </TouchableOpacity>
             ) : (
@@ -149,7 +156,11 @@ export default function Home() {
                 onPress={() => router.push("/escape")}
               >
                 <Text style={styles.escapeLabel}>Need a 15-minute exception?</Text>
-                <Text style={styles.escapeHint}>Hold continuously for 120 seconds to unlock selected apps.</Text>
+                <Text style={styles.escapeHint}>
+                  {protectionStatus === "shield-active"
+                    ? "Curfy's iOS shield is active. Hold for 120 seconds to request a temporary unlock."
+                    : "Curfy can't confirm the shield state. Check a selected app first; the hold will only grant access if iOS reports protection."}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
