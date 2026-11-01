@@ -377,7 +377,7 @@ export default function Leaderboard() {
           <View style={{ gap: 20, marginBottom: 20 }}>
             <View>
               <Text style={styles.title}>Leaderboard</Text>
-              <Text style={styles.subtitle}>Everyone's streaks. Judge freely.</Text>
+              <Text style={styles.subtitle}>Curfy nights logged — not measured sleep.</Text>
             </View>
 
             <GlobalLeaderboard />
