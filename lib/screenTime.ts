@@ -60,6 +60,33 @@ export function selectionIdForMode(mode: BlockModeId): string {
   return `curfy-block-${mode}`;
 }
 
+/** Editing is isolated from the tokens used by the live DeviceActivity monitor. */
+export function draftSelectionIdForMode(mode: BlockModeId): string {
+  return `curfy-draft-${mode}`;
+}
+
+/** Existing saved app tokens, not app identities, are cloned into a draft. */
+export function prepareSelectionDraft(mode: BlockModeId): string {
+  const id = draftSelectionIdForMode(mode);
+  const existing = DeviceActivity.getFamilyActivitySelectionId(selectionIdForMode(mode));
+  if (existing) {
+    DeviceActivity.setFamilyActivitySelectionId({ id, familyActivitySelection: existing });
+  }
+  return id;
+}
+
+function restoreSelection(id: string, previous: string | undefined): void {
+  if (previous) {
+    DeviceActivity.setFamilyActivitySelectionId({ id, familyActivitySelection: previous });
+    return;
+  }
+  // A new user had no committed selection. Restore that exact state.
+  const all = DeviceActivity.userDefaultsGet<Record<string, string>>("familyActivitySelectionIds") ?? {};
+  const copy = { ...all };
+  delete copy[id];
+  DeviceActivity.userDefaultsSet("familyActivitySelectionIds", copy);
+}
+
 const BEDTIME_ACTIVITY_NAME = "curfy-bedtime";
 const SCHEDULED_SELECTION_ID_KEY = "curfy-scheduled-selection-id";
 
@@ -118,12 +145,15 @@ export async function configureBedtimeBlocking({
   wakeTime,
   mode,
   now = new Date(),
+  draftSelectionId,
 }: {
   bedtime: string;
   wakeTime: string;
   mode: BlockModeId;
   /** Injectable local time keeps boundary cases deterministic in tests. */
   now?: Date;
+  /** Only Settings passes a staged picker ID; never update live tokens on mere picker edits. */
+  draftSelectionId?: string;
 }): Promise<void> {
   if (getScreenTimeAccessStatus() !== "authorized") {
     throw new Error("Screen Time permission is required to protect selected apps.");
@@ -131,9 +161,23 @@ export async function configureBedtimeBlocking({
   // Reject equal/invalid endpoints rather than creating an ambiguous
   // all-day interval or crashing the Home screen later.
   currentBedtimeWindow(now, bedtime, wakeTime);
-  assertOneFreeAppSelected(mode);
   const selectionId = selectionIdForMode(mode);
+  const pendingId = draftSelectionId ?? selectionId;
+  assertOneFreeAppSelected(pendingId);
   const previousSelectionId = previousScheduledSelectionId();
+  const previousTokens = DeviceActivity.getFamilyActivitySelectionId(selectionId);
+  if (draftSelectionId) {
+    if (draftSelectionId !== draftSelectionIdForMode(mode)) {
+      throw new Error("Unexpected app selection draft. Open the picker and try again.");
+    }
+    const draftTokens = DeviceActivity.getFamilyActivitySelectionId(draftSelectionId);
+    if (!draftTokens) throw new Error("Choose an app in the picker before saving.");
+    // Monitor callbacks read by ID. Keep the committed ID stable, and restore
+    // its old opaque token selection if scheduling fails.
+    DeviceActivity.setFamilyActivitySelectionId({
+      id: selectionId, familyActivitySelection: draftTokens,
+    });
+  }
 
   // Register the proposed actions before starting the monitor, because an
   // immediately-active schedule can call intervalDidStart synchronously.
@@ -159,6 +203,7 @@ export async function configureBedtimeBlocking({
   } catch (error) {
     // The old monitor may still be running. Restore its callbacks rather
     // than leaving them pointed at a selection that was never saved.
+    if (draftSelectionId) restoreSelection(selectionId, previousTokens);
     if (previousSelectionId) configureBedtimeActions(previousSelectionId);
     throw error;
   }
@@ -175,7 +220,9 @@ export async function configureBedtimeBlocking({
     if (!DeviceActivity.isShieldActive()) {
       // Restore prior protection when possible rather than silently claim
       // the newly saved selection is protected.
+      if (draftSelectionId) restoreSelection(selectionId, previousTokens);
       if (previousSelectionId) {
+        configureBedtimeActions(previousSelectionId);
         DeviceActivity.blockSelection(
           { activitySelectionId: previousSelectionId }, "curfy-schedule-change-rollback"
         );
@@ -260,8 +307,11 @@ function selectionMetadata(mode: BlockModeId) {
 export type FreeSelectionIssue = "choose-one-app" | "too-many-apps-or-categories";
 
 /** A null issue means exactly one application and no category/domain tokens. */
-export function freeSelectionIssue(mode: BlockModeId): FreeSelectionIssue | null {
-  const meta = selectionMetadata(mode);
+export function freeSelectionIssue(modeOrSelectionId: BlockModeId | string): FreeSelectionIssue | null {
+  const id = modeOrSelectionId.startsWith("curfy-")
+    ? modeOrSelectionId
+    : selectionIdForMode(modeOrSelectionId as BlockModeId);
+  const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: id });
   if (!meta || meta.applicationCount === 0 && meta.categoryCount === 0 && meta.webDomainCount === 0) {
     return "choose-one-app";
   }
@@ -272,8 +322,8 @@ export function freeSelectionIssue(mode: BlockModeId): FreeSelectionIssue | null
   return null;
 }
 
-function assertOneFreeAppSelected(mode: BlockModeId): void {
-  const issue = freeSelectionIssue(mode);
+function assertOneFreeAppSelected(selectionId: string): void {
+  const issue = freeSelectionIssue(selectionId);
   if (issue === "choose-one-app") {
     throw new Error("Select one app to protect. The free version protects one app.");
   }
@@ -382,7 +432,7 @@ export async function grantBedtimeException({
   const window = currentBedtimeWindow(now, bedtime, wakeTime);
   if (!window) throw new Error("Your selected apps are not in a bedtime blocking window.");
   const selectionId = selectionIdForMode(mode);
-  assertOneFreeAppSelected(mode);
+  assertOneFreeAppSelected(selectionId);
 
   // A token intersection can produce a false negative for an actual
   // category shield. Require either explicit token overlap or an active
