@@ -7,7 +7,8 @@ import {
   BlockModeId,
   configureBedtimeBlocking,
   getSelectionCount,
-  selectionIdForMode,
+  draftSelectionIdForMode,
+  prepareSelectionDraft,
 } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -56,6 +57,7 @@ export default function Settings() {
   const [localMotivation, setLocalMotivation] = useState(motivation);
   const [saved, setSaved] = useState(false);
   const [pickerMode, setPickerMode] = useState<BlockModeId | null>(null);
+  const [stagedMode, setStagedMode] = useState<BlockModeId | null>(null);
   // Read once on mount from the native side (not persisted app state) —
   // this is what actually lets the UI show "N apps blocked" without
   // reopening the picker. Refreshed locally after any picker session.
@@ -78,6 +80,9 @@ export default function Settings() {
         bedtime: localBedtime,
         wakeTime: localWakeTime,
         mode: localBlockMode,
+        draftSelectionId: stagedMode === localBlockMode
+          ? draftSelectionIdForMode(localBlockMode)
+          : undefined,
       });
     } catch (error) {
       console.warn("[Curfy] Failed to update app shielding", error);
@@ -101,8 +106,17 @@ export default function Settings() {
   };
 
   const handlePickApps = (mode: BlockModeId) => {
-    setLocalBlockMode(mode);
-    setPickerMode(mode);
+    try {
+      // The picker edits a distinct opaque selection. Leaving Settings
+      // without Save cannot change tokens used by the active iOS monitor.
+      if (stagedMode !== mode) prepareSelectionDraft(mode);
+      setStagedMode(mode);
+      setLocalBlockMode(mode);
+      setPickerMode(mode);
+    } catch (error) {
+      Alert.alert("Couldn't open app picker",
+        error instanceof Error ? error.message : "Please try again.");
+    }
   };
 
   const handleSelectionChange = (event: NativeSyntheticEvent<ActivitySelectionMetadata>) => {
@@ -215,7 +229,7 @@ export default function Settings() {
                     <Text style={styles.presetTitle}>{preset.title}</Text>
                     <Text style={styles.presetDesc}>
                       {count != null
-                        ? `${count} app${count === 1 ? "" : "s"} selected — tap to change`
+                        ? `${count} selection${count === 1 ? "" : "s"} — free protects one app`
                         : "Tap to choose apps"}
                     </Text>
                   </View>
@@ -230,7 +244,7 @@ export default function Settings() {
           {pickerMode && (
             <DeviceActivitySelectionSheetViewPersisted
               style={{ width: 1, height: 1, position: "absolute" }}
-              familyActivitySelectionId={selectionIdForMode(pickerMode)}
+              familyActivitySelectionId={draftSelectionIdForMode(pickerMode)}
               headerText={activePreset?.pickerHint}
               onSelectionChange={handleSelectionChange}
               onDismissRequest={() => setPickerMode(null)}
@@ -268,10 +282,8 @@ export default function Settings() {
             <Text style={styles.previewBtnText}>Preview Lock Screen</Text>
           </TouchableOpacity>
           <Text style={styles.previewHint}>
-            Shows the real lock screen right now, without waiting for
-            bedtime. Completing the 120-second hold counts as a real unlock
-            for tonight — use the close button instead if you're just
-            looking.
+            Preview only — no apps will unlock, even after the full
+            120-second hold. Use Exit to return to Settings.
           </Text>
         </View>
 
