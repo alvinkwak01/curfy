@@ -112,16 +112,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteRemoteAccount = async () => {
-    if (!isSupabaseConfigured) return;
-    if (!session?.user) return;
-    try {
-      // supabase-js attaches the current session's access token as the
-      // Authorization header automatically — the Edge Function derives
-      // which user to delete from that token, not from anything sent here.
-      await supabase.functions.invoke("delete-account");
-    } catch (_) {
-      // Swallowed deliberately — see the interface comment above.
+    if (!isSupabaseConfigured || !session?.user) return;
+    // An anonymous account is still a real account. Never report deletion
+    // when the Edge Function returned an error or the network was offline.
+    const { data, error } = await supabase.functions.invoke<{ success?: boolean; error?: string }>(
+      "delete-account"
+    );
+    if (error) throw new Error("Curfy couldn't delete your online account. Check your connection and retry.");
+    if (data?.success !== true) {
+      throw new Error(data?.error || "Online account deletion wasn't confirmed. Please retry.");
     }
+    // The server has already deleted the user and their public profile.
+    // Clear the on-device Supabase session so onboarding may start cleanly.
+    await supabase.auth.signOut({ scope: "local" });
     lastSynced.current = null;
   };
 
