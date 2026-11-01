@@ -30,3 +30,8 @@ jobs:
       # npm install may silently rewrite a stale lockfile. Catch that drift
       # before signing and uploading the next iPhone preview.
       - run: git diff --exit-code -- package-lock.json
+      # Generate the iOS project/config-plugin targets without Xcode or EAS.
+      # This does not compile Swift, but catches CNG/plugin generation failures.
+      - run: npx expo prebuild --platform ios --no-install
+        env:
+          CI: "1"
