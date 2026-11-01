@@ -311,8 +311,18 @@ export function freeSelectionIssue(modeOrSelectionId: BlockModeId | string): Fre
   const id = modeOrSelectionId.startsWith("curfy-")
     ? modeOrSelectionId
     : selectionIdForMode(modeOrSelectionId as BlockModeId);
-  const meta = DeviceActivity.activitySelectionMetadata({ activitySelectionId: id });
-  if (!meta || meta.applicationCount === 0 && meta.categoryCount === 0 && meta.webDomainCount === 0) {
+  return freeSelectionIssueForMetadata(
+    DeviceActivity.activitySelectionMetadata({ activitySelectionId: id })
+  );
+}
+
+/** Used by both native scheduling and the iOS picker immediately on dismiss. */
+export function freeSelectionIssueForMetadata(
+  meta: Pick<DeviceActivity.ActivitySelectionMetadata,
+    "applicationCount" | "categoryCount" | "webDomainCount" | "includeEntireCategory"> | null | undefined
+): FreeSelectionIssue | null {
+  if (!meta || (meta.applicationCount === 0 &&
+      meta.categoryCount === 0 && meta.webDomainCount === 0)) {
     return "choose-one-app";
   }
   if (meta.applicationCount !== 1 || meta.categoryCount !== 0 ||
