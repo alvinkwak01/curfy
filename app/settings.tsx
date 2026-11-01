@@ -9,6 +9,7 @@ import {
   getSelectionCount,
   draftSelectionIdForMode,
   prepareSelectionDraft,
+  selectionDraftChanged,
   freeSelectionIssue,
   freeSelectionIssueForMetadata,
   FreeSelectionIssue,
@@ -95,10 +96,12 @@ export default function Settings() {
           : "Choose one individual app before saving.");
       return;
     }
+    const pickerEdited = stagedMode === localBlockMode &&
+      selectionDraftChanged(localBlockMode);
     const protectionChanged = protectionSettingsChanged(
       { bedtime, wakeTime, blockMode },
       { bedtime: localBedtime, wakeTime: localWakeTime, blockMode: localBlockMode },
-      stagedMode === localBlockMode
+      pickerEdited
     );
     if (!allowProtectionReconfiguration({
       changingProtection: protectionChanged,
@@ -123,7 +126,7 @@ export default function Settings() {
           bedtime: localBedtime,
           wakeTime: localWakeTime,
           mode: localBlockMode,
-          draftSelectionId: stagedMode === localBlockMode
+          draftSelectionId: pickerEdited
             ? draftSelectionIdForMode(localBlockMode)
             : undefined,
         });
