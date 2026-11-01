@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useRef, useState } from "react";
-import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, AppState, StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
   useAnimatedProps,
@@ -88,6 +89,8 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
 
   const startTimeRef = useRef<number | null>(null);
   const unlockPendingRef = useRef(false);
+  const onUnlockRef = useRef(onUnlock);
+  onUnlockRef.current = onUnlock;
   const mountedRef = useRef(true);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -116,7 +119,8 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
   };
 
   const handlePressIn = () => {
-    if (unlockPendingRef.current || startTimeRef.current !== null) return;
+    if (unlockPendingRef.current || startTimeRef.current !== null ||
+        AppState.currentState !== "active") return;
     setIsHolding(true);
     onHoldingChange?.(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
@@ -131,35 +135,39 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
 
     tickRef.current = setInterval(() => {
       if (!startTimeRef.current) return;
+      // DISPLAY ONLY: the JavaScript clock must never grant a real unlock.
+      // Only Gesture.LongPress().minDuration(120000).onStart authorizes it.
       const elapsed = Date.now() - startTimeRef.current;
-      const remaining = Math.max(0, HOLD_DURATION_MS - elapsed);
-      setDisplaySeconds(Math.ceil(remaining / 1000));
-      if (elapsed >= HOLD_DURATION_MS) {
-        clearTimers();
-        startTimeRef.current = null;
-        setIsHolding(false);
-        onHoldingChange?.(false);
-        // Completion is only a request. Celebrate after the native
-        // unshield actually succeeds, not when the JS clock reaches zero.
-        unlockPendingRef.current = true;
-        setIsUnlocking(true);
-        Promise.resolve()
-          .then(() => onUnlock())
-          .then(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))
-          .catch(() => {
-            progress.value = withSpring(0);
-            scale.value = withSpring(1);
-            if (mountedRef.current) {
-              setDisplaySeconds(120);
-              setMessage("iOS couldn't unlock the apps. Try again.");
-            }
-          })
-          .finally(() => {
-            unlockPendingRef.current = false;
-            if (mountedRef.current) setIsUnlocking(false);
-          });
-      }
+      setDisplaySeconds(Math.ceil(Math.max(0, HOLD_DURATION_MS - elapsed) / 1000));
     }, 200);
+  };
+
+  const handleNativeHoldComplete = () => {
+    // Native recognizer has observed one continuous finger on the control
+    // for the entire duration; a suspended JS timer is never sufficient.
+    if (!startTimeRef.current || unlockPendingRef.current ||
+        AppState.currentState !== "active") return;
+    clearTimers();
+    startTimeRef.current = null;
+    unlockPendingRef.current = true;
+    setIsHolding(false);
+    onHoldingChange?.(false);
+    setIsUnlocking(true);
+    Promise.resolve()
+      .then(() => onUnlockRef.current())
+      .then(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))
+      .catch(() => {
+        progress.value = withSpring(0);
+        scale.value = withSpring(1);
+        if (mountedRef.current) {
+          setDisplaySeconds(120);
+          setMessage("iOS couldn't unlock the apps. Try again.");
+        }
+      })
+      .finally(() => {
+        unlockPendingRef.current = false;
+        if (mountedRef.current) setIsUnlocking(false);
+      });
   };
 
   const handlePressOut = () => {
@@ -189,6 +197,20 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
     };
   }, []);
 
+  // This is a native iOS/Android recognizer. Unlike setInterval, it fails
+  // when touch ends, the app backgrounds, or the gesture is cancelled.
+  // JS remains responsible only for the animated visual countdown.
+  const holdGesture = useMemo(() =>
+    Gesture.LongPress()
+      .minDuration(HOLD_DURATION_MS)
+      .maxDistance(26)
+      .shouldCancelWhenOutside(true)
+      .runOnJS(true)
+      .onBegin(() => handlePressIn())
+      .onStart(() => handleNativeHoldComplete())
+      .onFinalize(() => handlePressOut()),
+  []);
+
   const animatedCircleProps = useAnimatedProps(() => ({
     strokeDashoffset: CIRCUMFERENCE * (1 - progress.value),
   }));
@@ -204,6 +226,7 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
       )}
       <Text style={styles.message}>{message}</Text>
 
+      <GestureDetector gesture={holdGesture}>
       <Animated.View style={[styles.buttonWrap, animatedButtonStyle]}>
         <View pointerEvents="none" style={styles.halo} />
         <Svg
@@ -234,10 +257,8 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
           />
         </Svg>
 
-        <Pressable
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
-          disabled={isUnlocking}
+        <View
+          accessible
           accessibilityRole="button"
           accessibilityLabel="Hold continuously for 120 seconds to request a temporary unlock"
           accessibilityHint="Releasing early or leaving Curfy resets the full timer"
@@ -256,8 +277,9 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
               <Text style={styles.centerLabel}>PRESS & HOLD</Text>
             </>
           )}
-        </Pressable>
+        </View>
       </Animated.View>
+      </GestureDetector>
 
       <Text style={styles.hint}>
         {isUnlocking ? "Checking with iOS..." : isHolding ? "Don't lift your finger" : "Hold for the full 120 seconds"}
