@@ -42,7 +42,7 @@ function fixture({
       if (failStart) throw Error("Native scheduling failed");
       if (!silentMonitorFailure) monitoredActivities.add(name);
     },
-    activities: () => [...monitoredActivities],
+    getActivities: () => [...monitoredActivities],
     stopMonitoring: names => {
       calls.push(["stop", names]);
       if (names) names.forEach(name => monitoredActivities.delete(name));
