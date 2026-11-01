@@ -74,9 +74,10 @@ function pickMessage(progress: number): string {
 interface HoldButtonProps {
   onUnlock: () => void | Promise<void>;
   unlockCount: number;
+  onHoldingChange?: (holding: boolean) => void;
 }
 
-export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
+export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButtonProps) {
   const [isHolding, setIsHolding] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [displaySeconds, setDisplaySeconds] = useState(120);
@@ -117,6 +118,7 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
   const handlePressIn = () => {
     if (unlockPendingRef.current || startTimeRef.current !== null) return;
     setIsHolding(true);
+    onHoldingChange?.(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     scale.value = withSpring(0.95);
     startTimeRef.current = Date.now();
@@ -136,6 +138,7 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
         clearTimers();
         startTimeRef.current = null;
         setIsHolding(false);
+        onHoldingChange?.(false);
         // Completion is only a request. Celebrate after the native
         // unshield actually succeeds, not when the JS clock reaches zero.
         unlockPendingRef.current = true;
@@ -162,6 +165,7 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
   const handlePressOut = () => {
     if (!startTimeRef.current) return; // already completed via the interval
     setIsHolding(false);
+    onHoldingChange?.(false);
     startTimeRef.current = null;
     clearTimers();
     scale.value = withSpring(1);
@@ -180,6 +184,7 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
     return () => {
       mountedRef.current = false;
       startTimeRef.current = null;
+      onHoldingChange?.(false);
       sub.remove();
       clearTimers();
     };
