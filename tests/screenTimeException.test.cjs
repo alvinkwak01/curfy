@@ -412,3 +412,12 @@ test("selected website count is included in picker metadata (never misreported z
   assert.equal(f.screenTime.getSelectionCount("custom"), 2);
   assert.equal(f.screenTime.freeSelectionIssue("custom"), "too-many-apps-or-categories");
 });
+
+test("opening an unchanged native picker is not a protection change", () => {
+  const f = fixture();
+  f.selections.set("curfy-block-custom", "same-opaque-selection");
+  f.screenTime.prepareSelectionDraft("custom");
+  assert.equal(f.screenTime.selectionDraftChanged("custom"), false);
+  f.selections.set("curfy-draft-custom", "another-opaque-selection");
+  assert.equal(f.screenTime.selectionDraftChanged("custom"), true);
+});
