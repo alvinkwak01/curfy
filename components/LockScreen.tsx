@@ -150,7 +150,7 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
               style={[styles.homeButton, unlockPending && styles.homeButtonDisabled]}
             >
               <Ionicons name="arrow-back" size={19} color={Colors.textPrimary} />
-              <Text style={styles.homeButtonText}>Back to Home</Text>
+              <Text style={styles.homeButtonText}>Back to Curfy Home</Text>
             </TouchableOpacity>
           )}
           <Text style={styles.footer}>
