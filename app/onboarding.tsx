@@ -114,7 +114,7 @@ export default function Onboarding() {
   const [reasons, setReasons] = useState<string[]>([]);
   const [currentBedtime, setCurrentBedtime] = useState("00:30");
   const [localBedtime, setLocalBedtime] = useState(bedtime || "23:00");
-  const [localWakeTime, setLocalWakeTime] = useState("07:00");
+  const [localWakeTime, setLocalWakeTime] = useState("06:00");
   const [name, setName] = useState("");
   const [screenTimeStatus, setScreenTimeStatus] =
     useState<ScreenTimeAuthStatus>("notDetermined");
@@ -389,8 +389,8 @@ function StepWakeTime({ wakeTime, onChange }: { wakeTime: string; onChange: (v: 
         What time do{"\n"}you wake up?
       </Text>
       <Text style={[styles.bodyText, { textAlign: "center" }]}>
-        This is what we use to work out how much sleep you're actually
-        getting.
+        Curfy uses this as the end of your protected-app window.
+        The starting default is 6:00 a.m. You can change it here.
       </Text>
       <View style={{ marginVertical: 16 }}>
         <TimePicker value={wakeTime} onChange={onChange} digitSize={56} />
@@ -634,12 +634,12 @@ function StepChooseApps({
       <Badge>CHOOSE WHAT TO BLOCK</Badge>
       <Text style={styles.hero}>What should{"\n"}stay off-limits?</Text>
       <Text style={styles.bodyText}>
-        Pick a starting point. You can fine-tune the exact list any time in
-        Settings.
+        Choose **one app** that keeps pulling you back in at bedtime.
+        You can change it in Settings. Multiple apps are planned for premium.
       </Text>
 
       <View style={{ gap: 10, marginTop: 4 }}>
-        {BLOCK_MODE_PRESETS.map((preset) => {
+        {BLOCK_MODE_PRESETS.filter((preset) => preset.id === "custom").map((preset) => {
           const isSelected = blockMode === preset.id;
           return (
             <TouchableOpacity
@@ -673,7 +673,7 @@ function StepChooseApps({
           style={styles.selectedChip}
         >
           <Text style={styles.selectedChipText}>
-            {selectedCount} app{selectedCount === 1 ? "" : "s"} selected — tap to change
+            {selectedCount === 1 ? "1 selection — tap to change" : `${selectedCount} selections — free protects one individual app`}
           </Text>
         </TouchableOpacity>
       )}
@@ -695,8 +695,8 @@ function StepChooseApps({
       )}
 
       <Text style={styles.fineprint}>
-        Apple's own picker handles the exact app list — Curfy applies the
-        lock but never sees which specific apps you chose.
+        Choose exactly one individual app (no categories or websites).
+        Apple's picker keeps app identities private; Curfy sees only opaque tokens and counts.
       </Text>
     </View>
   );
@@ -711,7 +711,7 @@ function StepSetBedtime({ bedtime, onChange }: { bedtime: string; onChange: (v: 
       </Text>
       <Text style={[styles.bodyText, { textAlign: "center" }]}>
         This is when the lock kicks in. Pick a time you know you should
-        actually be asleep.
+        put your selected app away. Curfy doesn't measure your sleep.
       </Text>
       <View style={{ marginVertical: 16 }}>
         <TimePicker value={bedtime} onChange={onChange} digitSize={56} />
