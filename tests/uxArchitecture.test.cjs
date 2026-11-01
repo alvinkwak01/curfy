@@ -43,3 +43,14 @@ test("The Apple shield never promises an unsupported automatic Curfy launch", ()
   assert.match(screenTime, /behavior:\s*"close"/);
   assert.doesNotMatch(screenTime, /behavior:\s*"openApp"/);
 });
+
+test("nightly records are described as Curfy logs, not proven sleep", () => {
+  const home = source("app/(tabs)/index.tsx");
+  const leaderboard = source("app/(tabs)/leaderboard.tsx");
+  const journal = source("app/(tabs)/journal.tsx");
+  assert.match(home, /Curfy nights logged/);
+  assert.match(leaderboard, /not measured sleep/);
+  assert.match(home, /No-unlock nights/);
+  assert.doesNotMatch(journal, /signals to your brain/);
+  assert.doesNotMatch(journal, /let you actually fall asleep/);
+});
