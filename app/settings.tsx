@@ -24,6 +24,7 @@ import React, { useRef, useState } from "react";
 import {
   ActivitySelectionMetadata,
   DeviceActivitySelectionSheetViewPersisted,
+  activitySelectionMetadata,
 } from "react-native-device-activity";
 import {
   Alert,
@@ -160,13 +161,16 @@ export default function Settings() {
     }
   };
 
-  const handleSelectionChange = (event: NativeSyntheticEvent<ActivitySelectionMetadata>) => {
-    if (!pickerMode) return;
-    const { applicationCount, categoryCount, webDomainCount } = event.nativeEvent;
+  const applySelectionMetadata = (mode: BlockModeId, metadata: ActivitySelectionMetadata) => {
+    const { applicationCount, categoryCount, webDomainCount } = metadata;
     setAppCounts((prev) => ({
-      ...prev, [pickerMode]: applicationCount + categoryCount + webDomainCount,
+      ...prev, [mode]: applicationCount + categoryCount + webDomainCount,
     }));
-    setPickerIssue(freeSelectionIssueForMetadata(event.nativeEvent));
+    setPickerIssue(freeSelectionIssueForMetadata(metadata));
+  };
+
+  const handleSelectionChange = (event: NativeSyntheticEvent<ActivitySelectionMetadata>) => {
+    if (pickerMode) applySelectionMetadata(pickerMode, event.nativeEvent);
   };
 
   const activePreset = BLOCK_MODE_PRESETS.find((p) => p.id === pickerMode);
@@ -312,7 +316,15 @@ export default function Settings() {
               familyActivitySelectionId={draftSelectionIdForMode(pickerMode)}
               headerText={activePreset?.pickerHint}
               onSelectionChange={handleSelectionChange}
-              onDismissRequest={() => setPickerMode(null)}
+              onDismissRequest={() => {
+                // Take one final snapshot from native persisted picker state,
+                // even when no last onSelectionChange event was delivered.
+                const metadata = activitySelectionMetadata({
+                  activitySelectionId: draftSelectionIdForMode(pickerMode),
+                });
+                if (metadata) applySelectionMetadata(pickerMode, metadata);
+                setPickerMode(null);
+              }}
             />
           )}
         </View>
