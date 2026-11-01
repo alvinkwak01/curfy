@@ -10,11 +10,10 @@ import { Stack } from "expo-router";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { Modal, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import "react-native-reanimated";
 
-import { LockScreen } from "@/components/LockScreen";
-import { Colors } from "@/constants/theme";
+ import { Colors } from "@/constants/theme";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { JournalProvider } from "@/context/JournalContext";
 import { SleepProvider, useSleep } from "@/context/SleepContext";
@@ -101,7 +100,7 @@ function StreakSync() {
 }
 
 function RootLayoutNav() {
-  const { isLoading, isOnboardingComplete, isLocked } = useSleep();
+  const { isLoading, isOnboardingComplete } = useSleep();
 
   if (isLoading) {
     // Splash screen is still visible at this point.
@@ -136,10 +135,7 @@ function RootLayoutNav() {
         />
       </Stack>
 
-      <Modal visible={isLocked} animationType="fade" statusBarTranslucent>
-        <LockScreen />
-      </Modal>
-    </ThemeProvider>
+     </ThemeProvider>
   );
 }
 
