@@ -82,3 +82,20 @@ export function nativeDateComponents(date: Date) {
     timeZoneOffsetInSeconds: -date.getTimezoneOffset() * 60,
   };
 }
+
+/** Calendar key for a nightly restriction, anchored to the bedtime START.
+ *  A night from 23:00 to 06:00 stays on the same date after midnight.
+ *  Uses device-local calendar fields, never UTC ISO slicing.
+ */
+export function bedtimeNightKey(
+  at: Date,
+  bedtime: string,
+  wakeTime: string
+): string {
+  const active = currentBedtimeWindow(at, bedtime, wakeTime);
+  const day = active?.start ?? at;
+  const year = day.getFullYear();
+  const month = String(day.getMonth() + 1).padStart(2, "0");
+  const date = String(day.getDate()).padStart(2, "0");
+  return `${year}-${month}-${date}`;
+}
