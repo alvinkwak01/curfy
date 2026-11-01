@@ -129,6 +129,28 @@ export async function configureBedtimeBlocking({
     actions: [{ type: "unblockSelection", familyActivitySelectionId: selectionId }],
   });
 
+  refreshBedtimeShieldAppearance();
+
+  // Starting last matters: Apple may fire intervalDidStart right away.
+  // If monitoring fails, let onboarding/Settings show an error instead of
+  // silently marking an unprotected schedule as saved.
+  await DeviceActivity.startMonitoring(
+    BEDTIME_ACTIVITY_NAME,
+    {
+      intervalStart: timeToDateComponents(bedtime),
+      intervalEnd: timeToDateComponents(wakeTime),
+      repeats: true,
+    },
+    []
+  );
+}
+
+/**
+ * Applied during setup AND on subsequent app launches, since the native
+ * shield configuration is persisted between preview build installations.
+ * Existing installs must not keep the old broken "Open Curfy" button.
+ */
+export function refreshBedtimeShieldAppearance(): void {
   // A ShieldAction extension on iOS 18 cannot reliably launch Curfy.
   // "openApp" in this library attempts NSExtensionContext.open with a
   // different scheme and visibly just closes the blocked app. Never promise
@@ -150,18 +172,6 @@ export async function configureBedtimeBlocking({
     { primary: { behavior: "close" } }
   );
 
-  // Starting last matters: Apple may fire intervalDidStart right away.
-  // If monitoring fails, let onboarding/Settings show an error instead of
-  // silently marking an unprotected schedule as saved.
-  await DeviceActivity.startMonitoring(
-    BEDTIME_ACTIVITY_NAME,
-    {
-      intervalStart: timeToDateComponents(bedtime),
-      intervalEnd: timeToDateComponents(wakeTime),
-      repeats: true,
-    },
-    []
-  );
 }
 
 export function stopBedtimeBlocking(): void {
