@@ -280,7 +280,7 @@ function StepWelcome({ onStart }: { onStart: () => void }) {
         <Text style={styles.wordmark}>CURFY</Text>
         <Text style={styles.tagline}>Bedtime. For real.</Text>
         <Text style={styles.welcomeBody}>
-          A sleep guardian that locks your distracting apps at bedtime —
+          A bedtime boundary for the distracting app you select —
           and doesn't let you talk your way out of it.
         </Text>
       </View>
@@ -301,7 +301,7 @@ function StepWakeUpCall() {
       </Text>
       <Text style={[styles.hero, styles.heroCyan]}>You do.</Text>
       <Text style={styles.statement}>
-        Let's figure out exactly what that's costing you.
+        Let's choose which app gets a bedtime boundary.
       </Text>
     </View>
   );
@@ -327,7 +327,7 @@ function StepWhyStayUp({
     <View style={styles.stepInner}>
       <Badge>SO, TELL US</Badge>
       <Text style={styles.hero}>What keeps{"\n"}you up?</Text>
-      <Text style={styles.bodyText}>Choose up to 3 — this shapes what Curfy shows you next.</Text>
+      <Text style={styles.bodyText}>Choose up to 3 reasons. Your answers stay here; they do not measure sleep.</Text>
 
       <View style={{ gap: 10, marginTop: 4 }}>
         {REASON_OPTIONS.map((opt) => {
@@ -408,54 +408,31 @@ function StepReveal({
   goalBedtime: string;
   wakeTime: string;
 }) {
-  const currentSleep = sleepDurationMinutes(currentBedtime, wakeTime);
-  const goalSleep = sleepDurationMinutes(goalBedtime, wakeTime);
-  const deficitPerNight = goalSleep - currentSleep;
-  const isAlreadyClose = deficitPerNight <= 5;
-
-  if (isAlreadyClose) {
-    return (
-      <View style={styles.stepInner}>
-        <Badge>THE NUMBERS</Badge>
-        <Text style={styles.hero}>
-          You're close{"\n"}to your goal{"\n"}
-          <Text style={styles.heroCyan}>already.</Text>
-        </Text>
-        <Text style={styles.bodyText}>
-          At {formatTime12(currentBedtime)}, you're getting roughly{" "}
-          {formatDuration(currentSleep)} of sleep a night. Curfy's job from
-          here isn't to fix a huge gap — it's to make {formatTime12(goalBedtime)}{" "}
-          happen every night, not just some.
-        </Text>
-      </View>
-    );
-  }
-
-  const deficitPerWeek = deficitPerNight * 7;
-  const deficitPerYearHours = Math.round((deficitPerNight * 365) / 60);
-  const extraNightsPerYear = Math.round((deficitPerYearHours * 60) / goalSleep);
-
+  // These are configured clock times, NOT observed sleep or screen usage.
+  const before = sleepDurationMinutes(currentBedtime, wakeTime);
+  const after = sleepDurationMinutes(goalBedtime, wakeTime);
+  const difference = after - before;
   return (
     <View style={styles.stepInner}>
-      <Badge>THE NUMBERS</Badge>
+      <Badge>YOUR PLAN</Badge>
       <Text style={styles.hero}>
-        At {formatTime12(currentBedtime)},{"\n"}you're losing{"\n"}
-        <Text style={styles.heroDanger}>{formatDuration(deficitPerNight)}</Text> a night.
+        A boundary{"\n"}you actually{"\n"}
+        <Text style={styles.heroCyan}>choose.</Text>
       </Text>
       <Text style={styles.bodyText}>
-        That's {formatDuration(deficitPerWeek)} a week — about{" "}
-        {deficitPerYearHours} hours of lost sleep a year.
+        From {formatTime12(goalBedtime)} to {formatTime12(wakeTime)},
+        Curfy will protect your selected app. That's a{" "}
+        {formatDuration(after)} restriction window each night.
       </Text>
-
       <View style={styles.revealDivider} />
-
-      <Text style={[styles.hero, { fontSize: 28, lineHeight: 34 }]}>
-        Stick to <Text style={styles.heroCyan}>{formatTime12(goalBedtime)}</Text> and
-        get it back.
+      <Text style={[styles.hero, { fontSize: 27, lineHeight: 33 }]}>
+        {difference > 0
+          ? `${formatDuration(difference)} earlier than your current routine.`
+          : "It's your boundary. Make it yours."}
       </Text>
       <Text style={styles.bodyText}>
-        That's like reclaiming roughly {extraNightsPerYear} extra full
-        nights of sleep this year — just from one changed habit.
+        Those are planned app-restriction hours, not measured sleep.
+        Curfy does not know when you fall asleep.
       </Text>
     </View>
   );
@@ -464,40 +441,35 @@ function StepReveal({
 function StepBenefits() {
   const cards = [
     {
-      icon: "moon-outline" as const,
-      title: "1 in 3 adults don't get enough sleep.",
-      body: "Chronic short sleep is linked to worse mood, focus, and long-term health.",
-      source: "CDC, Morbidity and Mortality Weekly Report",
+      icon: "shield-outline" as const,
+      title: "Your apps, not your entire phone.",
+      body: "Choose an individual app. At bedtime, iOS shows a shield over it while the rest of your phone stays available.",
     },
     {
-      icon: "car-outline" as const,
-      title: "Awake ~18 hours straight? Same reaction time as legally drunk.",
-      body: "Sleep debt impairs coordination and judgment the same way alcohol does.",
-      source: "CDC / AAA Foundation for Traffic Safety",
+      icon: "hand-left-outline" as const,
+      title: "An escape that takes intention.",
+      body: "If you want temporary access, open Curfy and hold the circle without letting go for two full minutes.",
+    },
+    {
+      icon: "moon-outline" as const,
+      title: "Back to your boundary.",
+      body: "The exception is intended to last up to 15 minutes, then selected-app protection returns until your configured morning end time.",
     },
   ];
-
   return (
     <View style={styles.stepInner}>
-      <Badge>WHY IT MATTERS</Badge>
-      <Text style={styles.hero}>This isn't{"\n"}just about{"\n"}sleep.</Text>
+      <Badge>WHY CURFY</Badge>
+      <Text style={styles.hero}>A little more{"\n"}friction.{"\n"}
+        <Text style={styles.heroCyan}>On purpose.</Text>
+      </Text>
       <View style={{ gap: 10, marginTop: 4 }}>
         {cards.map((c) => (
           <View key={c.title} style={styles.benefitCard}>
             <Ionicons name={c.icon} size={20} color={Colors.primaryCyan} style={{ marginBottom: 8 }} />
             <Text style={styles.benefitTitle}>{c.title}</Text>
             <Text style={styles.benefitBody}>{c.body}</Text>
-            <Text style={styles.fineprint}>Source: {c.source}</Text>
           </View>
         ))}
-        <View style={styles.benefitCard}>
-          <Ionicons name="sparkles-outline" size={20} color={Colors.primaryCyan} style={{ marginBottom: 8 }} />
-          <Text style={styles.benefitTitle}>Consistency is the whole game.</Text>
-          <Text style={styles.benefitBody}>
-            One good night doesn't move the needle. The same bedtime, every
-            night, is what actually protects focus and mood.
-          </Text>
-        </View>
       </View>
     </View>
   );
@@ -505,9 +477,9 @@ function StepBenefits() {
 
 function StepHowItWorks() {
   const rows = [
-    { icon: "◉", title: "You choose what's blocked", desc: "Pick the apps that keep you up. We lock those, at your bedtime, every night." },
+    { icon: "◉", title: "One app is free", desc: "Choose one individual app to shield at your bedtime. Paid multi-app protection is not enabled yet." },
     { icon: "◎", title: "120-second escape", desc: "When an app is blocked, open Curfy from your Home Screen. Hold the circle for 2 uninterrupted minutes to request 15 minutes of access." },
-    { icon: "○", title: "Repeating every 15 min", desc: "Get in anyway? It locks back up 15 minutes later. And it remembers." },
+    { icon: "○", title: "A short exception", desc: "A successful hold requests up to 15 minutes of access, ending sooner if your bedtime window ends." },
   ];
   return (
     <View style={styles.stepInner}>
@@ -634,7 +606,7 @@ function StepChooseApps({
       <Badge>CHOOSE WHAT TO BLOCK</Badge>
       <Text style={styles.hero}>What should{"\n"}stay off-limits?</Text>
       <Text style={styles.bodyText}>
-        Choose **one app** that keeps pulling you back in at bedtime.
+        Choose one app that keeps pulling you back in at bedtime.
         You can change it in Settings. Multiple apps are planned for premium.
       </Text>
 
@@ -707,7 +679,7 @@ function StepSetBedtime({ bedtime, onChange }: { bedtime: string; onChange: (v: 
     <View style={[styles.stepInner, { alignItems: "center" }]}>
       <Badge>SET YOUR BEDTIME</Badge>
       <Text style={[styles.hero, { textAlign: "center" }]}>
-        And what time{"\n"}would you like{"\n"}to fall asleep{"\n"}instead?
+        When should{"\n"}your app{"\n"}be shielded?
       </Text>
       <Text style={[styles.bodyText, { textAlign: "center" }]}>
         This is when the lock kicks in. Pick a time you know you should
