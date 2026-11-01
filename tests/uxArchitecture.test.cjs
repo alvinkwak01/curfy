@@ -26,7 +26,10 @@ test("TimePicker uses gestures, never a vertically nested FlatList with hidden w
   const wheel = source("components/TimePicker.tsx");
   assert.match(wheel, /PanResponder\.create/);
   assert.match(wheel, /accessibilityRole="adjustable"/);
-  assert.doesNotMatch(wheel, /\bFlatList\b/);
+  // A comment explaining the removed FlatList is fine; an actual component
+  // or import would reintroduce the broken nested-scroll behavior.
+  assert.doesNotMatch(wheel, /<FlatList\b/);
+  assert.doesNotMatch(wheel, /import\s*\{[^}]*\bFlatList\b/);
   assert.doesNotMatch(wheel, /LogBox\.ignoreLogs/);
 });
 test("Settings only reschedules native protection when its protected fields change", () => {
