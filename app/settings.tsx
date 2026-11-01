@@ -56,6 +56,7 @@ export default function Settings() {
   const [localName, setLocalName] = useState(userName);
   const [localMotivation, setLocalMotivation] = useState(motivation);
   const [saved, setSaved] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [pickerMode, setPickerMode] = useState<BlockModeId | null>(null);
   const [stagedMode, setStagedMode] = useState<BlockModeId | null>(null);
   // Read once on mount from the native side (not persisted app state) —
@@ -130,7 +131,7 @@ export default function Settings() {
   const onSignOut = () => {
     Alert.alert(
       "Sign out?",
-      "This just resets setup and takes you back through onboarding. Your streak, sleep history, and leaderboard spot all stay exactly as they are.",
+      "Restarting setup stops Curfy's current app restrictions. Your local history and online profile remain. This does not sign out of the anonymous online account.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -138,7 +139,10 @@ export default function Settings() {
           style: "default",
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            signOut();
+            signOut().catch((error) => {
+              Alert.alert("Couldn't restart setup",
+                error instanceof Error ? error.message : "Please try again.");
+            });
           },
         },
       ]
@@ -148,7 +152,7 @@ export default function Settings() {
   const onDeleteAccount = () => {
     Alert.alert(
       "Delete everything?",
-      "This permanently erases your name, bedtime, streak, and full sleep history from this device. This can't be undone.",
+      "Delete your online Curfy account and local history? If online deletion cannot be confirmed, nothing on this device will be erased. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -156,7 +160,14 @@ export default function Settings() {
           style: "destructive",
           onPress: () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            deleteAccount();
+            if (deleting) return;
+            setDeleting(true);
+            deleteAccount()
+              .catch((error) => {
+                Alert.alert("Account deletion wasn't completed",
+                  error instanceof Error ? error.message : "Please try again while online.");
+              })
+              .finally(() => setDeleting(false));
           },
         },
       ]
@@ -317,12 +328,12 @@ export default function Settings() {
         </TouchableOpacity>
 
         <View style={styles.accountSection}>
-          <TouchableOpacity style={styles.signOutBtn} onPress={onSignOut}>
-            <Text style={styles.signOutText}>Sign Out</Text>
+          <TouchableOpacity style={styles.signOutBtn} onPress={onSignOut} disabled={deleting}>
+            <Text style={styles.signOutText}>Restart Setup</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.deleteLink} onPress={onDeleteAccount}>
-            <Text style={styles.deleteLinkText}>Delete Account</Text>
+          <TouchableOpacity style={styles.deleteLink} onPress={onDeleteAccount} disabled={deleting}>
+            <Text style={styles.deleteLinkText}>{deleting ? "Deleting Account..." : "Delete Account"}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
