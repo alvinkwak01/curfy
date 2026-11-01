@@ -38,10 +38,26 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 **Evidence:** reviewed current branch source, exact dependency `kingstinct/react-native-device-activity` v0.6.1 API/types/Swift implementation, Apple DeviceActivity minimum-15-minute rule and deferred-on-device-use callbacks. GitHub Actions CI run `41183596596` for code/test commit `257c9b4` **passed**: all 11 unit tests and `npx tsc --noEmit`. This is automated/mocked proof, NOT an iPhone or Swift native build. Added explicit same-time/malformed bedtime handling to prevent a Home render crash. The mock tests do NOT simulate real Screen Time callbacks, signing, force-quit behavior, or actual installed app shielding. **No EAS build triggered.**
 
+## Milestone: physical-iPhone shield proof and honest iOS 18 fallback (2026-10-31)
+
+**User-observed / physically evidenced:** A selected distracting app showed Apple's native **"Blocked by Curfy"** shield while Curfy Home remained accessible (screenshots IMG_7413/IMG_7416). The native shield's **"Open Curfy" button failed**, closing the blocked app without launching Curfy. Home incorrectly displayed **"App blocking needs attention"** at 23:01 with a configured 22:03 bedtime, while a real shield was present; countdown misleadingly read 24h 1m to bedtime.
+
+**Root cause verified in code and official Apple APIs:** `lib/screenTime.ts` configured the third-party library's `openApp` action; its Swift implementation calls `NSExtensionContext.open("device-activity://")` and then responds with `.close`. Apple does not support launching the parent application from this shield extension on the user's iOS 18 version. The old Home signal used a selected-token intersection which can be zero for an actual category shield. Home's countdown always targeted the *next* bedtime even during tonight's blocking window.
+
+**Corrective code commits on feature branch, not main:**
+- `lib/screenTime.ts`: branded, static Apple shield UI with moon icon and truthful "For a 2-minute hold to unlock, open Curfy from your Home Screen." The button now says **"Not now"** and only closes the blocked app, not a false "Open Curfy" promise. Reusable `refreshBedtimeShieldAppearance()` updates persisted native shield configuration on existing installs without restarting monitoring.
+- `context/SleepContext.tsx`: refresh persisted shield UI after hydration for users updating an already installed preview.
+- `app/(tabs)/index.tsx`: during the configured bedtime window show bedtime status rather than "24h until bedtime"; only show a setup warning for actual missing Screen Time authorization or selection. A native ManagedSettingsStore shield, not the unreliable per-selection intersection alone, establishes the positive active-shield status. A conspicuous, labeled **Start 120-second hold** action opens the existing Curfy ring screen.
+- `app/onboarding.tsx`: copy and shield mock preview now show the *actual* two-environment path, no impossible hold button inside Apple's system shield.
+- Native exception code: accepts a native active shield for category-token false-negative cases and verifies a true reduction in shielding before counting an unlock; recovery likewise clears its exception if the global native shield is restored.
+- Added automated unit cases for category intersection false-negative, migration of saved shield configuration, and no false unlocking.
+
+**Unverified:** These *new* fixes are only on GitHub, not in the user's installed preview. iOS Swift build/real-device end-to-end 120s unlock and 15-minute re-shield still need a new consolidated iPhone build. An astronaut animation is deferred until P0 escape/reblock proof. No new EAS build triggered.
+
 ## Known P0 gaps
 
-1. **Real-device proof:** select one nonessential app, schedule bedtime shortly ahead, close Curfy, confirm that app receives an iOS shield while a different app remains usable; verify it unblocks at scheduled end. Also check no-permission/empty-selection error.
-2. **Shield escape path:** the third-party `openApp` action goes through a ShieldAction extension and tries a custom URL. Opening Curfy from a shield has not been proven on iOS 18. Confirm a safe manual-open path if it fails. Do not promise shield UI can render the React Native hold screen.
+1. **Real-device proof:** user has provided screenshot of Apple's native "Blocked by Curfy" shield on selected app. Still verify app isolation, Curfy not foregrounded, permission denial, schedule start/end, and whether the *latest branch* retains native blocking.
+2. **Shield escape path:** user confirmed the third-party `openApp` shield action does NOT open Curfy on iOS 18. Do not retry unsupported extension launch tricks. Current code presents an honest close action, plus manual Curfy Home → 120-second ring; needs actual test. Reassess supported system `openParentalControlsApp` only for applicable newer iOS SDK/OS, never as an iOS 18 promise.
 3. **15-minute exception:** now implemented against the real device activity library, with a new native one-shot monitor and Swift guard, but **not yet built or verified on physical iPhone**. DeviceActivity callbacks can be delayed until the device is used; verify exact timing and error cases. Repeated trials, force-quits, reboot, DST and wake boundaries remain essential.
 4. **Schedule switching/clock:** changing the selected preset may leave old managed shields; reconcile native state when switching selections and changing windows. Test DST, timezone, reboot, permission revocation.
 5. **Product gate:** current UI's three presets and editable wake time do not yet enforce the approved 'one free app / multi premium' and 6:00 a.m. default; resolve before release.
@@ -49,7 +65,7 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 ## Next smallest action
 
-After the latest GitHub unit/TypeScript checks are green, pull this branch on the Mac and prepare ONE batched physical-iPhone preview build. First confirm selected app is actually shielded while Curfy is closed; then reopen Curfy manually, tap the new exception action, hold 120 seconds, confirm temporary app access, force-quit Curfy, and verify the selected app re-shields after ~15 minutes of actual device use. Test interrupted holds and wake-time boundary separately. Apple system scheduling is not hard real-time. Do not merge or call the native cycle complete until the device logs prove it.
+After fresh GitHub unit/TypeScript CI is green, pull the branch and make ONE batched iPhone preview build. Launch Curfy once after install to refresh the shared native shield UI. Confirm the blocked app's shield now says "Not now" and instructs manual Curfy access; Home shows an accurate bedtime state and **Start 120-second hold** action. Tap it to enter the existing circular ring screen, hold without interruption for 120s, confirm real temporary access, close Curfy, and verify restrictions return after the 15-minute exception. Verify an early-released hold resets and the scheduled wake boundary unblocks again. No EAS builds were used for code/test fixes.
 
 ## Decisions and rollback
 
