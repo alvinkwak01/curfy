@@ -378,3 +378,14 @@ test("native scheduling failure restores committed selection after editing draft
   assert.equal(f.selections.get("curfy-block-custom"), "old-token");
   assert.equal(f.isBlocked(), true);
 });
+
+test("picker shows the free-tier limit immediately from Apple's token counts", () => {
+  const f = fixture();
+  const check = f.screenTime.freeSelectionIssueForMetadata;
+  assert.equal(check({ applicationCount: 1, categoryCount: 0, webDomainCount: 0, includeEntireCategory: false }), null);
+  assert.equal(check({ applicationCount: 0, categoryCount: 0, webDomainCount: 0, includeEntireCategory: false }), "choose-one-app");
+  assert.equal(check({ applicationCount: 2, categoryCount: 0, webDomainCount: 0, includeEntireCategory: false }), "too-many-apps-or-categories");
+  assert.equal(check({ applicationCount: 1, categoryCount: 1, webDomainCount: 0, includeEntireCategory: false }), "too-many-apps-or-categories");
+  assert.equal(check({ applicationCount: 1, categoryCount: 0, webDomainCount: 1, includeEntireCategory: false }), "too-many-apps-or-categories");
+  assert.equal(check({ applicationCount: 1, categoryCount: 0, webDomainCount: 0, includeEntireCategory: true }), "too-many-apps-or-categories");
+});
