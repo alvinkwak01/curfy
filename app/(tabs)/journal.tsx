@@ -228,12 +228,10 @@ function JournalIntroModal({ visible, onClose }: { visible: boolean; onClose: ()
         <View style={styles.introCard}>
           <Text style={styles.introTitle}>Why journal before bed?</Text>
           <Text style={styles.introBody}>
-            Writing down what's on your mind — worries, loose ends,
-            tomorrow's to-dos — is a real technique called cognitive
-            offloading, the same idea behind CBT-I (cognitive behavioral
-            therapy for insomnia). Getting it out of your head and onto the
-            page signals to your brain that it's been saved, so it can stop
-            running the loop and let you actually fall asleep.
+            Got a thought, a worry, or tomorrow's to-do list on your mind?
+            Write it here so you don't have to keep it all in your head.
+            Journaling is optional. Curfy protects selected apps at bedtime;
+            it doesn't measure, diagnose, or promise anything about sleep.
           </Text>
           <TouchableOpacity onPress={onClose} style={styles.introBtn}>
             <Text style={styles.introBtnText}>Got it</Text>
