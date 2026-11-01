@@ -18,9 +18,11 @@ const time = loadTS("lib/bedtimeWindow.ts");
 function fixture({
   failStart = false, failUnblock = false, overlapReportsZero = false,
   authorization = 2, selectionCount = 1, initiallyBlocked = true,
+  silentMonitorFailure = false,
 } = {}) {
   const storage = new Map();
   const calls = [];
+  const monitoredActivities = new Set();
   let blocked = initiallyBlocked;
   const native = {
     AuthorizationStatus: { notDetermined: 0, denied: 1, approved: 2 },
@@ -38,8 +40,14 @@ function fixture({
     startMonitoring: async (name, schedule) => {
       calls.push(["start", name, schedule]);
       if (failStart) throw Error("Native scheduling failed");
+      if (!silentMonitorFailure) monitoredActivities.add(name);
     },
-    stopMonitoring: names => { calls.push(["stop", names]); },
+    activities: () => [...monitoredActivities],
+    stopMonitoring: names => {
+      calls.push(["stop", names]);
+      if (names) names.forEach(name => monitoredActivities.delete(name));
+      else monitoredActivities.clear();
+    },
     updateShield: (config, actions) => { calls.push(["shield", config, actions]); },
     isShieldActive: () => blocked,
     blockSelection: input => { calls.push(["block", input]); blocked = true; },
@@ -257,4 +265,31 @@ test("saving a schedule outside bedtime clears yesterday's stale shields", async
   assert.equal(f.isBlocked(), false);
   assert.equal(f.calls.filter(x => x[0] === "block").length, 0);
   assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
+});
+
+test("silent native monitor registration failure prevents a 15-minute exception", async () => {
+  const f = fixture({ silentMonitorFailure: true });
+  await assert.rejects(
+    f.screenTime.grantBedtimeException({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-10-31T23:00:00"),
+    }),
+    /automatic reblocking monitor/
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+  assert.equal(f.calls.filter(x => x[0] === "unblock").length, 0);
+});
+
+test("silent native bedtime monitor registration failure never clears existing shields", async () => {
+  const f = fixture({ silentMonitorFailure: true });
+  await assert.rejects(
+    f.screenTime.configureBedtimeBlocking({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-10-31T23:00:00"),
+    }),
+    /did not register bedtime monitoring/
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.calls.filter(x => x[0] === "reset").length, 0);
 });
