@@ -42,12 +42,12 @@ function fixture({
     stopMonitoring: names => { calls.push(["stop", names]); },
     updateShield: (config, actions) => { calls.push(["shield", config, actions]); },
     isShieldActive: () => blocked,
-    blockSelection: () => { calls.push(["block"]); blocked = true; },
+    blockSelection: input => { calls.push(["block", input]); blocked = true; },
     unblockSelection: () => {
       calls.push(["unblock"]);
       if (!failUnblock) blocked = false;
     },
-    resetBlocks: () => { blocked = false; },
+    resetBlocks: () => { calls.push(["reset"]); blocked = false; },
   };
   const screenTime = loadTS("lib/screenTime.ts", moduleName => {
     if (moduleName === "react-native-device-activity") return native;
@@ -195,4 +195,54 @@ test("existing installs can update the native shield copy without rescheduling",
   assert.ok(action);
   assert.equal(action[1].primaryButtonLabel, "Not now");
   assert.deepEqual(action[2], { primary: { behavior: "close" } });
+});
+
+test("new bedtime schedule rebuilds app-owned blocks after native monitoring succeeds", async () => {
+  const f = fixture();
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "social",
+  });
+  const firstSave = f.storage.get("curfy-scheduled-selection-id");
+  assert.equal(firstSave, "curfy-block-social");
+  const before = f.calls.length;
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+  });
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
+  const second = f.calls.slice(before);
+  const startIndex = second.findIndex(x => x[0] === "start");
+  const resetIndex = second.findIndex(x => x[0] === "reset");
+  const blockIndex = second.findIndex(x => x[0] === "block" && x[1].activitySelectionId === "curfy-block-custom");
+  assert.ok(startIndex >= 0 && resetIndex > startIndex);
+  // During bedtime, the newly selected apps must be reapplied after clearing
+  // old selections rather than unioned with them.
+  if (f.screenTime.getBedtimeProtectionStatus("custom") === "shield-active") {
+    assert.ok(blockIndex > resetIndex);
+  }
+});
+
+test("failed schedule replacement never clears existing managed restrictions", async () => {
+  const f = fixture({ failStart: true });
+  f.storage.set("curfy-scheduled-selection-id", "curfy-block-social");
+  await assert.rejects(
+    f.screenTime.configureBedtimeBlocking({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    }),
+    /Native scheduling failed/
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.calls.filter(x => x[0] === "reset").length, 0);
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-social");
+  const restored = f.calls.filter(x => x[0] === "action" && x[1].callbackName === "intervalDidStart").at(-1);
+  assert.equal(restored[1].actions[0].familyActivitySelectionId, "curfy-block-social");
+});
+
+test("stopping protection clears stored active selection as well as shields", async () => {
+  const f = fixture();
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+  });
+  f.screenTime.stopBedtimeBlocking();
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), undefined);
+  assert.equal(f.isBlocked(), false);
 });
