@@ -25,3 +25,8 @@ jobs:
         env:
           TZ: America/Los_Angeles
       - run: npx tsc --noEmit
+      # Check configuration and native dependencies without consuming an EAS build.
+      - run: npx expo-doctor
+      # npm install may silently rewrite a stale lockfile. Catch that drift
+      # before signing and uploading the next iPhone preview.
+      - run: git diff --exit-code -- package-lock.json
