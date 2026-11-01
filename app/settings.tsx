@@ -148,12 +148,12 @@ export default function Settings() {
 
   const onSignOut = () => {
     Alert.alert(
-      "Sign out?",
-      "Restarting setup stops Curfy's current app restrictions. Your local history and online profile remain. This does not sign out of the anonymous online account.",
+      "Restart setup?",
+      "This restarts onboarding and ends the current protection schedule. During bedtime, complete the 120-second hold from Home first. Your saved history and online profile remain.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Sign Out",
+          text: "Restart Setup",
           style: "default",
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
