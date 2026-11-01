@@ -9,6 +9,8 @@ import {
   BlockModeId,
   ScreenTimeAuthStatus,
   configureBedtimeBlocking,
+  freeSelectionIssueForMetadata,
+  FreeSelectionIssue,
   requestScreenTimeAccess,
   selectionIdForMode,
 } from "@/lib/screenTime";
@@ -120,8 +122,16 @@ export default function Onboarding() {
     useState<ScreenTimeAuthStatus>("notDetermined");
   const [blockMode, setBlockMode] = useState<BlockModeId | null>(null);
   const [selectedCount, setSelectedCount] = useState<number | null>(null);
+  const [selectionIssue, setSelectionIssue] = useState<FreeSelectionIssue | null>("choose-one-app");
 
   const next = async () => {
+    if (step === 9 && (selectionIssue || !blockMode)) {
+      Alert.alert("Start with one app",
+        selectionIssue === "too-many-apps-or-categories"
+          ? "Your free Curfy plan protects one individual app. Reopen Apple's picker and keep only one app selected. Multiple apps will require Premium."
+          : "Choose one individual app in Apple's picker to continue.");
+      return;
+    }
     if (step < STEP_COUNT - 1) {
       setStep(step + 1);
       return;
@@ -165,7 +175,7 @@ export default function Onboarding() {
     (isLastStep && name.trim().length === 0) ||
     (step === 1 && reasons.length === 0) ||
     (step === 8 && screenTimeStatus === "notDetermined") ||
-    (step === 9 && !blockMode);
+    (step === 9 && (!blockMode || selectionIssue !== null));
 
   if (showWelcome) {
     return (
@@ -230,7 +240,13 @@ export default function Onboarding() {
                     blockMode={blockMode}
                     selectedCount={selectedCount}
                     onSelect={setBlockMode}
-                    onCountChange={setSelectedCount}
+                    selectionIssue={selectionIssue}
+                    onSelectionChange={(metadata) => {
+                      setSelectedCount(
+                        metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount
+                      );
+                      setSelectionIssue(freeSelectionIssueForMetadata(metadata));
+                    }}
                   />
                 )}
                 {step === 10 && <StepPreview bedtime={localBedtime} wakeTime={localWakeTime} />}
@@ -578,12 +594,14 @@ function StepChooseApps({
   blockMode,
   selectedCount,
   onSelect,
-  onCountChange,
+  onSelectionChange,
+  selectionIssue,
 }: {
   blockMode: BlockModeId | null;
   selectedCount: number | null;
   onSelect: (m: BlockModeId) => void;
-  onCountChange: (n: number) => void;
+  onSelectionChange: (metadata: ActivitySelectionMetadata) => void;
+  selectionIssue: FreeSelectionIssue | null;
 }) {
   const [pickerMode, setPickerMode] = useState<BlockModeId | null>(null);
 
@@ -595,8 +613,7 @@ function StepChooseApps({
   const handleSelectionChange = (
     event: NativeSyntheticEvent<ActivitySelectionMetadata>
   ) => {
-    const { applicationCount, categoryCount } = event.nativeEvent;
-    onCountChange(applicationCount + categoryCount);
+    onSelectionChange(event.nativeEvent);
   };
 
   const activePreset = BLOCK_MODE_PRESETS.find((p) => p.id === pickerMode);
@@ -638,6 +655,17 @@ function StepChooseApps({
           );
         })}
       </View>
+
+      {selectionIssue === "too-many-apps-or-categories" && (
+        <View style={styles.selectionWarning}>
+          <Text style={styles.selectionWarningTitle}>Start with one app</Text>
+          <Text style={styles.fineprint}>
+            Free protection covers one individual app. Return to Apple's picker
+            and remove extra apps, categories and websites. Multi-app Premium
+            requires an in-app purchase and isn't available yet.
+          </Text>
+        </View>
+      )}
 
       {selectedCount !== null && blockMode && (
         <TouchableOpacity
@@ -955,6 +983,13 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   selectedChipText: { color: Colors.primaryCyan, fontFamily: Fonts.semiBold, fontSize: 12.5 },
+  selectionWarning: {
+    padding: 12, borderWidth: 1, borderColor: Colors.warningAmber,
+    borderRadius: 12, backgroundColor: "rgba(255,178,74,0.08)", gap: 4,
+  },
+  selectionWarningTitle: {
+    color: Colors.warningAmber, fontFamily: Fonts.semiBold, fontSize: 13,
+  },
   fineprint: {
     color: Colors.textGhost,
     fontSize: 11.5,
