@@ -4,6 +4,7 @@ import {
   BlockModeId,
   grantBedtimeException,
   reconcileBedtimeException,
+  refreshBedtimeShieldAppearance,
   stopBedtimeBlocking,
 } from "@/lib/screenTime";
 import React, {
@@ -447,6 +448,13 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   // the device. Reconcile missed exception expiry whenever Curfy reopens.
   useEffect(() => {
     if (isLoading || !isOnboardingComplete) return;
+    try {
+      // Updating an installed preview does not automatically replace native
+      // shield actions stored in the shared app-group UserDefaults.
+      refreshBedtimeShieldAppearance();
+    } catch (error) {
+      console.warn("[Curfy] Could not refresh native shield appearance", error);
+    }
     try {
       reconcileBedtimeException(bedtime, wakeTime);
     } catch (error) {
