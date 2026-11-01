@@ -201,12 +201,14 @@ test("new bedtime schedule rebuilds app-owned blocks after native monitoring suc
   const f = fixture();
   await f.screenTime.configureBedtimeBlocking({
     bedtime: "22:00", wakeTime: "06:00", mode: "social",
+    now: new Date("2026-10-31T23:00:00"),
   });
   const firstSave = f.storage.get("curfy-scheduled-selection-id");
   assert.equal(firstSave, "curfy-block-social");
   const before = f.calls.length;
   await f.screenTime.configureBedtimeBlocking({
     bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-10-31T23:01:00"),
   });
   assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
   const second = f.calls.slice(before);
@@ -216,9 +218,8 @@ test("new bedtime schedule rebuilds app-owned blocks after native monitoring suc
   assert.ok(startIndex >= 0 && resetIndex > startIndex);
   // During bedtime, the newly selected apps must be reapplied after clearing
   // old selections rather than unioned with them.
-  if (f.screenTime.getBedtimeProtectionStatus("custom") === "shield-active") {
-    assert.ok(blockIndex > resetIndex);
-  }
+  assert.ok(blockIndex > resetIndex);
+  assert.equal(f.isBlocked(), true);
 });
 
 test("failed schedule replacement never clears existing managed restrictions", async () => {
@@ -245,4 +246,15 @@ test("stopping protection clears stored active selection as well as shields", as
   f.screenTime.stopBedtimeBlocking();
   assert.equal(f.storage.get("curfy-scheduled-selection-id"), undefined);
   assert.equal(f.isBlocked(), false);
+});
+
+test("saving a schedule outside bedtime clears yesterday's stale shields", async () => {
+  const f = fixture();
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-10-31T12:00:00"),
+  });
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.calls.filter(x => x[0] === "block").length, 0);
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
 });
