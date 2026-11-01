@@ -84,7 +84,7 @@ export default function Settings() {
   });
 
   const onSave = async () => {
-    if (saveInFlight.current || saved) return;
+    if (saveInFlight.current || saved || deleting) return;
     if (!localBlockMode) {
       Alert.alert("Choose an app", "Select an app to protect before saving.");
       return;
@@ -179,6 +179,7 @@ export default function Settings() {
   const activePreset = BLOCK_MODE_PRESETS.find((p) => p.id === pickerMode);
 
   const onSignOut = () => {
+    if (saveInFlight.current || deleting) return;
     Alert.alert(
       "Restart setup?",
       "This restarts onboarding and ends the current protection schedule. During bedtime, complete the 120-second hold from Home first. Your saved history and online profile remain.",
@@ -200,6 +201,7 @@ export default function Settings() {
   };
 
   const onDeleteAccount = () => {
+    if (saveInFlight.current || deleting) return;
     Alert.alert(
       "Delete everything?",
       "Delete your online Curfy account and local history? If online deletion cannot be confirmed, nothing on this device will be erased. This cannot be undone.",
@@ -391,7 +393,7 @@ export default function Settings() {
         <TouchableOpacity
           style={[styles.saveBtn, saved && styles.saveBtnSaved]}
           onPress={onSave}
-          disabled={saved || saving}
+          disabled={saved || saving || deleting}
         >
           <Text style={styles.saveBtnText}>
             {saved ? "Saved" : saving ? "Saving..." : "Save"}
@@ -399,11 +401,11 @@ export default function Settings() {
         </TouchableOpacity>
 
         <View style={styles.accountSection}>
-          <TouchableOpacity style={styles.signOutBtn} onPress={onSignOut} disabled={deleting}>
+          <TouchableOpacity style={styles.signOutBtn} onPress={onSignOut} disabled={deleting || saving}>
             <Text style={styles.signOutText}>Restart Setup</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.deleteLink} onPress={onDeleteAccount} disabled={deleting}>
+          <TouchableOpacity style={styles.deleteLink} onPress={onDeleteAccount} disabled={deleting || saving}>
             <Text style={styles.deleteLinkText}>{deleting ? "Deleting Account..." : "Delete Account"}</Text>
           </TouchableOpacity>
         </View>
