@@ -31,6 +31,7 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
   const { unlockScreen, todayUnlocks, devDismissLock } = useSleep();
   const { top, bottom } = useSafeAreaInsets();
   const [unlockPending, setUnlockPending] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
   const isPreview = mode === "preview";
 
   const finishHold = async () => {
@@ -60,6 +61,7 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
       {Platform.OS !== "web" && <StatusBar barStyle="light-content" />}
       <StarBackground />
       <ScrollView
+        scrollEnabled={!isHolding}
         contentContainerStyle={[
           styles.content,
           { paddingTop: (Platform.OS === "web" ? 42 : top) + 16,
@@ -126,7 +128,11 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
           <View pointerEvents="none" style={styles.orbitMoon}>
             <Ionicons name="moon" size={15} color={Colors.primaryCyan} />
           </View>
-          <HoldButton onUnlock={finishHold} unlockCount={todayUnlocks} />
+          <HoldButton
+            onUnlock={finishHold}
+            unlockCount={todayUnlocks}
+            onHoldingChange={setIsHolding}
+          />
         </View>
 
         <View style={styles.bottom}>
