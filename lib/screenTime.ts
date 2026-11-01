@@ -131,10 +131,7 @@ export async function configureBedtimeBlocking({
   // Reject equal/invalid endpoints rather than creating an ambiguous
   // all-day interval or crashing the Home screen later.
   currentBedtimeWindow(now, bedtime, wakeTime);
-  const selectedCount = getSelectionCount(mode);
-  if (selectedCount === null || selectedCount < 1) {
-    throw new Error("Choose at least one app in Apple's app picker before continuing.");
-  }
+  assertOneFreeAppSelected(mode);
   const selectionId = selectionIdForMode(mode);
   const previousSelectionId = previousScheduledSelectionId();
 
@@ -242,11 +239,47 @@ export function stopBedtimeBlocking(): void {
 // "N apps blocked" for the current mode. Returns null if nothing's been
 // selected for that preset yet (e.g. it was never picked during onboarding).
 export function getSelectionCount(mode: BlockModeId): number | null {
-  const metadata = DeviceActivity.activitySelectionMetadata({
-    activitySelectionId: selectionIdForMode(mode),
-  });
+  const metadata = selectionMetadata(mode);
   if (!metadata) return null;
   return metadata.applicationCount + metadata.categoryCount;
+}
+
+/**
+ * The MVP has no paid entitlement implemented. Therefore exactly ONE explicit
+ * app is supported, regardless of which older preset was saved. A category
+ * can cover hundreds of apps and is not a valid substitute for one app.
+ * The native picker itself does not enforce a maximum, so validate the
+ * persisted opaque-token metadata before scheduling or granting an exception.
+ */
+function selectionMetadata(mode: BlockModeId) {
+  return DeviceActivity.activitySelectionMetadata({
+    activitySelectionId: selectionIdForMode(mode),
+  });
+}
+
+export type FreeSelectionIssue = "choose-one-app" | "too-many-apps-or-categories";
+
+/** A null issue means exactly one application and no category/domain tokens. */
+export function freeSelectionIssue(mode: BlockModeId): FreeSelectionIssue | null {
+  const meta = selectionMetadata(mode);
+  if (!meta || meta.applicationCount === 0 && meta.categoryCount === 0 && meta.webDomainCount === 0) {
+    return "choose-one-app";
+  }
+  if (meta.applicationCount !== 1 || meta.categoryCount !== 0 ||
+      meta.webDomainCount !== 0 || meta.includeEntireCategory === true) {
+    return "too-many-apps-or-categories";
+  }
+  return null;
+}
+
+function assertOneFreeAppSelected(mode: BlockModeId): void {
+  const issue = freeSelectionIssue(mode);
+  if (issue === "choose-one-app") {
+    throw new Error("Select one app to protect. The free version protects one app.");
+  }
+  if (issue) {
+    throw new Error("The free version protects one individual app. Remove extra apps, categories and websites in Apple's picker.");
+  }
 }
 
 /** One non-repeating native monitor per deliberate hold; JS timers alone are insufficient. */
@@ -294,7 +327,7 @@ export type BedtimeProtectionStatus =
  */
 export function getBedtimeProtectionStatus(mode: BlockModeId): BedtimeProtectionStatus {
   if (getScreenTimeAccessStatus() !== "authorized") return "permission-required";
-  if ((getSelectionCount(mode) ?? 0) < 1) return "selection-required";
+  if (freeSelectionIssue(mode)) return "selection-required";
   try {
     if (DeviceActivity.isShieldActive()) return "shield-active";
     if (selectedAppShieldCount(selectionIdForMode(mode)) > 0) return "shield-active";
@@ -349,9 +382,7 @@ export async function grantBedtimeException({
   const window = currentBedtimeWindow(now, bedtime, wakeTime);
   if (!window) throw new Error("Your selected apps are not in a bedtime blocking window.");
   const selectionId = selectionIdForMode(mode);
-  if ((getSelectionCount(mode) ?? 0) < 1) {
-    throw new Error("Choose an app to protect in Settings first.");
-  }
+  assertOneFreeAppSelected(mode);
 
   // A token intersection can produce a false negative for an actual
   // category shield. Require either explicit token overlap or an active
