@@ -71,6 +71,10 @@ export function prepareSelectionDraft(mode: BlockModeId): string {
   const existing = DeviceActivity.getFamilyActivitySelectionId(selectionIdForMode(mode));
   if (existing) {
     DeviceActivity.setFamilyActivitySelectionId({ id, familyActivitySelection: existing });
+  } else {
+    // Abandoned drafts live in shared storage across Settings sessions.
+    // Fresh users must not accidentally inherit an unsaved selection.
+    restoreSelection(id, undefined);
   }
   return id;
 }
@@ -288,7 +292,7 @@ export function stopBedtimeBlocking(): void {
 export function getSelectionCount(mode: BlockModeId): number | null {
   const metadata = selectionMetadata(mode);
   if (!metadata) return null;
-  return metadata.applicationCount + metadata.categoryCount;
+  return metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount;
 }
 
 /**
