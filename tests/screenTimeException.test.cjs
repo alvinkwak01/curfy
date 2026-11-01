@@ -22,6 +22,7 @@ function fixture({
   silentMonitorFailure = false,
 } = {}) {
   const storage = new Map();
+  const selections = new Map();
   const calls = [];
   const monitoredActivities = new Set();
   let blocked = initiallyBlocked;
@@ -34,6 +35,10 @@ function fixture({
     intersection: () => ({
       applicationCount: blocked && !overlapReportsZero ? 1 : 0, categoryCount: 0, webDomainCount: 0,
     }),
+    getFamilyActivitySelectionId: id => selections.get(id),
+    setFamilyActivitySelectionId: ({ id, familyActivitySelection }) => {
+      selections.set(id, familyActivitySelection);
+    },
     userDefaultsGet: key => storage.get(key),
     userDefaultsSet: (key, value) => { storage.set(key, value); },
     userDefaultsRemove: key => { storage.delete(key); },
@@ -63,7 +68,7 @@ function fixture({
     if (moduleName === "@/lib/bedtimeWindow") return time;
     throw Error("Unexpected import " + moduleName);
   });
-  return { native, screenTime, storage, calls, isBlocked: () => blocked };
+  return { native, screenTime, storage, selections, calls, isBlocked: () => blocked };
 }
 
 test("completing the hold schedules native reblock before unshielding", async () => {
@@ -333,4 +338,43 @@ test("only single-app selection receives the positive dashboard shield status", 
   assert.equal(fixture({ selectionCount: 1 }).screenTime.getBedtimeProtectionStatus("custom"), "shield-active");
   assert.equal(fixture({ selectionCount: 2 }).screenTime.getBedtimeProtectionStatus("custom"), "selection-required");
   assert.equal(fixture({ selectionCount: 0, categoryCount: 1 }).screenTime.getBedtimeProtectionStatus("custom"), "selection-required");
+});
+
+test("opening Settings' draft picker does not mutate live app tokens", () => {
+  const f = fixture();
+  f.selections.set("curfy-block-custom", "previous-opaque-token");
+  const id = f.screenTime.prepareSelectionDraft("custom");
+  assert.equal(id, "curfy-draft-custom");
+  assert.equal(f.selections.get(id), "previous-opaque-token");
+  f.selections.set(id, "edited-opaque-token");
+  assert.equal(f.selections.get("curfy-block-custom"), "previous-opaque-token");
+});
+
+test("saving staged selection commits opaque tokens only after preflight", async () => {
+  const f = fixture();
+  f.selections.set("curfy-block-custom", "old-token");
+  f.selections.set("curfy-draft-custom", "new-token");
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    draftSelectionId: "curfy-draft-custom",
+    now: new Date("2026-10-31T23:00:00"),
+  });
+  assert.equal(f.selections.get("curfy-block-custom"), "new-token");
+  assert.equal(f.isBlocked(), true);
+});
+
+test("native scheduling failure restores committed selection after editing draft", async () => {
+  const f = fixture({ failStart: true });
+  f.selections.set("curfy-block-custom", "old-token");
+  f.selections.set("curfy-draft-custom", "new-token");
+  await assert.rejects(
+    f.screenTime.configureBedtimeBlocking({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      draftSelectionId: "curfy-draft-custom",
+      now: new Date("2026-10-31T23:00:00"),
+    }),
+    /Native scheduling failed/
+  );
+  assert.equal(f.selections.get("curfy-block-custom"), "old-token");
+  assert.equal(f.isBlocked(), true);
 });
