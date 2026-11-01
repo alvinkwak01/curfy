@@ -12,7 +12,11 @@ import {
   freeSelectionIssue,
   freeSelectionIssueForMetadata,
   FreeSelectionIssue,
+  activeExceptionExpiresAt,
+  getScreenTimeAccessStatus,
 } from "@/lib/screenTime";
+import { isBedtimeWindowActive } from "@/lib/bedtimeWindow";
+import { allowProtectionReconfiguration, protectionSettingsChanged } from "@/lib/protectionSettingsPolicy";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
@@ -90,28 +94,49 @@ export default function Settings() {
           : "Choose one individual app before saving.");
       return;
     }
+    const protectionChanged = protectionSettingsChanged(
+      { bedtime, wakeTime, blockMode },
+      { bedtime: localBedtime, wakeTime: localWakeTime, blockMode: localBlockMode },
+      stagedMode === localBlockMode
+    );
+    if (!allowProtectionReconfiguration({
+      changingProtection: protectionChanged,
+      insideCurrentBedtime: isBedtimeWindowActive(new Date(), bedtime, wakeTime),
+      authorized: getScreenTimeAccessStatus() === "authorized",
+      hasConfiguredApp: blockMode === "custom" || blockMode === "social" || blockMode === "most",
+      activeException: activeExceptionExpiresAt() !== null,
+    })) {
+      Alert.alert(
+        "Your bedtime boundary is active",
+        "To change protected apps or bedtime hours tonight, complete the 120-second hold from Curfy Home first. You can still edit your name and motivation without changing protection."
+      );
+      return;
+    }
     saveInFlight.current = true;
     setSaving(true);
     try {
-      await configureBedtimeBlocking({
-        bedtime: localBedtime,
-        wakeTime: localWakeTime,
-        mode: localBlockMode,
-        draftSelectionId: stagedMode === localBlockMode
-          ? draftSelectionIdForMode(localBlockMode)
-          : undefined,
-      });
-      // Native state must be committed before Settings claims "Saved".
-      await setBedtime(localBedtime);
-      await setWakeTime(localWakeTime);
-      await setUserName(localName.trim());
-      await setMotivation(localMotivation.trim());
-      await setBlockMode(localBlockMode);
+      // Name/motivation edits must not reset the native shield, cancel an
+      // exception, or restart DeviceActivity monitoring.
+      if (protectionChanged) {
+        await configureBedtimeBlocking({
+          bedtime: localBedtime,
+          wakeTime: localWakeTime,
+          mode: localBlockMode,
+          draftSelectionId: stagedMode === localBlockMode
+            ? draftSelectionIdForMode(localBlockMode)
+            : undefined,
+        });
+        if (localBedtime !== bedtime) await setBedtime(localBedtime);
+        if (localWakeTime !== wakeTime) await setWakeTime(localWakeTime);
+        if (localBlockMode !== blockMode) await setBlockMode(localBlockMode);
+      }
+      if (localName.trim() !== userName) await setUserName(localName.trim());
+      if (localMotivation.trim() !== motivation) await setMotivation(localMotivation.trim());
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSaved(true);
       setTimeout(() => router.back(), 800);
     } catch (error) {
-      console.warn("[Curfy] Failed to save bedtime protection", error);
+      console.warn("[Curfy] Failed to save Settings", error);
       Alert.alert("Settings couldn't be fully saved",
         error instanceof Error ? error.message : "Please try saving again.");
     } finally {
