@@ -154,12 +154,17 @@ export default function Home() {
                 accessibilityRole="button"
                 accessibilityLabel="Begin uninterrupted 120-second hold to unlock selected apps"
                 onPress={() => router.push("/escape")}
+                style={styles.escapeAction}
               >
-                <Text style={styles.escapeLabel}>Need a 15-minute exception?</Text>
+                <View style={styles.escapeActionTitle}>
+                  <Ionicons name="lock-open-outline" size={22} color={Colors.primaryCyan} />
+                  <Text style={[styles.escapeLabel, { flex: 1 }]}>Start 120-second hold</Text>
+                  <Ionicons name="chevron-forward" size={19} color={Colors.primaryCyan} />
+                </View>
                 <Text style={styles.escapeHint}>
                   {protectionStatus === "shield-active"
-                    ? "Curfy's iOS shield is active. Hold for 120 seconds to request a temporary unlock."
-                    : "Curfy can't confirm the shield state. Check a selected app first; the hold will only grant access if iOS reports protection."}
+                    ? "Hold the circular button in Curfy for two uninterrupted minutes to request up to 15 minutes of access."
+                    : "iOS hasn't confirmed the shield state here. Check a selected app first; an unlock only succeeds if iOS reports protection."}
                 </Text>
               </TouchableOpacity>
             )}
@@ -269,6 +274,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
   },
+  escapeAction: { paddingVertical: 4 },
+  escapeActionTitle: { flexDirection: "row", alignItems: "center", gap: 10 },
   escapeLabel: { color: Colors.primaryCyan, fontSize: 16, fontFamily: Fonts.semiBold },
   escapeHint: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular, marginTop: 6 },
   messageSection: { alignItems: "center", gap: 10 },
