@@ -489,9 +489,11 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   };
 
   const completeOnboarding = async () => {
-    setIsOnboardingComplete(true);
+    // Onboarding already awaited setBedtime(userChosenTime), which scheduled
+    // reminders. Repeating that call here uses this render's stale bedtime
+    // (often the default) and silently replaces the user's chosen schedule.
     await AsyncStorage.setItem(ONBOARDING_KEY, "true");
-    await scheduleBedtimeNotifications(bedtime);
+    setIsOnboardingComplete(true);
   };
 
   const setDevSkipLock = async (skip: boolean) => {
