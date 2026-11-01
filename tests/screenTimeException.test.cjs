@@ -15,18 +15,21 @@ function loadTS(path, customRequire = require) {
 }
 const time = loadTS("lib/bedtimeWindow.ts");
 
-function fixture({ failStart = false, failUnblock = false } = {}) {
+function fixture({
+  failStart = false, failUnblock = false, overlapReportsZero = false,
+  authorization = 2, selectionCount = 1, initiallyBlocked = true,
+} = {}) {
   const storage = new Map();
   const calls = [];
-  let blocked = true;
+  let blocked = initiallyBlocked;
   const native = {
     AuthorizationStatus: { notDetermined: 0, denied: 1, approved: 2 },
-    getAuthorizationStatus: () => 2,
+    getAuthorizationStatus: () => authorization,
     activitySelectionMetadata: () => ({
-      applicationCount: 1, categoryCount: 0, webDomainCount: 0,
+      applicationCount: selectionCount, categoryCount: 0, webDomainCount: 0,
     }),
     intersection: () => ({
-      applicationCount: blocked ? 1 : 0, categoryCount: 0, webDomainCount: 0,
+      applicationCount: blocked && !overlapReportsZero ? 1 : 0, categoryCount: 0, webDomainCount: 0,
     }),
     userDefaultsGet: key => storage.get(key),
     userDefaultsSet: (key, value) => { storage.set(key, value); },
@@ -37,7 +40,8 @@ function fixture({ failStart = false, failUnblock = false } = {}) {
       if (failStart) throw Error("Native scheduling failed");
     },
     stopMonitoring: names => { calls.push(["stop", names]); },
-    updateShield: () => {},
+    updateShield: (config, actions) => { calls.push(["shield", config, actions]); },
+    isShieldActive: () => blocked,
     blockSelection: () => { calls.push(["block"]); blocked = true; },
     unblockSelection: () => {
       calls.push(["unblock"]);
@@ -125,4 +129,49 @@ test("recovery never re-shields apps when the bedtime window has ended", async (
   f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2_000));
   assert.equal(f.isBlocked(), false);
   assert.equal(f.storage.has("curfy-active-exception"), false);
+});
+
+test("dashboard recognizes native category shielding despite zero token overlap", () => {
+  const f = fixture({ overlapReportsZero: true });
+  assert.equal(f.screenTime.getBedtimeProtectionStatus("custom"), "shield-active");
+});
+
+test("dashboard only reports a missing setup when iOS actually says it is missing", () => {
+  assert.equal(fixture({ authorization: 1 }).screenTime.getBedtimeProtectionStatus("custom"), "permission-required");
+  assert.equal(fixture({ selectionCount: 0 }).screenTime.getBedtimeProtectionStatus("custom"), "selection-required");
+  assert.equal(fixture({ initiallyBlocked: false }).screenTime.getBedtimeProtectionStatus("custom"), "unconfirmed");
+});
+
+test("category-shield false negative still permits a verified native exception", async () => {
+  const f = fixture({ overlapReportsZero: true });
+  await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-10-31T23:00:00"),
+  });
+  assert.equal(f.isBlocked(), false);
+});
+
+test("category-shield false negative never counts an unlock when native shield persists", async () => {
+  const f = fixture({ overlapReportsZero: true, failUnblock: true });
+  await assert.rejects(
+    f.screenTime.grantBedtimeException({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-10-31T23:00:00"),
+    }),
+    /did not release/
+  );
+  assert.equal(f.isBlocked(), true);
+});
+
+test("the installed shield no longer offers a broken Open Curfy button", async () => {
+  const f = fixture();
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+  });
+  const updated = f.calls.find(x => x[0] === "shield");
+  assert.ok(updated);
+  assert.equal(updated[1].primaryButtonLabel, "Not now");
+  assert.equal(updated[2].primary.behavior, "close");
+  assert.equal(updated[2].primary.actions, undefined);
+  assert.match(updated[1].subtitle, /open Curfy from your Home Screen/);
 });
