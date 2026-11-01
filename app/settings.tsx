@@ -192,9 +192,9 @@ export default function Settings() {
 
         <View style={styles.section}>
           <Text style={styles.label}>BLOCKED APPS</Text>
-          <Text style={styles.hint}>What Curfy locks during your bedtime window</Text>
+          <Text style={styles.hint}>Free protects one individual app. Categories, websites and multiple apps aren't available yet.</Text>
           <View style={{ gap: 8, marginTop: 12 }}>
-            {BLOCK_MODE_PRESETS.map((preset) => {
+            {BLOCK_MODE_PRESETS.filter((preset) => preset.id === "custom").map((preset) => {
               const isSelected = localBlockMode === preset.id;
               const count = appCounts[preset.id];
               return (
