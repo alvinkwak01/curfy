@@ -61,6 +61,27 @@ export function selectionIdForMode(mode: BlockModeId): string {
 }
 
 const BEDTIME_ACTIVITY_NAME = "curfy-bedtime";
+const SCHEDULED_SELECTION_ID_KEY = "curfy-scheduled-selection-id";
+
+/** Last successfully configured app selection, shared with the native extensions. */
+function previousScheduledSelectionId(): string | null {
+  const value = DeviceActivity.userDefaultsGet<unknown>(SCHEDULED_SELECTION_ID_KEY);
+  return typeof value === "string" && value.startsWith("curfy-block-") ? value : null;
+}
+
+/** Install both actions together before startMonitoring can invoke a callback. */
+function configureBedtimeActions(selectionId: string): void {
+  DeviceActivity.configureActions({
+    activityName: BEDTIME_ACTIVITY_NAME,
+    callbackName: "intervalDidStart",
+    actions: [{ type: "blockSelection", familyActivitySelectionId: selectionId }],
+  });
+  DeviceActivity.configureActions({
+    activityName: BEDTIME_ACTIVITY_NAME,
+    callbackName: "intervalDidEnd",
+    actions: [{ type: "unblockSelection", familyActivitySelectionId: selectionId }],
+  });
+}
 
 function mapAuthStatus(status: DeviceActivity.AuthorizationStatusType): ScreenTimeAuthStatus {
   if (status === DeviceActivity.AuthorizationStatus.approved) return "authorized";
@@ -112,37 +133,52 @@ export async function configureBedtimeBlocking({
     throw new Error("Choose at least one app in Apple's app picker before continuing.");
   }
   const selectionId = selectionIdForMode(mode);
+  const previousSelectionId = previousScheduledSelectionId();
 
-  // A schedule change ends any prior exception; otherwise an obsolete
-  // one-off monitor could re-shield a superseded selection.
-  cancelExceptionForScheduleChange();
-
-  DeviceActivity.configureActions({
-    activityName: BEDTIME_ACTIVITY_NAME,
-    callbackName: "intervalDidStart",
-    actions: [{ type: "blockSelection", familyActivitySelectionId: selectionId }],
-  });
-
-  DeviceActivity.configureActions({
-    activityName: BEDTIME_ACTIVITY_NAME,
-    callbackName: "intervalDidEnd",
-    actions: [{ type: "unblockSelection", familyActivitySelectionId: selectionId }],
-  });
-
+  // Register the proposed actions before starting the monitor, because an
+  // immediately-active schedule can call intervalDidStart synchronously.
+  // Do not clear existing restrictions or cancel an active exception until
+  // startMonitoring has actually succeeded.
+  configureBedtimeActions(selectionId);
   refreshBedtimeShieldAppearance();
+  try {
+    await DeviceActivity.startMonitoring(
+      BEDTIME_ACTIVITY_NAME,
+      {
+        intervalStart: timeToDateComponents(bedtime),
+        intervalEnd: timeToDateComponents(wakeTime),
+        repeats: true,
+      },
+      []
+    );
+  } catch (error) {
+    // The old monitor may still be running. Restore its callbacks rather
+    // than leaving them pointed at a selection that was never saved.
+    if (previousSelectionId) configureBedtimeActions(previousSelectionId);
+    throw error;
+  }
 
-  // Starting last matters: Apple may fire intervalDidStart right away.
-  // If monitoring fails, let onboarding/Settings show an error instead of
-  // silently marking an unprotected schedule as saved.
-  await DeviceActivity.startMonitoring(
-    BEDTIME_ACTIVITY_NAME,
-    {
-      intervalStart: timeToDateComponents(bedtime),
-      intervalEnd: timeToDateComponents(wakeTime),
-      repeats: true,
-    },
-    []
-  );
+  // This is Curfy's dedicated managed-settings blocklist. Native
+  // blockSelection unions tokens, so merely changing the selection in
+  // Settings leaves OLD apps blocked. Rebuild only after monitoring succeeds.
+  cancelExceptionForScheduleChange();
+  DeviceActivity.resetBlocks("curfy-schedule-change-clear-old-apps");
+  if (currentBedtimeWindow(new Date(), bedtime, wakeTime)) {
+    DeviceActivity.blockSelection(
+      { activitySelectionId: selectionId }, "curfy-schedule-change-current-window"
+    );
+    if (!DeviceActivity.isShieldActive()) {
+      // Restore prior protection when possible rather than silently claim
+      // the newly saved selection is protected.
+      if (previousSelectionId) {
+        DeviceActivity.blockSelection(
+          { activitySelectionId: previousSelectionId }, "curfy-schedule-change-rollback"
+        );
+      }
+      throw new Error("iOS did not apply the selected app restrictions. Please retry.");
+    }
+  }
+  DeviceActivity.userDefaultsSet(SCHEDULED_SELECTION_ID_KEY, selectionId);
 }
 
 /**
@@ -190,6 +226,7 @@ export function stopBedtimeBlocking(): void {
   DeviceActivity.stopMonitoring([BEDTIME_ACTIVITY_NAME]);
   // A user deleting their Curfy account must not leave orphaned app shields.
   DeviceActivity.resetBlocks("curfy-stop-blocking");
+  DeviceActivity.userDefaultsRemove(SCHEDULED_SELECTION_ID_KEY);
 }
 
 // Reads back how many apps/categories are in a preset's already-persisted
