@@ -65,6 +65,19 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 - No new astronaut asset, mascot, premium mode, feature or animation was added. Existing twinkling stars and restrained orbit decoration preserve the current brand without shipping optional polish ahead of critical functionality.
 - User must verify on iPhone: ring visibility/sizing on iPhone 13, Exit during an incomplete hold (without granting access), preview never unblocks, continuous 120s → iOS unshield → 15m re-shield with Curfy closed, and accessible alternative for users unable to maintain a long press. The native iOS 18 shield cannot host the React Native ring, so manual launch of Curfy remains the tested journey.
 
+## Pre-build gate passed — no cloud build used (2026-10-31/11-01)
+
+User correctly requested preflight before spending an EAS build. The repo's `package-lock.json` still contained Expo dev-client v57.0.10 and `^57.0.10` at root, despite the app using Expo SDK 54 and `expo-dev-client ~6.0.21`. Existing CI ran `npm install` rather than catching lockfile drift.
+
+**Changed on feature branch only:**
+- `package.json`: align Expo patch declarations with Expo Doctor: `expo ~54.0.37`, `expo-constants ~18.0.14`.
+- `package-lock.json`: regenerated using the exact diff produced by the project's GitHub Actions `npm install` on Node 22; verified all 36 unified diff hunks against old contents, JSON parsing, and installed versions (`expo 54.0.38`, `expo-dev-client 6.0.21`, `expo-constants 18.0.14`). Committed the dependency lockfile to GitHub without user Mac intervention.
+- `.github/workflows/curfy-checks.yml`: enforce `npx expo-doctor`, `git diff --exit-code -- package-lock.json`, and `npx expo prebuild --platform ios --no-install` in addition to unit tests and TypeScript. The generated iOS project isn't checked in.
+
+**Verified by test, full CI**: Workflow `41281583164` (commit `7b10caa`) passed **all 18 unit cases**, TypeScript, Expo Doctor, clean lockfile, and native project generation (Expo prebuild) on GitHub Linux runner. **NOT verified:** Xcode Swift compilation, signing, installed latest preview, 120-second long-press on device, iOS native selected-app unshield or return to shield after the 15-minute exception. The previous user screenshot proved native shielding on an earlier preview only.
+
+**Decision:** No more speculative feature or polish work before next targeted real-device verification. Using EAS preview for the native cycle is now justified. Build on the Mac from the latest feature branch with `npx eas-cli build --platform ios --profile preview`, then install the QR-based internal distribution. Record exact build SHA and physical iPhone results; never claim launch-ready from CI alone. No paid EAS cloud build was triggered by these corrections.
+
 ## Known P0 gaps
 
 1. **Real-device proof:** user has provided screenshot of Apple's native "Blocked by Curfy" shield on selected app. Still verify app isolation, Curfy not foregrounded, permission denial, schedule start/end, and whether the *latest branch* retains native blocking.
