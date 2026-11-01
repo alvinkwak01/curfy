@@ -389,3 +389,26 @@ test("picker shows the free-tier limit immediately from Apple's token counts", (
   assert.equal(check({ applicationCount: 1, categoryCount: 0, webDomainCount: 1, includeEntireCategory: false }), "too-many-apps-or-categories");
   assert.equal(check({ applicationCount: 1, categoryCount: 0, webDomainCount: 0, includeEntireCategory: true }), "too-many-apps-or-categories");
 });
+
+test("fresh app-selection draft discards abandoned previously unsaved token", () => {
+  const f = fixture();
+  f.storage.set("familyActivitySelectionIds", {
+    "curfy-block-social": "a-previously-committed-mode",
+    "curfy-draft-custom": "stale-cancelled-selection",
+  });
+  const draftId = f.screenTime.prepareSelectionDraft("custom");
+  assert.equal(draftId, "curfy-draft-custom");
+  assert.equal(
+    f.storage.get("familyActivitySelectionIds")["curfy-draft-custom"], undefined
+  );
+  assert.equal(
+    f.storage.get("familyActivitySelectionIds")["curfy-block-social"],
+    "a-previously-committed-mode"
+  );
+});
+
+test("selected website count is included in picker metadata (never misreported zero)", () => {
+  const f = fixture({ selectionCount: 0, categoryCount: 0, webDomainCount: 2 });
+  assert.equal(f.screenTime.getSelectionCount("custom"), 2);
+  assert.equal(f.screenTime.freeSelectionIssue("custom"), "too-many-apps-or-categories");
+});
