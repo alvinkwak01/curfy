@@ -39,7 +39,8 @@ jobs:
   # runner minutes on every small JS/docs commit. This compiles Swift and
   # extension targets without Apple signing or an EAS cloud build.
   ios-native-compile:
-    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[native-ci]') }}
+    # One-time PR native compile audit. Restore opt-in after results.
+    if: ${{ github.event_name == 'pull_request' && github.base_ref == 'backup/local-curfy-august' }}
     runs-on: macos-15
     timeout-minutes: 55
     steps:
