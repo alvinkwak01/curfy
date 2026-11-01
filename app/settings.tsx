@@ -16,7 +16,7 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivitySelectionMetadata,
   DeviceActivitySelectionSheetViewPersisted,
@@ -59,6 +59,8 @@ export default function Settings() {
   const [localName, setLocalName] = useState(userName);
   const [localMotivation, setLocalMotivation] = useState(motivation);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const saveInFlight = useRef(false);
   const [deleting, setDeleting] = useState(false);
   const [pickerMode, setPickerMode] = useState<BlockModeId | null>(null);
   const [stagedMode, setStagedMode] = useState<BlockModeId | null>(null);
@@ -76,6 +78,7 @@ export default function Settings() {
   });
 
   const onSave = async () => {
+    if (saveInFlight.current || saved) return;
     if (!localBlockMode) {
       Alert.alert("Choose an app", "Select an app to protect before saving.");
       return;
@@ -87,6 +90,8 @@ export default function Settings() {
           : "Choose one individual app before saving.");
       return;
     }
+    saveInFlight.current = true;
+    setSaving(true);
     try {
       await configureBedtimeBlocking({
         bedtime: localBedtime,
@@ -96,25 +101,23 @@ export default function Settings() {
           ? draftSelectionIdForMode(localBlockMode)
           : undefined,
       });
+      // Native state must be committed before Settings claims "Saved".
+      await setBedtime(localBedtime);
+      await setWakeTime(localWakeTime);
+      await setUserName(localName.trim());
+      await setMotivation(localMotivation.trim());
+      await setBlockMode(localBlockMode);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSaved(true);
+      setTimeout(() => router.back(), 800);
     } catch (error) {
-      console.warn("[Curfy] Failed to update app shielding", error);
-      Alert.alert(
-        "App blocking wasn't updated",
-        error instanceof Error ? error.message : "Please try saving again."
-      );
-      return;
+      console.warn("[Curfy] Failed to save bedtime protection", error);
+      Alert.alert("Settings couldn't be fully saved",
+        error instanceof Error ? error.message : "Please try saving again.");
+    } finally {
+      saveInFlight.current = false;
+      setSaving(false);
     }
-    // Do not claim changes were saved when native protection failed.
-    await setBedtime(localBedtime);
-    await setWakeTime(localWakeTime);
-    await setUserName(localName.trim());
-    await setMotivation(localMotivation.trim());
-    await setBlockMode(localBlockMode);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSaved(true);
-    setTimeout(() => {
-      router.back();
-    }, 800);
   };
 
   const handlePickApps = (mode: BlockModeId) => {
@@ -348,9 +351,11 @@ export default function Settings() {
         <TouchableOpacity
           style={[styles.saveBtn, saved && styles.saveBtnSaved]}
           onPress={onSave}
-          disabled={saved}
+          disabled={saved || saving}
         >
-          <Text style={styles.saveBtnText}>{saved ? "Saved" : "Save"}</Text>
+          <Text style={styles.saveBtnText}>
+            {saved ? "Saved" : saving ? "Saving..." : "Save"}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.accountSection}>
