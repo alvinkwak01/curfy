@@ -18,9 +18,8 @@ jobs:
         with:
           node-version: "22"
           cache: npm
-      # The inherited lockfile currently predates the Expo 54 dev-client fix.
-      # Switch to npm ci after the Mac-generated lockfile is committed.
-      - run: npm install --ignore-scripts --no-audit --no-fund
+      # Fail if the locked dependency tree is not reproducible.
+      - run: npm ci --ignore-scripts --no-audit --no-fund
       - run: npm run test:unit
         env:
           TZ: America/Los_Angeles
@@ -35,3 +34,40 @@ jobs:
       - run: npx expo prebuild --platform ios --no-install
         env:
           CI: "1"
+
+  # Explicit opt-in via a [native-ci] commit message; don't burn macOS
+  # runner minutes on every small JS/docs commit. This compiles Swift and
+  # extension targets without Apple signing or an EAS cloud build.
+  ios-native-compile:
+    if: ${{ github.event_name == 'push' && contains(github.event.head_commit.message, '[native-ci]') }}
+    runs-on: macos-15
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Generate iOS target and extensions
+        run: npx expo prebuild --platform ios --no-install
+        env:
+          CI: "1"
+      - name: Install CocoaPods for compiled native targets
+        run: cd ios && pod install
+        env:
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
+      - name: Compile app and Swift extension targets without signing
+        shell: bash
+        run: |
+          set -o pipefail
+          workspace=$(find ios -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          test -n "$workspace" || { echo 'Missing generated Xcode workspace'; exit 1; }
+          xcodebuild -workspace "$workspace" -scheme Curfy -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/curfy-xcodebuild.log" 2>&1 || {
+              tail -n 150 "$RUNNER_TEMP/curfy-xcodebuild.log"
+              exit 1
+            }
+          tail -n 25 "$RUNNER_TEMP/curfy-xcodebuild.log"
