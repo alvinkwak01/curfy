@@ -16,6 +16,7 @@ import React, {
   useState,
 } from "react";
 import { AppState, Platform } from "react-native";
+import { bedtimeNightKey, isBedtimeWindowActive } from "@/lib/bedtimeWindow";
 import { useAuth } from "./AuthContext";
 import { useJournal } from "./JournalContext";
 
@@ -139,18 +140,8 @@ function getMinutesFromMidnight(time: string): number {
   return h * 60 + m;
 }
 
-function isInBedtimeWindow(bedtime: string): boolean {
-  const now = new Date();
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
-  const bedtimeMinutes = getMinutesFromMidnight(bedtime);
-  const wakeMinutes = 6 * 60;
-
-  if (bedtimeMinutes >= wakeMinutes) {
-    return currentMinutes >= bedtimeMinutes || currentMinutes < wakeMinutes;
-  } else {
-    return currentMinutes >= bedtimeMinutes && currentMinutes < wakeMinutes;
-  }
-}
+// Native restrictions and the optional local log use the SAME configured
+// boundaries. The previous local log hardcoded 06:00 even for custom wake times.
 
 async function sendMorningSummary(
   name: string,
@@ -275,9 +266,8 @@ function computeStreak(log: SleepEntry[]): number {
   return streak;
 }
 
-function todayDateString(): string {
-  return new Date().toISOString().split("T")[0];
-}
+// A nightly record belongs to its locally configured bedtime START date,
+ // including after midnight. Never derive this key from UTC ISO strings.
 
 // Collapses duplicate same-date entries into one. These shouldn't get
 // created going forward (see the guard in checkLock() below), but this
@@ -370,7 +360,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       if (tu) {
         try {
           const data = JSON.parse(tu);
-          if (data.date === todayDateString()) {
+          if (data.date === bedtimeNightKey(new Date(), bt || bedtime, wt || wakeTime)) {
             setTodayUnlocks(data.count);
             lockedToday.current = data.lockedToday ?? false;
           }
@@ -398,12 +388,12 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     const now = Date.now();
     if (cooldownUntil.current > now) return;
 
-    const inWindow = isInBedtimeWindow(bedtime);
+    const inWindow = isBedtimeWindowActive(new Date(), bedtime, wakeTime);
     // The native Screen Time shield protects selected apps. Never auto-lock
     // Curfy itself: users must be able to open Settings and manage protection.
     // Keep the daily log independent of the optional hold-screen preview.
     if (inWindow && !lockedToday.current) {
-      const today = todayDateString();
+      const today = bedtimeNightKey(new Date(), bedtime, wakeTime);
       // The persisted log is the real source of truth for "already
       // logged tonight" — lockedToday is just an in-memory fast path.
       // It resets to false on any JS restart (Expo Go reload, force-quit,
@@ -436,7 +426,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       const streak = computeStreak(currentLog);
       sendMorningSummary(userNameRef.current, escapes, streak);
     }
-  }, [bedtime, isOnboardingComplete, devSkipLock]);
+  }, [bedtime, wakeTime, isOnboardingComplete, devSkipLock]);
 
   useEffect(() => {
     checkLock();
@@ -563,14 +553,14 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem(
       TODAY_UNLOCKS_KEY,
       JSON.stringify({
-        date: todayDateString(),
+        date: bedtimeNightKey(new Date(), bedtime, wakeTime),
         count: newCount,
         lockedToday: true,
       })
     );
     setSleepLog((prev) => {
       const updated = prev.map((entry, idx) =>
-        idx === 0 && entry.date === todayDateString()
+        idx === 0 && entry.date === bedtimeNightKey(new Date(), bedtime, wakeTime)
           ? { ...entry, unlockAttempts: newCount, onTime: false }
           : entry
       );
