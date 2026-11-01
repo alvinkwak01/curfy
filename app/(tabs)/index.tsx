@@ -179,7 +179,7 @@ export default function Home() {
           <View style={styles.statsLeft}>
             <Text style={styles.streakEmoji}>{getStreakEmoji(streak)}</Text>
             <Text style={styles.streakNum}>{streak}</Text>
-            <Text style={styles.streakLabel}>nights streak</Text>
+            <Text style={styles.streakLabel}>Curfy nights logged</Text>
             {milestone && (
               <View style={[styles.milestonePill, { borderColor: milestone.color }]}>
                 <Text style={[styles.milestoneText, { color: milestone.color }]}>
