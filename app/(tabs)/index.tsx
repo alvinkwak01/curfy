@@ -146,7 +146,7 @@ export default function Home() {
                 <Text style={styles.escapeHint}>
                   {protectionStatus === "permission-required"
                     ? "Screen Time permission is needed. Open Settings to grant access."
-                    : "Choose the app you want to protect in Settings."}
+                    : "Choose exactly one individual app in Settings (no categories or websites)."}
                 </Text>
               </TouchableOpacity>
             ) : (
