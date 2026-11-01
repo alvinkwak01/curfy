@@ -583,6 +583,9 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   // leaderboard every time someone uses this button. Leaving the session
   // alone means redoing onboarding just keeps updating the same row.
   const signOut = async () => {
+    // Restarting onboarding must never strand a user behind still-active
+    // shields without the Home → 120-second escape entry point.
+    stopBedtimeBlocking();
     setIsLocked(false);
     lockedToday.current = false;
     setIsOnboardingComplete(false);
@@ -601,6 +604,10 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   // offline) — see the App Store 5.1.1(v) note in CONTEXT.md for why the
   // remote half exists at all.
   const deleteAccount = async () => {
+    // Deleting an automatically-created Supabase account is not optional.
+    // If the server is offline or rejects deletion, keep the local session
+    // and Settings so the user can retry. Never report a false success.
+    await deleteRemoteAccount();
     setIsLocked(false);
     lockedToday.current = false;
     cooldownUntil.current = 0;
@@ -624,9 +631,6 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     } catch (_) {}
     try {
       await clearJournal();
-    } catch (_) {}
-    try {
-      await deleteRemoteAccount();
     } catch (_) {}
     if (Platform.OS !== "web") {
       try {
