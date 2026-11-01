@@ -54,6 +54,17 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 **Unverified:** These *new* fixes are only on GitHub, not in the user's installed preview. iOS Swift build/real-device end-to-end 120s unlock and 15-minute re-shield still need a new consolidated iPhone build. An astronaut animation is deferred until P0 escape/reblock proof. No new EAS build triggered.
 
+## Milestone: in-app escape screen polish and honest exit (2026-10-31)
+
+**Implemented in GitHub branch (not yet visually or device tested):** At the user's request, made the in-Curfy 120-second hold a dedicated, visually polished space screen. The iOS shield remains a separate, simple native screen; this does not introduce unsupported shield-to-app launching.
+
+- `components/LockScreen.tsx`: redesigned the dedicated hold screen with a clear Curfy header, restrained space/orbit styling, deliberate choice copy, larger hero ring, explicit top-right **Exit** and full-width **Back to Home** button. Both are independent of `unlockScreen()` and have accessibility labels. Exiting never changes iOS restrictions or the unlock count. The existing 120-second uninterrupted hold still calls the native exception only after completing. The preview screen is explicitly non-unlocking.
+- `components/HoldButton.tsx`: enlarged ring/center target and clarified seconds-remaining/press instructions; pending native request shows a spinner, disables extra holds, and failure remains visible; early release/background/unmount cancels the full hold. Ring duration remains 120000 ms.
+- `app/escape.tsx`: routes **Exit** to Curfy Home rather than a tiny overlay close button. `app/preview-lock.tsx`: closes back to Settings, same new screen but no actual unlock.
+- **Verified by GitHub Actions on code commit `4152e12`**: unit suite and `npx tsc --noEmit` both passed (workflow run `41280797806`). No Xcode/native build or physical-phone visual/interaction test was run; older installed iPhone app does NOT contain this UI.
+- No new astronaut asset, mascot, premium mode, feature or animation was added. Existing twinkling stars and restrained orbit decoration preserve the current brand without shipping optional polish ahead of critical functionality.
+- User must verify on iPhone: ring visibility/sizing on iPhone 13, Exit during an incomplete hold (without granting access), preview never unblocks, continuous 120s → iOS unshield → 15m re-shield with Curfy closed, and accessible alternative for users unable to maintain a long press. The native iOS 18 shield cannot host the React Native ring, so manual launch of Curfy remains the tested journey.
+
 ## Known P0 gaps
 
 1. **Real-device proof:** user has provided screenshot of Apple's native "Blocked by Curfy" shield on selected app. Still verify app isolation, Curfy not foregrounded, permission denial, schedule start/end, and whether the *latest branch* retains native blocking.
