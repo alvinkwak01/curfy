@@ -1,6 +1,6 @@
 # Curfy — current engineering state
 
-Updated: 2026-10-31. Source of truth: current branch and device observations, not older claims in CONTEXT.md.
+Updated: 2026-11-01. Source of truth: current branch and device observations, not older claims in CONTEXT.md.
 
 ## Goal
 
@@ -9,6 +9,20 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 ## Current branch
 
 `feat/ios-shield-from-august`, draft PR #2 (base `backup/local-curfy-august`). `main` is untouched. Existing August native implementation and EAS iOS extension targets are preserved.
+
+## Milestone: protection-change safety, native compilation gate and consolidated UX regression (2026-11-01)
+
+**User intent:** continue building proactively, do not ask for per-step feedback, and avoid spending EAS credits until a more complete, thoroughly reviewed vertical slice is ready. No EAS build triggered. Work remains on feature branch / draft PR #2; `main` untouched.
+
+- `lib/protectionSettingsPolicy.ts` and `app/settings.tsx`: profile-only changes (name/motivation) bypass native Screen Time reconfiguration. This avoids cancelling an earned exception or momentarily unshielding apps for unrelated edits. A genuine bedtime/wake/selected-app change during an authorized active bedtime window requires an active 120s-earned exception, or can be made after the window ends. Recovery remains available after permission revocation or before first app configured.
+- `lib/screenTime.ts`: new `selectionDraftChanged` compares opaque app selection snapshots. Simply viewing/cancelling the Apple picker does **not** trigger a fresh native monitor or a hold. Settings commits draft tokens only if changed.
+- `app/_layout.tsx`: removed superseded `isLocked` legacy fullscreen in-app modal. iOS app-level shields remain separate from Curfy Home and the explicit `/escape` route; users should not be trapped inside Curfy itself.
+- `app/(tabs)/journal.tsx`, `app/(tabs)/index.tsx`, `app/(tabs)/leaderboard.tsx`: removed an unsupported claim that journaling makes the brain fall asleep; labelled nightly streaks as Curfy logs, **not measurements of sleep**.
+- `app/onboarding.tsx`, `app/settings.tsx`: after Apple's picker dismisses, read saved selection metadata again. This handles picker flows without a final `onSelectionChange` event, keeping one-app feedback and validation coherent.
+- `tests/protectionSettingsPolicy.test.cjs`, `tests/uxArchitecture.test.cjs`, `tests/screenTimeException.test.cjs`: added cross-flow tests for Settings bypass, profile-only save, removing the modal, native 120s recognizer, no nested-FlatList time picker, no unsupported shield launch, and unchanged picker selection. A too-broad test regex initially failed on a comment mentioning `FlatList`; fixed it to assert only against actual JSX/imports, not explanatory text.
+- `.github/workflows/curfy-checks.yml`: now uses reproducible `npm ci` for Linux code checks. Added an opt-in **macOS unsigned iOS simulator Xcode build** of generated Curfy app plus Swift extension targets (no EAS credit or Apple signing needed). Two one-time trial jobs were started in GitHub Actions `41359625636` and `41359693338`; their compile result should be recorded only when completed. To prevent routine macOS runner spend, further runs are gated by `[native-ci]` in PR title.
+- **Verified by automated tests:** GitHub Actions `41360075546` on code commit `f5ccdfa` passed **57/57 Node tests**, TypeScript, all **18/18 Expo Doctor** checks, clean lockfile and iOS CNG prebuild. This is **not** equivalent to compiled Swift, a physical iPhone OS shield, or actual premium purchase success.
+- **Still unverified/blocked:** signed native device build; continuous physical 120s hold and automatic 15m re-shield; time wheel gesture on actual iPhone; StoreKit product type/pricing/restore/expiry; per-app vs all-app premium exception scope; Family Controls distribution entitlements app/extensions; account deletion live backend; accessibility alternatives, store/privacy/brand readiness.
 
 ## Milestone: native bedtime scheduler reliability (2026-10-31)
 
