@@ -2,6 +2,8 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import {
   BlockModeId,
+  activeExceptionExpiresAt,
+  getScreenTimeAccessStatus,
   grantBedtimeException,
   reconcileBedtimeException,
   refreshBedtimeShieldAppearance,
@@ -18,6 +20,7 @@ import React, {
 import { AppState, Platform } from "react-native";
 import { bedtimeNightKey, isBedtimeWindowActive } from "@/lib/bedtimeWindow";
 import { countLoggedNightStreak } from "@/lib/nightHistory";
+import { mayRestartSetup } from "@/lib/restartProtectionPolicy";
 import { useAuth } from "./AuthContext";
 import { useJournal } from "./JournalContext";
 
@@ -564,8 +567,19 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   // leaderboard every time someone uses this button. Leaving the session
   // alone means redoing onboarding just keeps updating the same row.
   const signOut = async () => {
-    // Restarting onboarding must never strand a user behind still-active
-    // shields without the Home → 120-second escape entry point.
+    // Prevent a one-tap bypass: restarting setup would stop the native
+    // schedule. During active protection it requires the same 120-second
+    // exception as any other temporary access. Permission-denied users and
+    // anyone outside bedtime can still reset/recover their setup.
+    const canRestart = mayRestartSetup({
+      insideBedtime: isBedtimeWindowActive(new Date(), bedtime, wakeTime),
+      screenTimeAuthorized: getScreenTimeAccessStatus() === "authorized",
+      hasSelectedMode: blockMode === "social" || blockMode === "most" || blockMode === "custom",
+      activeException: activeExceptionExpiresAt() !== null,
+    });
+    if (!canRestart) {
+      throw new Error("During bedtime, complete the 120-second hold from Curfy Home before restarting setup, or wait until your morning end time.");
+    }
     stopBedtimeBlocking();
     setIsLocked(false);
     lockedToday.current = false;
