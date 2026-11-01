@@ -409,17 +409,17 @@ export default function Leaderboard() {
             <View style={styles.statsGrid}>
               <View style={styles.statBlock}>
                 <Text style={styles.statValue}>{totalNights}</Text>
-                <Text style={styles.statLabel}>Total nights</Text>
+                <Text style={styles.statLabel}>Nights logged</Text>
               </View>
               <View style={styles.gridDivider} />
               <View style={styles.statBlock}>
                 <Text style={[styles.statValue, { color: Colors.primaryCyan }]}>{cleanNights}</Text>
-                <Text style={styles.statLabel}>Clean nights</Text>
+                <Text style={styles.statLabel}>No-unlock nights</Text>
               </View>
               <View style={styles.gridDivider} />
               <View style={styles.statBlock}>
                 <Text style={[styles.statValue, { color: cleanRateColor }]}>{cleanRate}%</Text>
-                <Text style={styles.statLabel}>Clean rate</Text>
+                <Text style={styles.statLabel}>No-unlock rate</Text>
               </View>
               <View style={styles.gridDivider} />
               <View style={styles.statBlock}>
