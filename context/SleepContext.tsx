@@ -17,6 +17,7 @@ import React, {
 } from "react";
 import { AppState, Platform } from "react-native";
 import { bedtimeNightKey, isBedtimeWindowActive } from "@/lib/bedtimeWindow";
+import { countLoggedNightStreak } from "@/lib/nightHistory";
 import { useAuth } from "./AuthContext";
 import { useJournal } from "./JournalContext";
 
@@ -135,14 +136,6 @@ Notifications.setNotificationHandler({
   }),
 });
 
-function getMinutesFromMidnight(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
-}
-
-// Native restrictions and the optional local log use the SAME configured
-// boundaries. The previous local log hardcoded 06:00 even for custom wake times.
-
 async function sendMorningSummary(
   name: string,
   escapes: number,
@@ -243,31 +236,10 @@ async function scheduleBedtimeNotifications(bedtime: string) {
   } catch (_) {}
 }
 
+// This counts recorded protection nights, never nights of measured sleep.
 function computeStreak(log: SleepEntry[]): number {
-  if (log.length === 0) return 0;
-  const sorted = [...log].sort((a, b) => b.createdAt - a.createdAt);
-  let streak = 0;
-  let expectedDate = new Date();
-  expectedDate.setHours(0, 0, 0, 0);
-
-  for (const entry of sorted) {
-    const entryDate = new Date(entry.date);
-    entryDate.setHours(0, 0, 0, 0);
-    const diff = Math.round(
-      (expectedDate.getTime() - entryDate.getTime()) / (1000 * 60 * 60 * 24)
-    );
-    if (diff === 0 || diff === 1) {
-      streak++;
-      expectedDate = entryDate;
-    } else {
-      break;
-    }
-  }
-  return streak;
+  return countLoggedNightStreak(log);
 }
-
-// A nightly record belongs to its locally configured bedtime START date,
- // including after midnight. Never derive this key from UTC ISO strings.
 
 // Collapses duplicate same-date entries into one. These shouldn't get
 // created going forward (see the guard in checkLock() below), but this
@@ -403,6 +375,13 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       const alreadyLoggedToday = sleepLogRef.current.some((e) => e.date === today);
       if (!lockedToday.current && !alreadyLoggedToday) {
         lockedToday.current = true;
+        // New local bedtime night: never carry yesterday's unlock count
+        // forward into a brand-new evening.
+        todayUnlocksRef.current = 0;
+        setTodayUnlocks(0);
+        AsyncStorage.setItem(TODAY_UNLOCKS_KEY, JSON.stringify({
+          date: today, count: 0, lockedToday: true,
+        }));
         const entry: SleepEntry = {
           id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
           date: today,
