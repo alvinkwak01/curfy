@@ -9,6 +9,9 @@ import {
   getSelectionCount,
   draftSelectionIdForMode,
   prepareSelectionDraft,
+  freeSelectionIssue,
+  freeSelectionIssueForMetadata,
+  FreeSelectionIssue,
 } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -59,6 +62,7 @@ export default function Settings() {
   const [deleting, setDeleting] = useState(false);
   const [pickerMode, setPickerMode] = useState<BlockModeId | null>(null);
   const [stagedMode, setStagedMode] = useState<BlockModeId | null>(null);
+  const [pickerIssue, setPickerIssue] = useState<FreeSelectionIssue | null>(null);
   // Read once on mount from the native side (not persisted app state) —
   // this is what actually lets the UI show "N apps blocked" without
   // reopening the picker. Refreshed locally after any picker session.
@@ -74,6 +78,13 @@ export default function Settings() {
   const onSave = async () => {
     if (!localBlockMode) {
       Alert.alert("Choose an app", "Select an app to protect before saving.");
+      return;
+    }
+    if (stagedMode === localBlockMode && pickerIssue) {
+      Alert.alert("Start with one app",
+        pickerIssue === "too-many-apps-or-categories"
+          ? "Free protection covers one individual app. Return to the picker and remove extra apps, categories and websites. Premium purchases aren't available yet."
+          : "Choose one individual app before saving.");
       return;
     }
     try {
@@ -111,6 +122,7 @@ export default function Settings() {
       // The picker edits a distinct opaque selection. Leaving Settings
       // without Save cannot change tokens used by the active iOS monitor.
       if (stagedMode !== mode) prepareSelectionDraft(mode);
+      setPickerIssue(freeSelectionIssue(draftSelectionIdForMode(mode)));
       setStagedMode(mode);
       setLocalBlockMode(mode);
       setPickerMode(mode);
@@ -122,8 +134,11 @@ export default function Settings() {
 
   const handleSelectionChange = (event: NativeSyntheticEvent<ActivitySelectionMetadata>) => {
     if (!pickerMode) return;
-    const { applicationCount, categoryCount } = event.nativeEvent;
-    setAppCounts((prev) => ({ ...prev, [pickerMode]: applicationCount + categoryCount }));
+    const { applicationCount, categoryCount, webDomainCount } = event.nativeEvent;
+    setAppCounts((prev) => ({
+      ...prev, [pickerMode]: applicationCount + categoryCount + webDomainCount,
+    }));
+    setPickerIssue(freeSelectionIssueForMetadata(event.nativeEvent));
   };
 
   const activePreset = BLOCK_MODE_PRESETS.find((p) => p.id === pickerMode);
@@ -251,6 +266,17 @@ export default function Settings() {
               );
             })}
           </View>
+
+          {stagedMode && pickerIssue === "too-many-apps-or-categories" && (
+            <View style={styles.freeLimitNotice}>
+              <Text style={styles.freeLimitTitle}>One app is included free</Text>
+              <Text style={styles.hint}>
+                Your current selection includes more than one app, a category, or a website.
+                Keep just one individual app to save. Premium multi-app protection will
+                require an App Store purchase; purchasing isn't available yet.
+              </Text>
+            </View>
+          )}
 
           {pickerMode && (
             <DeviceActivitySelectionSheetViewPersisted
@@ -383,6 +409,14 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   presetCardSelected: { borderColor: Colors.primaryCyan },
+  freeLimitNotice: {
+    marginTop: 12, borderRadius: 12, padding: 12, gap: 6,
+    borderWidth: 1, borderColor: Colors.warningAmber,
+    backgroundColor: "rgba(255,178,74,0.07)",
+  },
+  freeLimitTitle: {
+    fontFamily: Fonts.semiBold, color: Colors.warningAmber, fontSize: 14,
+  },
   presetIconWrap: {
     width: 34,
     height: 34,
