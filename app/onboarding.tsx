@@ -174,8 +174,9 @@ export default function Onboarding() {
   const buttonDisabled =
     (isLastStep && name.trim().length === 0) ||
     (step === 1 && reasons.length === 0) ||
-    (step === 8 && screenTimeStatus === "notDetermined") ||
-    (step === 9 && (!blockMode || selectionIssue !== null));
+    // Keep Continue tappable on the selection step so next() can show
+    // the reason free users cannot proceed with invalid selections.
+    (step === 8 && screenTimeStatus === "notDetermined");
 
   if (showWelcome) {
     return (
