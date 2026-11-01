@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import React, { useEffect, useRef, useState } from "react";
-import { AppState, Pressable, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, AppState, Pressable, StyleSheet, Text, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedProps,
@@ -14,8 +14,8 @@ import Svg, { Circle } from "react-native-svg";
 import { Colors, Fonts } from "@/constants/theme";
 
 const HOLD_DURATION_MS = 120000;
-const RADIUS = 80;
-const STROKE_WIDTH = 6;
+const RADIUS = 91;
+const STROKE_WIDTH = 7;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const SVG_SIZE = RADIUS * 2 + STROKE_WIDTH * 2;
 
@@ -78,6 +78,7 @@ interface HoldButtonProps {
 
 export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
   const [isHolding, setIsHolding] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
   const [displaySeconds, setDisplaySeconds] = useState(120);
   const [message, setMessage] = useState("Hold to unlock");
 
@@ -86,6 +87,7 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
 
   const startTimeRef = useRef<number | null>(null);
   const unlockPendingRef = useRef(false);
+  const mountedRef = useRef(true);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -137,17 +139,21 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
         // Completion is only a request. Celebrate after the native
         // unshield actually succeeds, not when the JS clock reaches zero.
         unlockPendingRef.current = true;
+        setIsUnlocking(true);
         Promise.resolve()
           .then(() => onUnlock())
           .then(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))
           .catch(() => {
             progress.value = withSpring(0);
             scale.value = withSpring(1);
-            setDisplaySeconds(120);
-            setMessage("Unlock failed. Try holding again.");
+            if (mountedRef.current) {
+              setDisplaySeconds(120);
+              setMessage("iOS couldn't unlock the apps. Try again.");
+            }
           })
           .finally(() => {
             unlockPendingRef.current = false;
+            if (mountedRef.current) setIsUnlocking(false);
           });
       }
     }, 200);
@@ -167,12 +173,13 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
   // Backgrounding or an incoming call must terminate an in-progress hold.
   // A paused JS interval must never finish the hold after returning to Curfy.
   useEffect(() => {
+    mountedRef.current = true;
     const sub = AppState.addEventListener("change", (state) => {
-      if (state !== "active") {
-        handlePressOut();
-      }
+      if (state !== "active") handlePressOut();
     });
     return () => {
+      mountedRef.current = false;
+      startTimeRef.current = null;
       sub.remove();
       clearTimers();
     };
@@ -194,6 +201,7 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
       <Text style={styles.message}>{message}</Text>
 
       <Animated.View style={[styles.buttonWrap, animatedButtonStyle]}>
+        <View pointerEvents="none" style={styles.halo} />
         <Svg
           width={SVG_SIZE}
           height={SVG_SIZE}
@@ -203,7 +211,7 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
             cx={SVG_SIZE / 2}
             cy={SVG_SIZE / 2}
             r={RADIUS}
-            stroke={Colors.border}
+            stroke="#303352"
             strokeWidth={STROKE_WIDTH}
             fill="none"
           />
@@ -225,18 +233,30 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
         <Pressable
           onPressIn={handlePressIn}
           onPressOut={handlePressOut}
+          disabled={isUnlocking}
+          accessibilityRole="button"
+          accessibilityLabel="Hold continuously for 120 seconds to request a temporary unlock"
+          accessibilityHint="Releasing early or leaving Curfy resets the full timer"
           style={styles.innerButton}
         >
-          {isHolding ? (
-            <Text style={styles.countdown}>{displaySeconds}</Text>
+          {isUnlocking ? (
+            <ActivityIndicator size="large" color={Colors.primaryCyan} />
+          ) : isHolding ? (
+            <>
+              <Text style={styles.countdown}>{displaySeconds}</Text>
+              <Text style={styles.centerLabel}>SECONDS LEFT</Text>
+            </>
           ) : (
-            <Ionicons name="lock-closed" size={24} color={Colors.textMuted} />
+            <>
+              <Ionicons name="hand-left-outline" size={29} color={Colors.primaryCyan} />
+              <Text style={styles.centerLabel}>PRESS & HOLD</Text>
+            </>
           )}
         </Pressable>
       </Animated.View>
 
       <Text style={styles.hint}>
-        {isHolding ? "Keep holding..." : "Hold for 120 seconds"}
+        {isUnlocking ? "Checking with iOS..." : isHolding ? "Don't lift your finger" : "Hold for the full 120 seconds"}
       </Text>
     </View>
   );
@@ -245,7 +265,8 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
-    gap: 16,
+    justifyContent: "center",
+    gap: 14,
   },
   unlockBadge: {
     color: Colors.dangerRed,
@@ -254,10 +275,11 @@ const styles = StyleSheet.create({
   },
   message: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: Fonts.medium,
     textAlign: "center",
     maxWidth: 280,
+    minHeight: 21,
   },
   buttonWrap: {
     width: SVG_SIZE,
@@ -265,20 +287,37 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  innerButton: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: Colors.surface,
+  halo: {
+    position: "absolute",
+    width: 170,
+    height: 170,
+    borderRadius: 85,
+    backgroundColor: "rgba(0,229,255,0.035)",
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: "rgba(0,229,255,0.10)",
+  },
+  innerButton: {
+    width: 144,
+    height: 144,
+    borderRadius: 72,
+    backgroundColor: "#111629",
+    borderWidth: 1,
+    borderColor: "#2E5062",
     alignItems: "center",
     justifyContent: "center",
+    gap: 8,
     shadowColor: Colors.primaryCyan,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOpacity: 0.21,
+    shadowRadius: 22,
+    elevation: 5,
+  },
+  centerLabel: {
+    color: "#91BACC",
+    fontFamily: Fonts.semiBold,
+    fontSize: 10,
+    letterSpacing: 1.2,
+    textAlign: "center",
   },
   countdown: {
     color: Colors.primaryCyan,
@@ -286,8 +325,9 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
   },
   hint: {
-    color: Colors.textMuted,
-    fontSize: 13,
-    fontFamily: Fonts.regular,
+    color: "#A4A4C5",
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    letterSpacing: 0.2,
   },
 });
