@@ -217,11 +217,11 @@ export default function Home() {
               </TouchableOpacity>
             </View>
             <View style={styles.recordRow}>
-              <Text style={styles.recordLabel}>Total nights</Text>
+              <Text style={styles.recordLabel}>Nights logged</Text>
               <Text style={styles.recordValue}>{totalNights}</Text>
             </View>
             <View style={styles.recordRow}>
-              <Text style={styles.recordLabel}>Clean nights</Text>
+              <Text style={styles.recordLabel}>No-unlock nights</Text>
               <Text style={styles.recordValue}>{cleanNights}</Text>
             </View>
             <View style={styles.recordRow}>
