@@ -186,3 +186,13 @@ test("native category re-shield clears the exception despite missing token overl
   assert.equal(f.isBlocked(), true);
   assert.equal(f.storage.has("curfy-active-exception"), false);
 });
+
+test("existing installs can update the native shield copy without rescheduling", () => {
+  const f = fixture();
+  f.screenTime.refreshBedtimeShieldAppearance();
+  assert.equal(f.calls.some(x => x[0] === "start"), false);
+  const action = f.calls.find(x => x[0] === "shield");
+  assert.ok(action);
+  assert.equal(action[1].primaryButtonLabel, "Not now");
+  assert.deepEqual(action[2], { primary: { behavior: "close" } });
+});
