@@ -129,18 +129,25 @@ export async function configureBedtimeBlocking({
     actions: [{ type: "unblockSelection", familyActivitySelectionId: selectionId }],
   });
 
+  // A ShieldAction extension on iOS 18 cannot reliably launch Curfy.
+  // "openApp" in this library attempts NSExtensionContext.open with a
+  // different scheme and visibly just closes the blocked app. Never promise
+  // a handoff that Apple's supported iOS 18 shield API cannot provide.
+  // The full 120-second ring is available inside Curfy via Home → Escape.
   DeviceActivity.updateShield(
     {
       title: "Blocked by Curfy",
-      subtitle: "It's past your bedtime.",
-      primaryButtonLabel: "Open Curfy",
+      subtitle: "For a 2-minute hold to unlock, open Curfy from your Home Screen.",
+      iconSystemName: "moon.stars.fill",
+      backgroundColor: { red: 8, green: 8, blue: 16, alpha: 1 },
+      titleColor: { red: 239, green: 239, blue: 255, alpha: 1 },
+      subtitleColor: { red: 183, green: 186, blue: 219, alpha: 1 },
+      iconTint: { red: 0, green: 215, blue: 241, alpha: 1 },
+      primaryButtonLabel: "Not now",
+      primaryButtonBackgroundColor: { red: 24, green: 27, blue: 49, alpha: 1 },
+      primaryButtonLabelColor: { red: 239, green: 239, blue: 255, alpha: 1 },
     },
-    {
-      primary: {
-        behavior: "close",
-        actions: [{ type: "openApp" }],
-      },
-    }
+    { primary: { behavior: "close" } }
   );
 
   // Starting last matters: Apple may fire intervalDidStart right away.
@@ -215,15 +222,31 @@ function readException(): ActiveException | null {
   return state;
 }
 
-/** Preflight prevents users from holding 120 seconds when iOS never shielded an app. */
-export function isSelectionShielded(mode: BlockModeId): boolean {
-  if (getScreenTimeAccessStatus() !== "authorized") return false;
+export type BedtimeProtectionStatus =
+  | "permission-required"
+  | "selection-required"
+  | "shield-active"
+  | "unconfirmed";
+
+/**
+ * Dashboard status: only claim a problem when authorization/selection is
+ * explicitly absent. Token intersections can return zero while an actual
+ * native shield is visible (for example category shielding), so a zero
+ * intersection must never assert that iOS did not block the app.
+ *
+ * isShieldActive() reads the app's ManagedSettingsStore directly. It confirms
+ * a Curfy-owned shield exists, but cannot prove which individual app it covers.
+ */
+export function getBedtimeProtectionStatus(mode: BlockModeId): BedtimeProtectionStatus {
+  if (getScreenTimeAccessStatus() !== "authorized") return "permission-required";
+  if ((getSelectionCount(mode) ?? 0) < 1) return "selection-required";
   try {
-    return selectedAppShieldCount(selectionIdForMode(mode)) > 0;
+    if (DeviceActivity.isShieldActive()) return "shield-active";
+    if (selectedAppShieldCount(selectionIdForMode(mode)) > 0) return "shield-active";
   } catch (error) {
-    console.warn("[Curfy] Unable to inspect current native app shields", error);
-    return false;
+    console.warn("[Curfy] Could not confirm current native shield state", error);
   }
+  return "unconfirmed";
 }
 
 function selectedAppShieldCount(selectionId: string): number {
@@ -275,9 +298,13 @@ export async function grantBedtimeException({
     throw new Error("Choose an app to protect in Settings first.");
   }
 
-  // The hold is not a bypass for an unconfigured/broken native shield.
-  if (selectedAppShieldCount(selectionId) === 0) {
-    throw new Error("Your selected apps are not currently shielded by iOS.");
+  // A token intersection can produce a false negative for an actual
+  // category shield. Require either explicit token overlap or an active
+  // native ManagedSettingsStore shield before starting the exception.
+  const overlapBefore = selectedAppShieldCount(selectionId);
+  const anyShieldBefore = DeviceActivity.isShieldActive();
+  if (overlapBefore === 0 && !anyShieldBefore) {
+    throw new Error("iOS is not reporting any active Curfy app restrictions.");
   }
 
   const previous = readException();
@@ -328,7 +355,11 @@ export async function grantBedtimeException({
     // The third-party library catches native blocking exceptions, so verify
     // resulting managed settings instead of assuming its call succeeded.
     DeviceActivity.unblockSelection({ activitySelectionId: selectionId }, "curfy-120-second-hold");
-    if (selectedAppShieldCount(selectionId) > 0) {
+    // Only count an unlock after independent native verification. If our
+    // selected-token intersection was already zero despite a visible shield,
+    // we require the actual ManagedSettingsStore shield to clear instead.
+    const overlapAfter = selectedAppShieldCount(selectionId);
+    if (overlapBefore > 0 ? overlapAfter > 0 : DeviceActivity.isShieldActive()) {
       throw new Error("iOS did not release the selected app restrictions.");
     }
     return state.expiresAt;
