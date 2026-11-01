@@ -17,7 +17,8 @@ const time = loadTS("lib/bedtimeWindow.ts");
 
 function fixture({
   failStart = false, failUnblock = false, overlapReportsZero = false,
-  authorization = 2, selectionCount = 1, initiallyBlocked = true,
+  authorization = 2, selectionCount = 1, categoryCount = 0,
+  webDomainCount = 0, includeEntireCategory = false, initiallyBlocked = true,
   silentMonitorFailure = false,
 } = {}) {
   const storage = new Map();
@@ -28,7 +29,7 @@ function fixture({
     AuthorizationStatus: { notDetermined: 0, denied: 1, approved: 2 },
     getAuthorizationStatus: () => authorization,
     activitySelectionMetadata: () => ({
-      applicationCount: selectionCount, categoryCount: 0, webDomainCount: 0,
+      applicationCount: selectionCount, categoryCount, webDomainCount, includeEntireCategory,
     }),
     intersection: () => ({
       applicationCount: blocked && !overlapReportsZero ? 1 : 0, categoryCount: 0, webDomainCount: 0,
@@ -292,4 +293,44 @@ test("silent native bedtime monitor registration failure never clears existing s
   );
   assert.equal(f.isBlocked(), true);
   assert.equal(f.calls.filter(x => x[0] === "reset").length, 0);
+});
+
+test("MVP free tier requires exactly one individually selected app", async () => {
+  const at = new Date("2026-10-31T23:00:00");
+  for (const [opts, expected] of [
+    [{ selectionCount: 0 }, /Select one app/],
+    [{ selectionCount: 2 }, /one individual app/],
+    [{ selectionCount: 0, categoryCount: 1 }, /one individual app/],
+    [{ selectionCount: 1, webDomainCount: 1 }, /one individual app/],
+    [{ selectionCount: 1, includeEntireCategory: true }, /one individual app/],
+  ]) {
+    const f = fixture(opts);
+    await assert.rejects(
+      f.screenTime.configureBedtimeBlocking({
+        bedtime: "22:00", wakeTime: "06:00", mode: "custom", now: at,
+      }),
+      expected
+    );
+    assert.equal(f.calls.filter(x => x[0] === "start").length, 0);
+    assert.equal(f.isBlocked(), true);
+  }
+});
+
+test("invalid multi-app selection also cannot gain a temporary exception", async () => {
+  const f = fixture({ selectionCount: 3 });
+  await assert.rejects(
+    f.screenTime.grantBedtimeException({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-10-31T23:00:00"),
+    }),
+    /one individual app/
+  );
+  assert.equal(f.calls.filter(x => x[0] === "unblock").length, 0);
+  assert.equal(f.isBlocked(), true);
+});
+
+test("only single-app selection receives the positive dashboard shield status", () => {
+  assert.equal(fixture({ selectionCount: 1 }).screenTime.getBedtimeProtectionStatus("custom"), "shield-active");
+  assert.equal(fixture({ selectionCount: 2 }).screenTime.getBedtimeProtectionStatus("custom"), "selection-required");
+  assert.equal(fixture({ selectionCount: 0, categoryCount: 1 }).screenTime.getBedtimeProtectionStatus("custom"), "selection-required");
 });
