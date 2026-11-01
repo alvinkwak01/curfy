@@ -17,11 +17,25 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     super.intervalDidStart(for: activity)
     logger.log("intervalDidStart")
 
-    self.executeActionsForEvent(
-      activityName: activity.rawValue,
-      callbackName: "intervalDidStart",
-      eventName: nil
-    )
+    // An interval-start callback can arrive late when iOS resumes device
+    // activity. A genuine 120-second exception must not be cancelled by the
+    // daily bedtime monitor's delayed start callback. The separate one-shot
+    // exception monitor remains responsible for restoring the shield.
+    let nowMs = Date().timeIntervalSince1970 * 1000
+    let exception = userDefaults?.dictionary(forKey: "curfy-active-exception")
+    let exceptionExpiry = (exception?["expiresAt"] as? NSNumber)?.doubleValue ?? 0
+    let bedtimeEnd = (exception?["bedtimeEndAt"] as? NSNumber)?.doubleValue ?? 0
+    let exceptionStillActive = nowMs < exceptionExpiry && nowMs < bedtimeEnd
+
+    if activity.rawValue == "curfy-bedtime" && exceptionStillActive {
+      logger.log("Ignoring delayed bedtime start during active Curfy exception")
+    } else {
+      self.executeActionsForEvent(
+        activityName: activity.rawValue,
+        callbackName: "intervalDidStart",
+        eventName: nil
+      )
+    }
 
     persistToUserDefaults(
       activityName: activity.rawValue,
@@ -42,8 +56,8 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       guard
         let state = userDefaults?.dictionary(forKey: "curfy-active-exception"),
         let currentName = state["activityName"] as? String,
-        let expiryMs = state["expiresAt"] as? Double,
-        let bedtimeEndMs = state["bedtimeEndAt"] as? Double,
+        let expiryMs = (state["expiresAt"] as? NSNumber)?.doubleValue,
+        let bedtimeEndMs = (state["bedtimeEndAt"] as? NSNumber)?.doubleValue,
         currentName == activity.rawValue
       else {
         logger.log("Ignoring missing/stale Curfy exception callback")
