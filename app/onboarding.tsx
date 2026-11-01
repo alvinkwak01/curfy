@@ -15,7 +15,7 @@ import {
   selectionIdForMode,
 } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -123,6 +123,8 @@ export default function Onboarding() {
   const [blockMode, setBlockMode] = useState<BlockModeId | null>(null);
   const [selectedCount, setSelectedCount] = useState<number | null>(null);
   const [selectionIssue, setSelectionIssue] = useState<FreeSelectionIssue | null>("choose-one-app");
+  const [finishing, setFinishing] = useState(false);
+  const finishingRef = useRef(false);
 
   const next = async () => {
     if (step === 9 && (selectionIssue || !blockMode)) {
@@ -140,26 +142,28 @@ export default function Onboarding() {
       Alert.alert("Choose an app", "Select an app to protect before finishing setup.");
       return;
     }
+    if (finishingRef.current) return;
+    finishingRef.current = true;
+    setFinishing(true);
     try {
       await configureBedtimeBlocking({
         bedtime: localBedtime,
         wakeTime: localWakeTime,
         mode: blockMode,
       });
+      await setBedtime(localBedtime);
+      await setWakeTime(localWakeTime);
+      await setUserName(name.trim());
+      await persistBlockMode(blockMode);
+      await completeOnboarding();
     } catch (error) {
-      console.warn("[Curfy] Failed to schedule app shielding", error);
-      Alert.alert(
-        "App blocking isn't ready",
-        error instanceof Error ? error.message : "Please try setting up app blocking again."
-      );
-      return;
+      console.warn("[Curfy] Failed to finish onboarding", error);
+      Alert.alert("Setup couldn't finish",
+        error instanceof Error ? error.message : "Please try saving again.");
+    } finally {
+      finishingRef.current = false;
+      setFinishing(false);
     }
-    // Only complete setup after the native schedule was accepted.
-    await setBedtime(localBedtime);
-    await setWakeTime(localWakeTime);
-    await setUserName(name.trim());
-    await persistBlockMode(blockMode);
-    await completeOnboarding();
   };
 
   const back = () => {
@@ -172,7 +176,7 @@ export default function Onboarding() {
 
   const isLastStep = step === STEP_COUNT - 1;
   const buttonDisabled =
-    (isLastStep && name.trim().length === 0) ||
+    (isLastStep && (name.trim().length === 0 || finishing)) ||
     (step === 1 && reasons.length === 0) ||
     // Keep Continue tappable on the selection step so next() can show
     // the reason free users cannot proceed with invalid selections.
@@ -271,7 +275,7 @@ export default function Onboarding() {
 
         <View style={styles.btnWrap}>
           <Btn
-            label={isLastStep ? "Begin" : "Continue"}
+            label={isLastStep ? (finishing ? "Setting up..." : "Begin") : "Continue"}
             onPress={next}
             disabled={buttonDisabled}
           />
