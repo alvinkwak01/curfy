@@ -306,7 +306,7 @@ function dedupeSleepLog(log: SleepEntry[]): SleepEntry[] {
 
 export function SleepProvider({ children }: { children: React.ReactNode }) {
   const [bedtime, setBedtimeState] = useState("23:00");
-  const [wakeTime, setWakeTimeState] = useState("07:00");
+  const [wakeTime, setWakeTimeState] = useState("06:00");
   const [blockMode, setBlockModeState] = useState<string | null>(null);
   const [userName, setUserNameState] = useState("Sleeper");
   const [motivation, setMotivationState] = useState("");
@@ -615,7 +615,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     lockedToday.current = false;
     cooldownUntil.current = 0;
     setBedtimeState("23:00");
-    setWakeTimeState("07:00");
+    setWakeTimeState("06:00");
     setBlockModeState(null);
     setUserNameState("Sleeper");
     setMotivationState("");
