@@ -32,6 +32,7 @@ import {
 import {
   ActivitySelectionMetadata,
   DeviceActivitySelectionSheetViewPersisted,
+  activitySelectionMetadata,
 } from "react-native-device-activity";
 import Animated, { SlideInRight, SlideOutLeft } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -687,7 +688,15 @@ function StepChooseApps({
           familyActivitySelectionId={selectionIdForMode(pickerMode)}
           headerText={activePreset?.pickerHint}
           onSelectionChange={handleSelectionChange}
-          onDismissRequest={() => setPickerMode(null)}
+          onDismissRequest={() => {
+            // Some iOS picker dismissals don't emit a final change event.
+            // Re-read persisted opaque-token metadata before validating step 9.
+            const metadata = activitySelectionMetadata({
+              activitySelectionId: selectionIdForMode(pickerMode),
+            });
+            if (metadata) onSelectionChange(metadata);
+            setPickerMode(null);
+          }}
         />
       )}
 
