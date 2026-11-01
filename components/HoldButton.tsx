@@ -184,7 +184,6 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
     return () => {
       mountedRef.current = false;
       startTimeRef.current = null;
-      onHoldingChange?.(false);
       sub.remove();
       clearTimers();
     };
