@@ -506,7 +506,7 @@ function StepBenefits() {
 function StepHowItWorks() {
   const rows = [
     { icon: "◉", title: "You choose what's blocked", desc: "Pick the apps that keep you up. We lock those, at your bedtime, every night." },
-    { icon: "◎", title: "120-second escape", desc: "Tap a blocked app and it's held behind Apple's own lock screen. Hold a button for 2 full minutes to get through." },
+    { icon: "◎", title: "120-second escape", desc: "When an app is blocked, open Curfy from your Home Screen. Hold the circle for 2 uninterrupted minutes to request 15 minutes of access." },
     { icon: "○", title: "Repeating every 15 min", desc: "Get in anyway? It locks back up 15 minutes later. And it remembers." },
   ];
   return (
@@ -730,7 +730,7 @@ function StepPreview({ bedtime, wakeTime }: { bedtime: string; wakeTime: string 
       <Text style={styles.hero}>Here's the{"\n"}moment it{"\n"}matters.</Text>
       <Text style={styles.bodyText}>
         At {formatTime12(bedtime)}, opening a blocked app looks like this —
-        Apple's own lock screen, not something you can swipe away.
+        Apple's system shield. To use the 120-second hold, open Curfy separately.
       </Text>
 
       <View style={styles.phoneFrame}>
@@ -739,9 +739,9 @@ function StepPreview({ bedtime, wakeTime }: { bedtime: string; wakeTime: string 
           <Ionicons name="shield-checkmark" size={34} color={Colors.textMuted} />
         </View>
         <Text style={styles.phoneShieldTitle}>Blocked by Curfy</Text>
-        <Text style={styles.phoneShieldSub}>Locked until {formatTime12(wakeTime)}</Text>
+        <Text style={styles.phoneShieldSub}>To unlock, open Curfy from your Home Screen and hold for 120 seconds.</Text>
         <View style={styles.phoneHoldBtn}>
-          <Text style={styles.phoneHoldBtnText}>Hold 120s to unlock</Text>
+          <Text style={styles.phoneHoldBtnText}>Not now</Text>
         </View>
       </View>
     </View>
