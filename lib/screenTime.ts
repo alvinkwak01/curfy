@@ -117,17 +117,20 @@ export async function configureBedtimeBlocking({
   bedtime,
   wakeTime,
   mode,
+  now = new Date(),
 }: {
   bedtime: string;
   wakeTime: string;
   mode: BlockModeId;
+  /** Injectable local time keeps boundary cases deterministic in tests. */
+  now?: Date;
 }): Promise<void> {
   if (getScreenTimeAccessStatus() !== "authorized") {
     throw new Error("Screen Time permission is required to protect selected apps.");
   }
   // Reject equal/invalid endpoints rather than creating an ambiguous
   // all-day interval or crashing the Home screen later.
-  currentBedtimeWindow(new Date(), bedtime, wakeTime);
+  currentBedtimeWindow(now, bedtime, wakeTime);
   const selectedCount = getSelectionCount(mode);
   if (selectedCount === null || selectedCount < 1) {
     throw new Error("Choose at least one app in Apple's app picker before continuing.");
@@ -163,7 +166,7 @@ export async function configureBedtimeBlocking({
   // Settings leaves OLD apps blocked. Rebuild only after monitoring succeeds.
   cancelExceptionForScheduleChange();
   DeviceActivity.resetBlocks("curfy-schedule-change-clear-old-apps");
-  if (currentBedtimeWindow(new Date(), bedtime, wakeTime)) {
+  if (currentBedtimeWindow(now, bedtime, wakeTime)) {
     DeviceActivity.blockSelection(
       { activitySelectionId: selectionId }, "curfy-schedule-change-current-window"
     );
