@@ -156,7 +156,7 @@ export async function configureBedtimeBlocking({
     );
     // The only proof a recurring schedule was accepted by the OS is
     // reading DeviceActivityCenter.activities back after registration.
-    if (!DeviceActivity.activities().includes(BEDTIME_ACTIVITY_NAME)) {
+    if (!DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
       throw new Error("iOS did not register bedtime monitoring. Please retry.");
     }
   } catch (error) {
@@ -406,7 +406,7 @@ export async function grantBedtimeException({
         intervalEnd: nativeDateComponents(scheduledEnd),
         repeats: false,
       }, []);
-      if (!DeviceActivity.activities().includes(activityName)) {
+      if (!DeviceActivity.getActivities().includes(activityName)) {
         throw new Error("iOS did not register the automatic reblocking monitor.");
       }
     }
