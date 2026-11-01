@@ -254,15 +254,9 @@ export default function Onboarding() {
               </>
             );
 
-            // Steps 2-4 render TimePicker, which uses a FlatList internally
-            // for its scroll wheel — nesting that inside another ScrollView
-            // (same vertical orientation) breaks list virtualization and
-            // React warns loudly about it. Those steps are short and never
-            // needed outer scrolling anyway, so they skip the ScrollView
-            // entirely rather than working around the warning.
-            const needsScroll = step !== 2 && step !== 3 && step !== 4;
-
-            return needsScroll ? (
+            // The wheel now owns touch gestures inside each clock column,
+            // while the surrounding form can scroll on smaller iPhones.
+            return (
               <ScrollView
                 contentContainerStyle={styles.stepScrollContent}
                 showsVerticalScrollIndicator={false}
@@ -270,8 +264,6 @@ export default function Onboarding() {
               >
                 {stepNode}
               </ScrollView>
-            ) : (
-              <View style={styles.stepScrollContent}>{stepNode}</View>
             );
           })()}
         </Animated.View>
