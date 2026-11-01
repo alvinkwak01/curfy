@@ -65,6 +65,16 @@ export function draftSelectionIdForMode(mode: BlockModeId): string {
   return `curfy-draft-${mode}`;
 }
 
+/**
+ * Reading the same opaque token selection in Settings is not a change.
+ * iOS picker reopens should not cancel a 15-minute exception or force
+ * a fresh 120-second hold just because somebody viewed their chosen app.
+ */
+export function selectionDraftChanged(mode: BlockModeId): boolean {
+  return DeviceActivity.getFamilyActivitySelectionId(draftSelectionIdForMode(mode)) !==
+    DeviceActivity.getFamilyActivitySelectionId(selectionIdForMode(mode));
+}
+
 /** Existing saved app tokens, not app identities, are cloned into a draft. */
 export function prepareSelectionDraft(mode: BlockModeId): string {
   const id = draftSelectionIdForMode(mode);
