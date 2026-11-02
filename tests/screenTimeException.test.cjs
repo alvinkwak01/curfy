@@ -21,7 +21,7 @@ function fixture({
   webDomainCount = 0, includeEntireCategory = false, initiallyBlocked = true,
   silentMonitorFailure = false,
   failOnStartCalls = [], failAfterOverwriteStartCalls = [],
-  ignoreBlockOnCalls = [],
+  ignoreBlockOnCalls = [], ignoreResetOnCalls = [],
 } = {}) {
   const storage = new Map();
   const selections = new Map();
@@ -84,7 +84,12 @@ function fixture({
       calls.push(["unblock"]);
       if (!failUnblock) blocked = false;
     },
-    resetBlocks: () => { calls.push(["reset"]); blocked = false; },
+    resetBlocks: () => {
+      calls.push(["reset"]);
+      if (!ignoreResetOnCalls.includes(calls.filter(x => x[0] === "reset").length)) {
+        blocked = false;
+      }
+    },
   };
   const screenTime = loadTS("lib/screenTime.ts", moduleName => {
     if (moduleName === "react-native-device-activity") return native;
@@ -633,4 +638,25 @@ test("a first-run native monitor failure never leaves an orphan recurring schedu
   assert.equal(f.monitorSchedules.has("curfy-bedtime"), false);
   assert.equal(f.storage.has("curfy-bedtime-clock-window"), false);
   assert.equal(f.storage.has("curfy-scheduled-selection-id"), false);
+});
+
+test("a swallowed native reset error cannot leave the old app shielded alongside a new selection", async () => {
+  const f = fixture({ ignoreResetOnCalls: [2] });
+  const now = new Date("2026-11-02T23:00:00");
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "social", now,
+  });
+  const previousSchedule = f.monitorSchedules.get("curfy-bedtime");
+  await assert.rejects(
+    f.screenTime.configureBedtimeBlocking({
+      bedtime: "22:00", wakeTime: "09:00", mode: "custom", now,
+    }), /did not clear the old app restrictions/
+  );
+  assert.deepEqual(f.monitorSchedules.get("curfy-bedtime"), previousSchedule);
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-social");
+  assert.equal(f.isBlocked(), true);
+  assert.equal(
+    f.calls.filter(x => x[0] === "block" && x[1].activitySelectionId === "curfy-block-custom").length,
+    0
+  );
 });
