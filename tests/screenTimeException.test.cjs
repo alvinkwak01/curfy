@@ -22,6 +22,7 @@ function fixture({
   silentMonitorFailure = false,
   failOnStartCalls = [], failAfterOverwriteStartCalls = [],
   ignoreBlockOnCalls = [], ignoreResetOnCalls = [],
+  ignoreStopOnCalls = [],
 } = {}) {
   const storage = new Map();
   const selections = new Map();
@@ -65,6 +66,7 @@ function fixture({
     getActivities: () => [...monitoredActivities],
     stopMonitoring: names => {
       calls.push(["stop", names]);
+      if (ignoreStopOnCalls.includes(calls.filter(x => x[0] === "stop").length)) return;
       if (names) names.forEach(name => {
         monitoredActivities.delete(name);
         monitorSchedules.delete(name);
@@ -659,4 +661,35 @@ test("a swallowed native reset error cannot leave the old app shielded alongside
     f.calls.filter(x => x[0] === "block" && x[1].activitySelectionId === "curfy-block-custom").length,
     0
   );
+});
+
+test("account/reset stop refuses to erase recovery metadata if native monitor refuses to stop", async () => {
+  const f = fixture({ ignoreStopOnCalls: [1] });
+  const now = new Date("2026-11-02T23:00:00");
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(), /still has Curfy's protection schedule/);
+  assert.equal(f.monitorSchedules.has("curfy-bedtime"), true);
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
+  assert.deepEqual(f.storage.get("curfy-bedtime-clock-window"), {
+    startMinute: 1320, endMinute: 360,
+  });
+  // Retry can still stop the schedule; the app was not wiped.
+  assert.doesNotThrow(() => f.screenTime.stopBedtimeBlocking());
+  assert.equal(f.monitorSchedules.has("curfy-bedtime"), false);
+});
+
+test("account/reset stop refuses to discard metadata when managed app shield remains", async () => {
+  const f = fixture({ ignoreResetOnCalls: [2] });
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-02T23:00:00"),
+  });
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(), /still reports protected apps/);
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
+  assert.equal(f.isBlocked(), true);
+  assert.doesNotThrow(() => f.screenTime.stopBedtimeBlocking());
+  assert.equal(f.storage.has("curfy-scheduled-selection-id"), false);
+  assert.equal(f.isBlocked(), false);
 });
