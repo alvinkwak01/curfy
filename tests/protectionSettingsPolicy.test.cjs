@@ -42,3 +42,10 @@ test("configured protection can change after a completed exception or outside be
     assert.equal(allowProtectionReconfiguration({ changingProtection: true, ...settings }), true);
   }
 });
+
+test("switching Evening / Morning / Both is treated as a protected scheduling change", () => {
+  const previous = { bedtime: "23:00", wakeTime: "06:00", blockMode: "custom", routine: "evening" };
+  assert.equal(protectionSettingsChanged(previous, { ...previous, routine: "morning" }, false), true);
+  assert.equal(protectionSettingsChanged(previous, { ...previous, routine: "both" }, false), true);
+  assert.equal(protectionSettingsChanged(previous, { ...previous }, false), false);
+});
