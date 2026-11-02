@@ -10,6 +10,18 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 `feat/ios-shield-from-august`, draft PR #2 (base `backup/local-curfy-august`). `main` is untouched. Existing August native implementation and EAS iOS extension targets are preserved.
 
+## Milestone: native StoreKit 2 foundation — verified tests, unsigned Swift compile pending (2026-11-02)
+
+**Goal:** implement the actual Apple non-consumable purchase bridge for the agreed $5.99 one-time Premium, without collecting money before multi-app/per-app exception behavior is ready.
+
+**Implemented** (commit `b320bf6`): Local autolinked iOS Expo module in `modules/curfy-storekit/` with Swift StoreKit 2 `Product.products(for:)`, `Product.purchase()`, `Transaction.currentEntitlements`, `AppStore.sync()`; a focused TypeScript facade in `lib/premiumStore.ts`, and failure-injection tests in `tests/premiumStore.test.cjs`. Purchase success is rechecked against Apple's verified current entitlements. Cancellation and pending purchase never create an entitlement. Error/unavailable state remains **unknown** rather than silently reducing or clearing existing shields. Product display prices come from the StoreKit storefront, not hard-coded US currency.
+
+**Verified by test:** GitHub Actions `41484301143` passed **114/114 Node tests**, TypeScript, 18/18 Expo Doctor checks, lockfile integrity and iOS project generation. **Not yet verified:** native CocoaPods autolinking and Swift compilation (the first CI run skipped that job); StoreKit purchase/restore on iPhone, availability of actual App Store Connect product, transaction revocation while app is active. A separate macOS unsigned Xcode compilation is explicitly queued for this module. No EAS credit spent.
+
+**Deliberate shipping guard:** purchase and multi-app UI remain inaccessible; the existing free-tier one-app protection is still enforced. The local native bridge is implemented but not yet proven compiled or deployed. Do not claim checkout is working or market Premium until the complete paid experience is ready.
+
+**Next:** verify native Swift compilation and autolinking; integrate visible restore/status and guarded paywall after multi-app token-specific 120-second exception is safely implemented. Explicitly verify Apple Family Controls and StoreKit on physical iPhone. Refer to `PREMIUM_IMPLEMENTATION.md`.
+
 ## Milestone: Premium product decision and fail-closed app-selection policy (2026-11-02)
 
 **User-approved:** Premium is a **$5.99 USD one-time Apple non-consumable purchase**, not a subscription; Free always protects one application, Premium will allow multiple explicitly selected applications. A completed continuous **120-second hold unlocks exactly one chosen protected app** for up to 15 minutes, while the others remain blocked. Free users skip the app chooser. Protected-app selection should be minimal and accessible through Apple's privacy-preserving native labels. **Product identifier proposed:** `com.alvinkwak.curfy.premium`; App Store Connect product creation/status is unverified. See `PREMIUM_IMPLEMENTATION.md` for full design and verification gates.

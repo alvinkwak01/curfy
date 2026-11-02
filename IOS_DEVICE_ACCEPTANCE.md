@@ -32,6 +32,9 @@ Updated 2026-11-02. **NOT a claim of device testing.** Use this after the next s
 - Onboard a Morning user and confirm NO 'bedtime approaching' notification at 5:50 a.m. Confirm Home's cutoff and stats don't claim to measure sleep, and no average bedtime is shown for a mixed Morning+Evening cohort.
 - Check Dynamic Type/VoiceOver/Reduce Motion and an explicit accessibility alternative to the continuous hold; document emergency-access expectations (Curfy protects selected distracting apps, not emergency calls or the whole phone).
 - After native cases pass: separately verify IAP sandbox purchase, Restore Purchases, cancellation/refunds, offline status, downgrade to one selected app, App Store privacy/support data and Family Controls distribution entitlements for **app and extensions**.
+- **StoreKit build checks:** verify `CurfyStoreKit` local pod appears in CocoaPods/autolinking (not just TypeScript imports); check the signed app's In-App Purchase capability and configured product ID `com.alvinkwak.curfy.premium`. Fetch the localized price from Apple, not a UI constant.
+- **Non-consumable sandbox matrix:** successful purchase changes verified current entitlement to owned; cancellation leaves free; Ask-to-Buy pending remains non-owned; app restart and offline refresh do not erase a surviving native shielding schedule; restore with same Apple Account re-detects entitlement; a different Apple Account with no purchase is free; refund/revocation no longer grants new multi-app changes. StoreKit/App Store errors must not delete configured shields.
+- **Launch gate:** do not enable the Premium buy button until an uninterrupted 120-second hold can target one selected app, with independently scheduled 15-minute re-shielding while all other chosen apps remain blocked, verified on hardware.
 
 ## Evidence record (fill after actual testing)
 

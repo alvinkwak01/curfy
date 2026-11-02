@@ -21,14 +21,17 @@ Decision date: 2026-11-02. This supersedes the earlier pending-subscription/pric
 ## Current technical state
 - `lib/premiumPolicy.ts` defines the product ID, known/unknown/owned model and a pure app-only selection policy; `tests/premiumPolicy.test.cjs` checks free, paid, unknown, category promotion and corrupt metadata.
 - `lib/screenTime.ts` reuses that policy but still enforces **free one-app mode** everywhere. This is deliberate until StoreKit AND selected-app exception are implemented.
-- **NOT IMPLEMENTED:** StoreKit payment module/paywall, native verified entitlement source, dynamic store price, restore purchase UI, multiple app monitoring, app-specific unshield and native label selector. This milestone is a correctness foundation only, not a finished Premium product.
+- **IMPLEMENTED IN SOURCE, NOT DEVICE VERIFIED:** Local Swift StoreKit 2 module in `modules/curfy-storekit/`, exposing verified active non-consumable entitlements, product metadata/localized StoreKit price, non-consumable purchase and Apple Account restore. `lib/premiumStore.ts` does not trust a purchase-return value to grant Premium; it re-reads current entitlements, treats errors as unknown, and never writes a locally spoofable entitlement flag. `tests/premiumStore.test.cjs` covers failures, cancelled/pending purchases, product price from StoreKit and restore reconciliation. **114/114 tests passed** in CI `41484301143`; unsigned native compilation and StoreKit hardware behavior are not yet proven.
+- **NOT IMPLEMENTED:** purchasable paywall and restore UI, ownership/transaction refresh on resume, multiple app native monitoring, app-specific unshield/reblock, private native app labels. The one-app limit remains enforced until full Premium functionality is proven; this is not a finished paid product.
 
 ## Integration next step
-Verify an `expo-iap` release compatible with **Expo SDK 54 / React Native 0.81**, lockfile and native targets. Implement a single non-consumable product with native verified current entitlements and restore; ensure purchase cancellation/errors cannot activate Premium. Then implement minimal app-choice UI and token-specific 15-minute exception before advertising purchases. Use mocked/unit tests, unsigned native compilation, then a consolidated signed iPhone acceptance test. Preserve the existing draft PR #2 and `main` unchanged.
+The solution uses an **app-local Expo Swift StoreKit 2 module** instead of a new third-party IAP dependency: Expo documents automatic discovery of local modules and Apple documents current verified entitlements. Verify macOS unsigned native compilation, then add transaction update/foreground reconciliation, minimal app-choice UI and token-specific 15-minute exception before advertising purchases. Validate StoreKit sandbox buying, restore, refunds and restart behavior. Use mocked/unit tests, unsigned native compilation, then a consolidated signed iPhone acceptance test. Preserve the existing draft PR #2 and `main` unchanged.
 
 Sources checked 2026-11-02:
 - Apple IAP product types: https://developer.apple.com/help/app-store-connect/configure-in-app-purchase-settings/overview-for-configuring-in-app-purchases
 - Apple current entitlements: https://developer.apple.com/documentation/storekit/transaction/currententitlements
 - Apple activity labels: https://developer.apple.com/documentation/familycontrols/displayingactivitylabels
 - Library picker-category issue: https://github.com/kingstinct/react-native-device-activity/issues/95
-- OpenIAP Expo setup: https://www.openiap.dev/docs/setup/expo
+- Expo local native modules: https://docs.expo.dev/modules/get-started/
+- Expo autolinking: https://docs.expo.dev/modules/autolinking/
+- Apple StoreKit transaction entitlements: https://developer.apple.com/documentation/storekit/transaction/currententitlements
