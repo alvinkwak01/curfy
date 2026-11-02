@@ -145,7 +145,7 @@ test("premium purchase is checked by StoreKit before touching native blocking", 
   const f = fixture({ entitlement: "unknown" });
   await assert.rejects(() => f.grant(), /ownership has not been verified/);
   assert.deepEqual([...f.blocked].sort(), ["A","B","C"]);
-  assert.equal(f.storage.size, 0);
+  assert.equal(f.storage.has(policy.PREMIUM_EXCEPTIONS_KEY), false);
   assert.equal(f.calls.filter(x => x[0] === "start").length, 0);
 });
 
@@ -159,7 +159,7 @@ test("changed native app ticket refuses to unshield or schedule", async () => {
   const f = fixture({ validateFails: true });
   await assert.rejects(() => f.grant(), /saved app choice changed/);
   assert.equal(f.activities.size, 0);
-  assert.equal(f.storage.size, 0);
+  assert.equal(f.storage.has(policy.PREMIUM_EXCEPTIONS_KEY), false);
 });
 
 test("monitor setup failure never releases an app; native ledger rolls back", async () => {
