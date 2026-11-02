@@ -1,6 +1,6 @@
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
-import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults, clockLabel } from "@/lib/protectionRoutine";
+import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults } from "@/lib/protectionRoutine";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import {
