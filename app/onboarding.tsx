@@ -1,4 +1,5 @@
 import Btn from "@/components/Btn";
+import { MoonGlyph } from "@/components/MoonGlyph";
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
 import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults, routineExplainer, startQuestion, protectionWindowLabel } from "@/lib/protectionRoutine";
@@ -35,7 +36,6 @@ import {
   DeviceActivitySelectionSheetViewPersisted,
   activitySelectionMetadata,
 } from "react-native-device-activity";
-import Animated, { SlideInRight, SlideOutLeft } from "react-native-reanimated";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 const STEP_COUNT = 5;
@@ -65,6 +65,8 @@ export default function Onboarding() {
     setProtectionRoutine,
     completeOnboarding,
   } = useSleep();
+  // Restore the original branded first impression, including after Delete Everything.
+  const [showWelcome, setShowWelcome] = useState(true);
   const [step, setStep] = useState(0);
   const [routine, setRoutine] = useState<ProtectionRoutine | null>(null);
   const [localBedtime, setLocalBedtime] = useState("23:00");
@@ -157,74 +159,65 @@ export default function Onboarding() {
   };
 
   const back = () => {
-    if (step > 0) setStep(step - 1);
+    if (step === 0) setShowWelcome(true);
+    else setStep(step - 1);
   };
 
   const isLastStep = step === STEP_COUNT - 1;
   // Leave Continue tappable so invalid selections get an explanation.
   const buttonDisabled = finishing;
 
+  if (showWelcome) {
+    return (
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
+        <StarBackground />
+        <StepWelcome onStart={() => setShowWelcome(false)} />
+      </SafeAreaView>
+    );
+  }
+
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <StarBackground />
       <View style={styles.header}>
-        {step > 0 ? (
-          <TouchableOpacity onPress={back} hitSlop={12} accessibilityRole="button" accessibilityLabel="Previous setup step">
-            <Ionicons name="chevron-back" size={22} color={Colors.textMuted} />
-          </TouchableOpacity>
-        ) : <View style={{ width: 22 }} />}
+        <TouchableOpacity onPress={back} hitSlop={12} accessibilityRole="button" accessibilityLabel={step === 0 ? "Back to welcome" : "Previous setup step"} style={styles.backControl}>
+          <Ionicons name="chevron-back" size={22} color={Colors.textPrimary} />
+        </TouchableOpacity>
         <ProgressBar step={step} />
+        <Text style={styles.stepCounter}>{step + 1} / {STEP_COUNT}</Text>
       </View>
 
       <KeyboardAvoidingView
         style={styles.stepFlow}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <Animated.View
+        <ScrollView
           key={step}
-          entering={SlideInRight.duration(350)}
-          exiting={SlideOutLeft.duration(300)}
-          style={styles.stepContent}
+          style={styles.stepScroll}
+          contentContainerStyle={styles.stepScrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
         >
-          {(() => {
-            const stepNode = (
-              <>
-                {step === 0 && <StepRoutine routine={routine} onChange={chooseRoutine} />}
-                {step === 1 && routine && <StepTimeStart routine={routine} value={localBedtime} onChange={setLocalBedtime} />}
-                {step === 2 && routine && <StepTimeEnd routine={routine} value={localWakeTime} onChange={setLocalWakeTime} />}
-                {step === 3 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
-                {step === 4 && (
-                  <StepChooseApps
-                    routine={routine}
-                    start={localBedtime}
-                    end={localWakeTime}
-                    blockMode={blockMode}
-                    selectedCount={selectedCount}
-                    onSelect={setBlockMode}
-                    selectionIssue={selectionIssue}
-                    onSelectionChange={(metadata) => {
-                      setSelectedCount(metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount);
-                      setSelectionIssue(freeSelectionIssueForMetadata(metadata));
-                    }}
-                  />
-                )}
-              </>
-            );
-
-            // The wheel now owns touch gestures inside each clock column,
-            // while the surrounding form can scroll on smaller iPhones.
-            return (
-              <ScrollView
-                contentContainerStyle={styles.stepScrollContent}
-                showsVerticalScrollIndicator={false}
-                keyboardShouldPersistTaps="handled"
-              >
-                {stepNode}
-              </ScrollView>
-            );
-          })()}
-        </Animated.View>
-
+          {step === 0 && <StepRoutine routine={routine} onChange={chooseRoutine} />}
+          {step === 1 && routine && <StepTimeStart routine={routine} value={localBedtime} onChange={setLocalBedtime} />}
+          {step === 2 && routine && <StepTimeEnd routine={routine} value={localWakeTime} onChange={setLocalWakeTime} />}
+          {step === 3 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
+          {step === 4 && (
+            <StepChooseApps
+              routine={routine}
+              start={localBedtime}
+              end={localWakeTime}
+              blockMode={blockMode}
+              selectedCount={selectedCount}
+              onSelect={setBlockMode}
+              selectionIssue={selectionIssue}
+              onSelectionChange={(metadata) => {
+                setSelectedCount(metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount);
+                setSelectionIssue(freeSelectionIssueForMetadata(metadata));
+              }}
+            />
+          )}
+        </ScrollView>
         <View style={styles.btnWrap}>
           <Btn
             label={isLastStep ? (finishing ? "Setting up..." : "Start protecting") : "Continue"}
@@ -237,14 +230,33 @@ export default function Onboarding() {
   );
 }
 
+function StepWelcome({ onStart }: { onStart: () => void }) {
+  return (
+    <View style={styles.welcomeWrap}>
+      <View style={styles.welcomeCenter}>
+        <MoonGlyph size={86} />
+        <Text style={styles.wordmark}>CURFY</Text>
+        <Text style={styles.tagline}>Bedtime. For real.</Text>
+        <Text style={styles.welcomeBody}>
+          Protect the distracting apps you choose during your hours.
+          Your phone stays yours.
+        </Text>
+      </View>
+      <View style={styles.welcomeFooter}>
+        <Btn label="Get Started" onPress={onStart} />
+      </View>
+    </View>
+  );
+}
+
 function StepRoutine({ routine, onChange }: {
   routine: ProtectionRoutine | null; onChange: (value: ProtectionRoutine) => void;
 }) {
   return (
     <View style={styles.stepInner}>
       <Badge>YOUR ROUTINE</Badge>
-      <Text style={styles.hero}>When do you want{"\n"}fewer distractions?</Text>
-      <Text style={styles.bodyText}>Protect a distracting app, not your whole phone. Pick a starting point; adjust the times next.</Text>
+      <Text style={[styles.hero, styles.routineHero]}>When should Curfy keep distractions out?</Text>
+      <Text style={styles.bodyText}>Choose a starting point. You can adjust your protection hours next.</Text>
       <View style={{ gap: 12, marginTop: 8 }}>
         {PROTECTION_ROUTINES.map((option) => {
           const selected = option.id === routine;
@@ -525,12 +537,13 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 14,
     height: 36,
-    marginTop: 8,
-    paddingHorizontal: 20,
+    marginTop: 12,
+    paddingHorizontal: 24,
+    flexShrink: 0,
   },
   progressTrack: {
     flex: 1,
-    height: 4,
+    height: 3,
     borderRadius: 2,
     backgroundColor: Colors.border,
     overflow: "hidden",
@@ -540,18 +553,62 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: Colors.primaryCyan,
   },
+  backControl: {
+    width: 26,
+    height: 36,
+    justifyContent: "center",
+  },
+  stepCounter: {
+    color: "#A1A1BD",
+    fontFamily: Fonts.semiBold,
+    fontSize: 11,
+    letterSpacing: 1,
+    minWidth: 36,
+    textAlign: "right",
+  },
   stepFlow: {
     flex: 1,
     paddingHorizontal: 24,
+  },
+  stepScroll: { flex: 1 },
+  // Keep the progress header pinned above all onboarding content.
+  // A scrollable page owns its height; it must never overlap the header.
+  stepScrollContent: { flexGrow: 1, paddingTop: 30, paddingBottom: 32 },
+  stepInner: { gap: 14 },
+  welcomeWrap: {
+    flex: 1,
+    paddingHorizontal: 28,
     justifyContent: "space-between",
   },
-  stepContent: { flex: 1 },
-  // flexGrow (not flex) lets short steps stay vertically centered like
-  // before, while tall ones (7-option list, 3 benefit cards) naturally
-  // become scrollable instead of overflowing the screen or getting
-  // covered by the fixed Continue button.
-  stepScrollContent: { flexGrow: 1, justifyContent: "center", paddingBottom: 12 },
-  stepInner: { gap: 16 },
+  welcomeCenter: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingBottom: 28,
+  },
+  wordmark: {
+    color: Colors.textPrimary,
+    fontFamily: Fonts.bold,
+    fontSize: 48,
+    letterSpacing: 5,
+    marginTop: -4,
+  },
+  tagline: {
+    color: Colors.primaryCyan,
+    fontFamily: Fonts.semiBold,
+    fontSize: 18,
+    marginTop: 6,
+  },
+  welcomeBody: {
+    color: "#B0B0D2",
+    fontFamily: Fonts.regular,
+    fontSize: 16,
+    lineHeight: 24,
+    textAlign: "center",
+    maxWidth: 340,
+    marginTop: 28,
+  },
+  welcomeFooter: { paddingBottom: 22 },
   badge: {
     alignSelf: "flex-start",
     backgroundColor: Colors.surface,
@@ -570,14 +627,18 @@ const styles = StyleSheet.create({
   hero: {
     color: Colors.textPrimary,
     fontFamily: Fonts.bold,
-    fontSize: 40,
-    lineHeight: 48,
+    fontSize: 34,
+    lineHeight: 41,
+  },
+  routineHero: {
+    fontSize: 31,
+    lineHeight: 38,
   },
   bodyText: {
-    color: Colors.textMuted,
+    color: "#B0B0D2",
     fontFamily: Fonts.regular,
     fontSize: 15,
-    lineHeight: 22,
+    lineHeight: 23,
   },
   // A short, forceful closing line (Wake Up Call step) — deliberately
   // brighter/heavier than bodyText, this is a statement, not a caption.
@@ -666,7 +727,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,229,255,0.1)",
   },
   presetTitle: { color: Colors.textPrimary, fontSize: 15, fontFamily: Fonts.semiBold, marginBottom: 2 },
-  presetDesc: { color: Colors.textMuted, fontSize: 12.5, fontFamily: Fonts.regular, lineHeight: 17 },
+  presetDesc: { color: "#A6A6C5", fontSize: 13, fontFamily: Fonts.regular, lineHeight: 19 },
   selectedChip: {
     alignSelf: "flex-start",
     backgroundColor: "rgba(0,229,255,0.1)",
@@ -686,11 +747,11 @@ const styles = StyleSheet.create({
     color: Colors.warningAmber, fontFamily: Fonts.semiBold, fontSize: 13,
   },
   fineprint: {
-    color: Colors.textGhost,
-    fontSize: 11.5,
+    color: "#8F8FB3",
+    fontSize: 12,
     fontFamily: Fonts.regular,
-    lineHeight: 16,
+    lineHeight: 18,
     marginTop: 2,
   },
-  btnWrap: { paddingBottom: 56 },
+  btnWrap: { paddingTop: 12, paddingBottom: 20 },
 });

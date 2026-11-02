@@ -60,8 +60,10 @@ test("onboarding lets users choose Morning, Evening or Both in only five steps",
   const settings = source("app/settings.tsx");
   const context = source("context/SleepContext.tsx");
   assert.match(onboarding, /STEP_COUNT = 5/);
-  assert.doesNotMatch(onboarding, /if \(showWelcome\)/);
-  assert.doesNotMatch(onboarding, /Get Started/);
+  assert.match(onboarding, /const \\[showWelcome, setShowWelcome\\] = useState\\(true\\)/);
+  assert.match(onboarding, /if \\(showWelcome\\)/);
+  assert.match(onboarding, /<StepWelcome onStart=/);
+  assert.match(onboarding, /<Btn label="Get Started"/);
   assert.match(onboarding, /PROTECTION_ROUTINES\.map/);
   assert.match(onboarding, /When should your app be available again\?/);
   assert.doesNotMatch(onboarding, /What time do.*you wake up/);
@@ -105,4 +107,30 @@ test("onboarding compensates for native schedule if local completion fails", () 
   assert.ok(start >= 0 && complete > start && fail > complete && stop > fail);
   assert.match(onboarding.slice(fail, fail + 950), /nativeScheduleStarted/);
   assert.match(onboarding.slice(stop, stop + 600), /Screen Time access in iPhone Settings/);
+});
+
+
+test("fresh and deleted-account onboarding restores Curfy welcome before routine", () => {
+  const onboarding = source("app/onboarding.tsx");
+  const layout = source("app/_layout.tsx");
+  const sleep = source("context/SleepContext.tsx");
+  assert.match(layout, /!isOnboardingComplete[\\s\\S]*<Onboarding \\/>/);
+  assert.match(sleep, /const deleteAccount = async \\(\\) => \\{/);
+  assert.match(sleep, /setIsOnboardingComplete\\(false\\)/);
+  const welcome = onboarding.indexOf("if (showWelcome)");
+  const routine = onboarding.indexOf('step === 0 && <StepRoutine');
+  assert.ok(welcome >= 0 && routine > welcome,
+    "Welcome must render before the first actual setup question");
+  assert.match(onboarding, /if \\(step === 0\\) setShowWelcome\\(true\\)/);
+  assert.match(onboarding, /<MoonGlyph size=\\{86\\}/);
+  assert.match(onboarding, /Bedtime\\. For real\\./);
+});
+test("routine content cannot overlap a fixed progress header or push CTA offscreen", () => {
+  const src = source("app/onboarding.tsx");
+  assert.match(src, /<View style=\\{styles\\.header\\}>/);
+  assert.match(src, /<ScrollView[\\s\\S]*style=\\{styles\\.stepScroll\\}/);
+  assert.match(src, /stepScrollContent: \\{ flexGrow: 1, paddingTop: 30, paddingBottom: 32 \\}/);
+  assert.match(src, /btnWrap: \\{ paddingTop: 12, paddingBottom: 20 \\}/);
+  assert.doesNotMatch(src, /SlideOutLeft/);
+  assert.match(src, /styles\\.routineHero/);
 });
