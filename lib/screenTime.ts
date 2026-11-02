@@ -452,6 +452,18 @@ function selectedAppShieldCount(selectionId: string): number {
   return overlap.applicationCount + overlap.categoryCount + overlap.webDomainCount;
 }
 
+/** Native token introspection may be unavailable even when a real OS shield
+ * exists. Return null only for the probe; fall back to the app-owned native
+ * ManagedSettingsStore state, never to an optimistic success. */
+function selectedShieldCountOrNull(selectionId: string): number | null {
+  try {
+    return selectedAppShieldCount(selectionId);
+  } catch (error) {
+    console.warn("[Curfy] Native selected-token overlap unavailable", error);
+    return null;
+  }
+}
+
 function stopExceptionMonitor(state: ActiveException): void {
   if (!state.activityName) return;
   // Apple's stopMonitoring can itself produce intervalDidEnd. Remove its
@@ -492,9 +504,9 @@ export async function grantBedtimeException({
   // A token intersection can produce a false negative for an actual
   // category shield. Require either explicit token overlap or an active
   // native ManagedSettingsStore shield before starting the exception.
-  const overlapBefore = selectedAppShieldCount(selectionId);
+  const overlapBefore = selectedShieldCountOrNull(selectionId);
   const anyShieldBefore = DeviceActivity.isShieldActive();
-  if (overlapBefore === 0 && !anyShieldBefore) {
+  if ((overlapBefore ?? 0) === 0 && !anyShieldBefore) {
     throw new Error("iOS is not reporting any active Curfy app restrictions.");
   }
 
@@ -552,8 +564,14 @@ export async function grantBedtimeException({
     // Only count an unlock after independent native verification. If our
     // selected-token intersection was already zero despite a visible shield,
     // we require the actual ManagedSettingsStore shield to clear instead.
-    const overlapAfter = selectedAppShieldCount(selectionId);
-    if (overlapBefore > 0 ? overlapAfter > 0 : DeviceActivity.isShieldActive()) {
+    const overlapAfter = selectedShieldCountOrNull(selectionId);
+    // A positive token overlap is always failure. When either probe is
+    // unavailable or previously returned zero despite a real shield,
+    // require the native ManagedSettingsStore shield to disappear too.
+    const stillShielded = (overlapAfter !== null && overlapAfter > 0) ||
+      ((overlapBefore === null || overlapBefore === 0 || overlapAfter === null) &&
+        DeviceActivity.isShieldActive());
+    if (stillShielded) {
       throw new Error("iOS did not release the selected app restrictions.");
     }
     return state.expiresAt;
