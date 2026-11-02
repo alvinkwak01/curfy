@@ -3,7 +3,7 @@ import { MoonGlyph } from "@/components/MoonGlyph";
 
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
-import { PROTECTION_ROUTINES, ProtectionRoutine, protectionWindowLabel, clockLabel, cutoffDayLabel } from "@/lib/protectionRoutine";
+import { clockLabel, protectionWindowLabel, inferRoutineFromStart } from "@/lib/protectionRoutine";
 import { assertMonitorableBedtimeSchedule } from "@/lib/bedtimeWindow";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
@@ -41,25 +41,14 @@ import {
 } from "react-native-device-activity";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const STEP_COUNT = 13;
+// Welcome is separate. These nine setup pages make ten screens total.
+const STEP_COUNT = 9;
 
-function toMinutes(time: string): number {
-  const [h, m] = time.split(":").map(Number);
-  return h * 60 + m;
-}
-
-function sleepDurationMinutes(bedtime: string, wake: string): number {
-  const b = toMinutes(bedtime);
-  const w = toMinutes(wake);
-  return w > b ? w - b : 24 * 60 - b + w;
-}
-
-function formatDuration(totalMinutes: number): string {
-  const h = Math.floor(totalMinutes / 60);
-  const m = Math.round(totalMinutes % 60);
-  if (h <= 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
-  return `${h}h ${m}m`;
+function initialClockWindow(now = new Date()): { start: string; end: string } {
+  const nextHour = ((now.getHours() + 1) % 24) * 60;
+  const clock = (minutes: number) =>
+    `${String(Math.floor(minutes / 60) % 24).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+  return { start: clock(nextHour), end: clock((nextHour + 120) % 1440) };
 }
 
 function formatTime12(time: string): string {
@@ -72,14 +61,21 @@ function formatTime12(time: string): string {
 }
 
 const REASON_OPTIONS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
-  { id: "social", label: "Doomscrolling social media", icon: "phone-portrait-outline" },
-  { id: "video", label: "\"One more episode\"", icon: "play-circle-outline" },
-  { id: "chat", label: "Texting or group chats", icon: "chatbubble-ellipses-outline" },
+  { id: "social", label: "Social media scrolling", icon: "phone-portrait-outline" },
+  { id: "video", label: "Watching videos", icon: "play-circle-outline" },
+  { id: "chat", label: "Messages and group chats", icon: "chatbubble-ellipses-outline" },
   { id: "games", label: "Games", icon: "game-controller-outline" },
-  { id: "cant-sleep", label: "Can't fall asleep, so I pick up my phone", icon: "moon-outline" },
-  { id: "work", label: "Catching up on work or school", icon: "briefcase-outline" },
-  { id: "anxious", label: "Anxious thoughts, phone is the distraction", icon: "pulse-outline" },
+  { id: "browse", label: "Browsing out of habit", icon: "compass-outline" },
+  { id: "work", label: "Work or school apps", icon: "briefcase-outline" },
+  { id: "other", label: "Something else", icon: "ellipsis-horizontal-circle-outline" },
 ];
+
+function reasonSummary(ids: string[]): string {
+  const labels = ids.map(id => REASON_OPTIONS.find(option => option.id === id)?.label).filter(Boolean);
+  if (!labels.length) return "the distractions you want to limit";
+  if (labels.length === 1) return labels[0]!.toLowerCase();
+  return labels.slice(0, 2).map(label => label!.toLowerCase()).join(" and ");
+}
 
 
 
@@ -113,16 +109,12 @@ export default function Onboarding() {
   const [showWelcome, setShowWelcome] = useState(true);
   const [step, setStep] = useState(0);
   const [reasons, setReasons] = useState<string[]>([]);
-  const [currentBedtime, setCurrentBedtime] = useState("00:30");
   const [name, setName] = useState("");
   const firstPickerOpened = useRef(false);
-  const [routine, setRoutine] = useState<ProtectionRoutine | null>(null);
-  const [localBedtime, setLocalBedtime] = useState("23:00");
-  const [localWakeTime, setLocalWakeTime] = useState("06:00");
-  const chooseRoutine = (selected: ProtectionRoutine) => {
-    // This choice changes the narrative, NEVER the user's actual clock choices.
-    setRoutine(selected);
-  };
+  // These clock positions are based on the user's current time, not bedtime advice.
+  const [firstWindow] = useState(() => initialClockWindow());
+  const [localBedtime, setLocalBedtime] = useState(firstWindow.start);
+  const [localWakeTime, setLocalWakeTime] = useState(firstWindow.end);
   const [screenTimeStatus, setScreenTimeStatus] =
     useState<ScreenTimeAuthStatus>("notDetermined");
   const [blockMode, setBlockMode] = useState<BlockModeId | null>(null);
@@ -131,7 +123,7 @@ export default function Onboarding() {
   // iOS Screen Time authorization survives deleting a Curfy account.
   // Check the actual device permission when the step becomes visible.
   useEffect(() => {
-    if (step !== 9) return;
+    if (step !== 6) return;
     try {
       setScreenTimeStatus(getScreenTimeAccessStatus());
     } catch (error) {
@@ -147,46 +139,45 @@ export default function Onboarding() {
       Alert.alert("Choose a distraction", "Choose at least one reason to continue.");
       return;
     }
-    if (step === 2 && !routine) {
-      Alert.alert("Choose your routine", "Select Evening, Morning or Both to continue.");
-      return;
-    }
-    if (step === 5) {
+    if (step === 3) {
       try {
         assertMonitorableBedtimeSchedule(localBedtime, localWakeTime);
       } catch (error) {
-        Alert.alert("Adjust the times", error instanceof Error ? error.message : "Choose a valid protection window.");
+        Alert.alert("Adjust the times",
+          error instanceof Error ? error.message : "Choose a valid protection window.");
         return;
       }
     }
-    if (step === 9) {
+    if (step === 6) {
       let currentStatus: ScreenTimeAuthStatus;
       try {
         currentStatus = getScreenTimeAccessStatus();
       } catch {
-        Alert.alert("Screen Time unavailable", "Curfy couldn't verify Screen Time access. Try again.");
+        Alert.alert("Screen Time unavailable", "Curfy couldn't verify Screen Time permission. Try again.");
         return;
       }
       setScreenTimeStatus(currentStatus);
       if (currentStatus !== "authorized") {
-        Alert.alert("Screen Time needed", "Grant Screen Time access so Curfy can shield your chosen app.");
+        Alert.alert("Screen Time needed", "Grant access to protect your selected app.");
         return;
       }
     }
-    if (step === 10) {
-      // Trust the committed native picker selection, not a stale event from
-      // the last picker session or an old local React state.
+    if (step === 7) {
+      // Always read the *native saved selection*, not just a JS event.
       const metadata = blockMode ? activitySelectionMetadata({
         activitySelectionId: selectionIdForMode(blockMode),
       }) : null;
       const issue = freeSelectionIssueForMetadata(metadata);
       setSelectionIssue(issue);
-      setSelectedCount(metadata ? metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount : null);
+      setSelectedCount(metadata
+        ? metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount
+        : null);
       if (!blockMode || issue) {
         const details = metadata
-          ? `${metadata.applicationCount} individual app(s), ${metadata.categoryCount} categories, ${metadata.webDomainCount} websites selected.`
-          : "No app selection was saved.";
-        Alert.alert("Choose exactly one app", `${details}\nOpen Apple's picker and remove any extra selections or categories.`);
+          ? `${metadata.applicationCount} apps, ${metadata.categoryCount} categories and ${metadata.webDomainCount} websites saved.`
+          : "Apple's picker hasn't saved a selection yet.";
+        Alert.alert("Select one individual app",
+          `${details}\nReopen the picker and leave exactly one app checked. If the counts are wrong, tell us what is shown here.`);
         return;
       }
     }
@@ -194,8 +185,9 @@ export default function Onboarding() {
       setStep(step + 1);
       return;
     }
-    if (!blockMode || !routine || !name.trim()) {
-      Alert.alert("Finish setup", "Choose a routine, one individual app and a name first.");
+    if (!blockMode) {
+      Alert.alert("Choose your app", "Select exactly one individual app first.");
+      setStep(7);
       return;
     }
     if (finishingRef.current) return;
@@ -203,20 +195,17 @@ export default function Onboarding() {
     setFinishing(true);
     let nativeScheduleStarted = false;
     try {
+      // Final native validation and monitoring are mandatory; no optimistic completion.
       await configureBedtimeBlocking({
-        bedtime: localBedtime,
-        wakeTime: localWakeTime,
-        mode: blockMode,
+        bedtime: localBedtime, wakeTime: localWakeTime, mode: blockMode,
       });
       nativeScheduleStarted = true;
-      // Never mark onboarding complete until all local settings exist.
-      // The user must be able to reach Curfy Home's 120s escape screen
-      // whenever an OS-level schedule may already be running.
+      const routine = inferRoutineFromStart(localBedtime);
       await setBedtime(localBedtime, routine);
       await setWakeTime(localWakeTime);
       await persistBlockMode(blockMode);
       await setProtectionRoutine(routine);
-      await setUserName(name.trim());
+      if (name.trim()) await setUserName(name.trim());
       await completeOnboarding();
     } catch (error) {
       console.warn("[Curfy] Failed to finish onboarding", error);
@@ -224,11 +213,9 @@ export default function Onboarding() {
         try {
           stopBedtimeBlocking();
         } catch (nativeStopError) {
-          console.warn("[Curfy] Onboarding rollback could not stop iOS", nativeStopError);
-          Alert.alert(
-            "App protection may still be active",
-            "Setup couldn't finish, and iOS did not confirm it stopped shielding your app. Retry setup, or revoke Curfy's Screen Time access in iPhone Settings to regain access."
-          );
+          console.warn("[Curfy] Could not stop iOS protection during rollback", nativeStopError);
+          Alert.alert("App protection may still be active",
+            "Setup couldn't finish, and iOS didn't confirm that it stopped shielding your app. Retry setup, or revoke Curfy's Screen Time access in iPhone Settings to regain access.");
           return;
         }
       }
@@ -247,48 +234,44 @@ export default function Onboarding() {
 
   const isLastStep = step === STEP_COUNT - 1;
   // Leave Continue tappable so invalid selections get an explanation.
-  const buttonDisabled = finishing || (isLastStep && !name.trim());
+  const buttonDisabled = finishing;
 
-  // Render the restored screen exactly once regardless of which layout
-  // wrapper it needs. Clock wheels deliberately bypass the parent ScrollView.
+  // Preserve the original visual storytelling, in the agreed ten screens.
+  // The 120-second exception is explained, never falsely shown inside iOS's shield.
   const stepNode = (
     <>
-{step === 0 && <StepWakeUpCall />}
-          {step === 1 && <StepWhyStayUp reasons={reasons} onChange={setReasons} />}
-          {step === 2 && <StepRoutine routine={routine} onChange={chooseRoutine} />}
-          {step === 3 && <StepCurrentBedtime bedtime={currentBedtime} onChange={setCurrentBedtime} />}
-          {step === 4 && <StepSetBedtime bedtime={localBedtime} onChange={setLocalBedtime} />}
-          {step === 5 && <StepWakeTime wakeTime={localWakeTime} onChange={setLocalWakeTime} />}
-          {step === 6 && <StepReveal currentBedtime={currentBedtime} goalBedtime={localBedtime} wakeTime={localWakeTime} />}
-          {step === 7 && <StepBenefits />}
-          {step === 8 && <StepHowItWorks />}
-          {step === 9 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
-          {step === 10 && (
-            <StepChooseApps
-              routine={routine}
-              start={localBedtime}
-              end={localWakeTime}
-              blockMode={blockMode}
-              selectedCount={selectedCount}
-              onSelect={(mode) => {
-                if (!firstPickerOpened.current) {
-                  beginFreshOnboardingAppSelection(mode);
-                  firstPickerOpened.current = true;
-                }
-                setBlockMode(mode);
-              }}
-              selectionIssue={selectionIssue}
-              onSelectionChange={(metadata) => {
-                setSelectedCount(metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount);
-                setSelectionIssue(freeSelectionIssueForMetadata(metadata));
-              }}
-            />
-          )}
-          {step === 11 && <StepPreview bedtime={localBedtime} wakeTime={localWakeTime} />}
-          {step === 12 && <StepName name={name} onChange={setName} />}
+      {step === 0 && <StepWakeUpCall />}
+      {step === 1 && <StepWhyStayUp reasons={reasons} onChange={setReasons} />}
+      {step === 2 && <StepSetBedtime bedtime={localBedtime} onChange={setLocalBedtime} />}
+      {step === 3 && <StepWakeTime wakeTime={localWakeTime} onChange={setLocalWakeTime} />}
+      {step === 4 && <StepReveal reasons={reasons} goalBedtime={localBedtime} wakeTime={localWakeTime} />}
+      {step === 5 && <StepWhyCurfy />}
+      {step === 6 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
+      {step === 7 && (
+        <StepChooseApps
+          start={localBedtime}
+          end={localWakeTime}
+          blockMode={blockMode}
+          selectedCount={selectedCount}
+          onSelect={(mode) => {
+            if (!firstPickerOpened.current) {
+              beginFreshOnboardingAppSelection(mode);
+              firstPickerOpened.current = true;
+            }
+            setBlockMode(mode);
+          }}
+          selectionIssue={selectionIssue}
+          onSelectionChange={(metadata) => {
+            setSelectedCount(metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount);
+            setSelectionIssue(freeSelectionIssueForMetadata(metadata));
+          }}
+        />
+      )}
+      {step === 8 && (
+        <StepFinish bedtime={localBedtime} wakeTime={localWakeTime} name={name} onNameChange={setName} />
+      )}
     </>
   );
-
 
   if (showWelcome) {
     return (
@@ -314,7 +297,7 @@ export default function Onboarding() {
         style={styles.stepFlow}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {([3, 4, 5].includes(step)) ? (
+        {([2, 3].includes(step)) ? (
           <View key={step} style={styles.timeStepContent}>
             {stepNode}
           </View>
@@ -365,13 +348,10 @@ function StepWakeUpCall() {
     <View style={styles.stepInner}>
       <Badge>WAKE UP CALL</Badge>
       <Text style={styles.hero}>
-        Your phone{"\n"}doesn't have{"\n"}
-        <Text style={styles.heroCyan}>a bedtime.</Text>
+        One more tap.{"\n"}One more{"\n"}
+        <Text style={styles.heroCyan}>hour.</Text>
       </Text>
-      <Text style={[styles.hero, styles.heroCyan]}>You do.</Text>
-      <Text style={styles.statement}>
-        Make room for the evening you want.
-      </Text>
+      <Text style={styles.statement}>Take your time back, on your terms.</Text>
     </View>
   );
 }
@@ -395,8 +375,8 @@ function StepWhyStayUp({
   return (
     <View style={styles.stepInner}>
       <Badge>SO, TELL US</Badge>
-      <Text style={styles.hero}>What keeps{"\n"}you up?</Text>
-      <Text style={styles.bodyText}>Choose up to 3. This doesn't change which apps are blocked.</Text>
+      <Text style={styles.hero}>What pulls{"\n"}you back in?</Text>
+      <Text style={styles.bodyText}>Choose up to three. Your answer helps personalize your plan, not your app selection.</Text>
 
       <View style={{ gap: 10, marginTop: 4 }}>
         {REASON_OPTIONS.map((opt) => {
@@ -428,23 +408,6 @@ function StepWhyStayUp({
             </TouchableOpacity>
           );
         })}
-      </View>
-    </View>
-  );
-}
-
-function StepCurrentBedtime({ bedtime, onChange }: { bedtime: string; onChange: (v: string) => void }) {
-  return (
-    <View style={[styles.stepInner, { alignItems: "center" }]}>
-      <Badge>YOUR CURRENT HABIT</Badge>
-      <Text style={[styles.hero, { textAlign: "center" }]}>
-        When do you usually{"\n"}reach for your apps?
-      </Text>
-      <Text style={[styles.bodyText, { textAlign: "center" }]}>
-        Just your estimate, not tracked usage. This doesn't set your schedule.
-      </Text>
-      <View style={{ marginVertical: 16 }}>
-        <TimePicker value={bedtime} onChange={onChange} digitSize={56} />
       </View>
     </View>
   );
@@ -489,85 +452,48 @@ function StepWakeTime({ wakeTime, onChange }: { wakeTime: string; onChange: (v: 
 }
 
 function StepReveal({
-  currentBedtime, goalBedtime, wakeTime,
+  reasons, goalBedtime, wakeTime,
 }: {
-  currentBedtime: string; goalBedtime: string; wakeTime: string;
+  reasons: string[]; goalBedtime: string; wakeTime: string;
 }) {
   return (
     <View style={styles.stepInner}>
       <Badge>YOUR PLAN</Badge>
-      <Text style={styles.hero}>
-        Your hours.{"\n"}
-        <Text style={styles.heroCyan}>Your boundaries.</Text>
-      </Text>
+      <Text style={styles.hero}>Your time.{"\n"}<Text style={styles.heroCyan}>Your boundaries.</Text></Text>
       <Text style={styles.bodyText}>
-        You usually reach for distracting apps around {formatTime12(currentBedtime)}.
-        You chose to start protection at {formatTime12(goalBedtime)}.
+        You picked {reasonSummary(reasons)} as something that pulls you back to your phone.
+        Curfy can make those moments more deliberate.
       </Text>
       <View style={styles.revealDivider} />
       <Text style={[styles.hero, { fontSize: 27, lineHeight: 35 }]}>
-        {formatTime12(goalBedtime)}{" → "}{formatTime12(wakeTime)}
+        {clockLabel(goalBedtime)}{" → "}{clockLabel(wakeTime)}
       </Text>
       <Text style={styles.bodyText}>
-        Your selected app is scheduled for protection during those hours.
-        Curfy doesn't track sleep or measure how much time you save.
+        Your selected app will be shielded during this continuous daily window.
+        If the end time is earlier, protection ends the next day.
       </Text>
     </View>
   );
 }
 
-function StepBenefits() {
-  const cards = [
-    {
-      icon: "moon-outline" as const,
-      title: "Keep your chosen hours yours.",
-      body: "Select the app that distracts you. The rest of your iPhone remains available.",
-    },
-    {
-      icon: "shield-checkmark-outline" as const,
-      title: "A real iOS restriction.",
-      body: "Curfy uses Apple's Screen Time APIs, which can shield apps while Curfy is closed.",
-    },
-    {
-      icon: "hourglass-outline" as const,
-      title: "Make exceptions deliberate.",
-      body: "Need access? A continuous 120-second hold in Curfy allows up to 15 minutes before protection returns.",
-    },
-  ];
-  return (
-    <View style={styles.stepInner}>
-      <Badge>WHY IT MATTERS</Badge>
-      <Text style={styles.hero}>Fewer{"\n"}automatic{"\n"}detours.</Text>
-      <View style={{ gap: 10, marginTop: 4 }}>
-        {cards.map(c => (
-          <View key={c.title} style={styles.benefitCard}>
-            <Ionicons name={c.icon} size={20} color={Colors.primaryCyan} style={{ marginBottom: 8 }} />
-            <Text style={styles.benefitTitle}>{c.title}</Text>
-            <Text style={styles.benefitBody}>{c.body}</Text>
-          </View>
-        ))}
-      </View>
-    </View>
-  );
-}
-
-function StepHowItWorks() {
+function StepWhyCurfy() {
   const rows = [
-    { icon: "◉", title: "You choose what is shielded", desc: "Pick one distracting app and your own start and end times." },
-    { icon: "◎", title: "120-second escape", desc: "Open Curfy from your Home Screen and hold for two uninterrupted minutes. Early release resets the hold." },
-    { icon: "○", title: "Temporary access", desc: "After a completed hold, the app is accessible for up to 15 minutes before the shield returns." },
+    { icon: "shield-checkmark-outline" as const, title: "Your chosen app, not your whole phone", desc: "Curfy uses Apple's Screen Time controls to shield exactly the one app you select." },
+    { icon: "finger-print-outline" as const, title: "An intentional 120-second escape", desc: "Open Curfy and hold continuously for two full minutes. Release early and the timer resets." },
+    { icon: "time-outline" as const, title: "Up to 15 minutes of access", desc: "After the hold, the app is temporarily available. The shield is designed to return before your window ends." },
   ];
   return (
     <View style={styles.stepInner}>
-      <Badge>HOW IT WORKS</Badge>
-      <Text style={styles.hero}>We lock the{"\n"}apps.{"\n"}<Text style={styles.heroCyan}>Not the phone.</Text></Text>
-      <View style={{ gap: 20, marginTop: 8 }}>
-        {rows.map((r) => (
-          <View key={r.title} style={styles.featureRow}>
-            <Text style={styles.featureIcon}>{r.icon}</Text>
+      <Badge>WHY CURFY</Badge>
+      <Text style={styles.hero}>Less impulse.{"\n"}<Text style={styles.heroCyan}>More intention.</Text></Text>
+      <Text style={styles.bodyText}>A small pause between wanting to open an app and actually opening it.</Text>
+      <View style={{ gap: 16, marginTop: 12 }}>
+        {rows.map(row => (
+          <View key={row.title} style={styles.featureRow}>
+            <Ionicons name={row.icon} size={23} color={Colors.primaryCyan} style={{ marginTop: 2 }} />
             <View style={{ flex: 1 }}>
-              <Text style={styles.featureTitle}>{r.title}</Text>
-              <Text style={styles.featureDesc}>{r.desc}</Text>
+              <Text style={styles.featureTitle}>{row.title}</Text>
+              <Text style={styles.featureDesc}>{row.desc}</Text>
             </View>
           </View>
         ))}
@@ -576,88 +502,41 @@ function StepHowItWorks() {
   );
 }
 
-function StepPreview({ bedtime, wakeTime }: { bedtime: string; wakeTime: string }) {
+function StepFinish({ bedtime, wakeTime, name, onNameChange }: {
+  bedtime: string; wakeTime: string; name: string; onNameChange: (v: string) => void;
+}) {
   return (
     <View style={styles.stepInner}>
-      <Badge>WHAT IT LOOKS LIKE</Badge>
-      <Text style={styles.hero}>Here's the{"\n"}moment it{"\n"}matters.</Text>
+      <Badge>READY WHEN YOU ARE</Badge>
+      <Text style={styles.hero}>Here's what{"\n"}protection looks like.</Text>
       <Text style={styles.bodyText}>
-        During your chosen hours, opening the protected app shows an iOS shield like this.
+        {protectionWindowLabel(bedtime, wakeTime)} · every day. Tap Finish setup
+        to activate protection for the selected app.
       </Text>
-
       <View style={styles.phoneFrame}>
         <View style={styles.phoneNotch} />
         <View style={styles.phoneShieldIcon}>
           <Ionicons name="shield-checkmark" size={34} color={Colors.textMuted} />
         </View>
         <Text style={styles.phoneShieldTitle}>Blocked by Curfy</Text>
-        <Text style={styles.phoneShieldSub}>Locked until {formatTime12(wakeTime)}</Text>
+        <Text style={styles.phoneShieldSub}>Until {clockLabel(wakeTime)}</Text>
         <View style={styles.phoneHoldBtn}>
           <Text style={styles.phoneHoldBtnText}>Not now</Text>
         </View>
       </View>
       <Text style={styles.fineprint}>
-        Preview only. To request temporary access, open Curfy and complete the
-        uninterrupted 120-second hold.
+        Preview only. Apple's shield cannot show the hold screen; open Curfy separately for an exception.
       </Text>
-    </View>
-  );
-}
-
-function StepName({ name, onChange }: { name: string; onChange: (v: string) => void }) {
-  return (
-    <View style={[styles.stepInner, { alignItems: "center" }]}>
-      <Badge>ALMOST READY</Badge>
-      <Text style={[styles.hero, { textAlign: "center" }]}>
-        What should{"\n"}we call you?
-      </Text>
-      <Text style={[styles.bodyText, { textAlign: "center" }]}>
-        For your Curfy activity log and profile.
-      </Text>
+      <Text style={styles.featureTitle}>What should we call you? (optional)</Text>
       <TextInput
         style={styles.nameInput}
         value={name}
-        onChangeText={onChange}
+        onChangeText={onNameChange}
         placeholder="Your name"
         placeholderTextColor={Colors.textGhost}
-        autoFocus
+        autoCapitalize="words"
+        returnKeyType="done"
       />
-    </View>
-  );
-}
-
-function StepRoutine({ routine, onChange }: {
-  routine: ProtectionRoutine | null; onChange: (value: ProtectionRoutine) => void;
-}) {
-  return (
-    <View style={styles.stepInner}>
-      <Badge>YOUR ROUTINE</Badge>
-      <Text style={[styles.hero, styles.routineHero]}>When do you want fewer distractions?</Text>
-      <Text style={styles.bodyText}>Choose the part of your day. You decide the exact hours later.</Text>
-      <View style={{ gap: 12, marginTop: 8 }}>
-        {PROTECTION_ROUTINES.map((option) => {
-          const selected = option.id === routine;
-          return (
-            <TouchableOpacity key={option.id} accessibilityRole="radio"
-              accessibilityState={{ checked: selected }}
-              accessibilityLabel={`${option.title}. ${option.description}`}
-              onPress={() => onChange(option.id)}
-              activeOpacity={0.85}
-              style={[styles.presetCard, selected && styles.presetCardSelected]}>
-              <View style={[styles.presetIconWrap, selected && styles.presetIconWrapSelected]}>
-                <Ionicons name={option.icon} size={23}
-                  color={selected ? Colors.primaryCyan : Colors.textMuted} />
-              </View>
-              <View style={{ flex: 1, gap: 3 }}>
-                <Text style={styles.presetTitle}>{option.title}</Text>
-                <Text style={styles.presetDesc}>{option.description}</Text>
-              </View>
-              {selected && <Ionicons name="checkmark-circle" size={22} color={Colors.primaryCyan} />}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-      <Text style={styles.fineprint}>This chooses the setup style. It does not set your bedtime or wake-up time.</Text>
     </View>
   );
 }
@@ -743,7 +622,6 @@ function StepScreenTimeAccess({
 }
 
 function StepChooseApps({
-  routine,
   start,
   end,
   blockMode,
@@ -752,7 +630,6 @@ function StepChooseApps({
   onSelectionChange,
   selectionIssue,
 }: {
-  routine: ProtectionRoutine | null;
   start: string;
   end: string;
   blockMode: BlockModeId | null;
@@ -789,15 +666,12 @@ function StepChooseApps({
       </Text>
       <View style={styles.trustCard}>
         <Text style={styles.featureTitle}>
-          {routine === "morning" ? "Morning" : routine === "both" ? "Night + morning" : "Evening"} protection
+          Your protection hours
         </Text>
         <Text style={styles.bodyText}>
           {protectionWindowLabel(start, end)} · every day
         </Text>
-        <Text style={styles.fineprint}>
-          Need temporary access? Open Curfy and hold for 120 uninterrupted seconds
-          to request up to 15 minutes. Releasing early starts over.
-        </Text>
+
       </View>
 
       <TouchableOpacity
@@ -828,8 +702,7 @@ function StepChooseApps({
           <Text style={styles.selectionWarningTitle}>Start with one app</Text>
           <Text style={styles.fineprint}>
             Free protection covers one individual app. Return to Apple's picker
-            and remove extra apps, categories and websites. Multi-app Premium
-            requires an in-app purchase and isn't available yet.
+            and remove extra apps, categories and websites. Multiple app selections aren't available in Free.
           </Text>
         </View>
       )}
@@ -850,7 +723,7 @@ function StepChooseApps({
           onSelectionChange={handleSelectionChange}
           onDismissRequest={() => {
             // Some iOS picker dismissals don't emit a final change event.
-            // Re-read persisted opaque-token metadata before validating step 9.
+            // Re-read persisted opaque-token metadata before validating step 7.
             const metadata = activitySelectionMetadata({
               activitySelectionId: selectionIdForMode(pickerMode),
             });
@@ -967,10 +840,6 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
     fontSize: 34,
     lineHeight: 41,
-  },
-  routineHero: {
-    fontSize: 31,
-    lineHeight: 38,
   },
   bodyText: {
     color: "#B0B0D2",
@@ -1134,13 +1003,13 @@ const styles = StyleSheet.create({
   phoneFrame: {
     alignSelf: "center",
     width: 200,
-    height: 280,
+    height: 242,
     borderRadius: 32,
     borderWidth: 2,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
     alignItems: "center",
-    paddingTop: 36,
+    paddingTop: 28,
     paddingHorizontal: 18,
     marginTop: 8,
   },
