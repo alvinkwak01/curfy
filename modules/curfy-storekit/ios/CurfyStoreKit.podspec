@@ -6,7 +6,7 @@ Pod::Spec.new do |s|
   s.author         = 'Curfy'
   s.homepage       = 'https://github.com/alvinkwak01/curfy'
   s.license        = { :type => 'Proprietary', :text => 'Curfy application module. All rights reserved; no reuse license is granted.' }
-  s.platform       = :ios, '15.1'
+  s.platform       = :ios, '15.2'
   s.source         = { :git => '' }
   s.static_framework = true
   s.swift_version  = '5.9'

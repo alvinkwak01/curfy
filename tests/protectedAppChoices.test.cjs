@@ -187,3 +187,19 @@ test("native Screen Time chooser compiles against iOS 15.1 API availability boun
       "Only the availability-guarded read may access the iOS 15.2 API");
   }
 });
+
+
+test("iOS deployment target and local pods match the 15.2 native FamilyControls Label requirement", () => {
+  const app = JSON.parse(readFileSync(join(__dirname, "../app.json"), "utf8"));
+  const plugin = app.expo.plugins.find(p => Array.isArray(p) && p[0] === "expo-build-properties");
+  assert.equal(plugin?.[1]?.ios?.deploymentTarget, "15.2");
+  for (const file of [
+    "../modules/curfy-protected-apps/ios/CurfyProtectedApps.podspec",
+    "../modules/curfy-storekit/ios/CurfyStoreKit.podspec",
+  ]) {
+    assert.match(readFileSync(join(__dirname, file), "utf8"), /:ios,\s*'15\.2'/);
+  }
+  const swift = readFileSync(join(__dirname,
+    "../modules/curfy-protected-apps/ios/CurfyProtectedAppsModule.swift"), "utf8");
+  assert.match(swift, /Label\(token\)/);
+});
