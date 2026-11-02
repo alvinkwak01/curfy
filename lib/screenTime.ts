@@ -428,6 +428,34 @@ export function stopBedtimeBlocking(): void {
   DeviceActivity.userDefaultsRemove(BEDTIME_CLOCK_KEY);
 }
 
+/**
+ * Only after iOS has confirmed the daily schedule and shields are stopped,
+ * erase the onboarding picker selections for a deleted Curfy account.
+ * Restart Setup intentionally does NOT call this: it preserves the account.
+ *
+ * Other apps' UserDefaults keys are untouched. Premium per-app tickets need
+ * their own monitor-aware cleanup before Premium becomes user-facing.
+ */
+export function clearCurfyOnboardingSelectionsAfterAccountDeletion(): void {
+  const key = "familyActivitySelectionIds";
+  const saved = DeviceActivity.userDefaultsGet<unknown>(key);
+  if (saved == null) return;
+  if (typeof saved !== "object" || Array.isArray(saved)) {
+    throw new Error("iOS protected-app selections could not be cleared safely.");
+  }
+  const oldSelections = saved as Record<string, unknown>;
+  const ownedId = /^curfy-(?:block|draft)-(?:social|most|custom)$/;
+  const retained = Object.fromEntries(
+    Object.entries(oldSelections).filter(([id]) => !ownedId.test(id))
+  );
+  DeviceActivity.userDefaultsSet(key, retained);
+  const after = DeviceActivity.userDefaultsGet<unknown>(key);
+  if (!after || typeof after !== "object" || Array.isArray(after) ||
+      Object.keys(after).some((id) => ownedId.test(id))) {
+    throw new Error("iOS did not confirm the old Curfy app selections were erased.");
+  }
+}
+
 // Reads back how many apps/categories are in a preset's already-persisted
 // selection, without opening the picker — used by Settings to show
 // "N apps blocked" for the current mode. Returns null if nothing's been
