@@ -23,16 +23,16 @@ interface AuthContextType {
   // deliberately for zero-friction participation; revisit if that trade-off
   // stops being fine (e.g. a "claim this profile with an email" upgrade path).
   ensureAnonymousProfile: (displayName: string) => Promise<void>;
-  // Real, server-side sign out — distinct from SleepContext's signOut(),
-  // which only resets the local onboarding flag and never touched a
-  // backend because there wasn't one. Call both when the user signs out.
+  // Explicit Supabase sign out for future authenticated flows. Curfy's
+  // current "Restart Setup" intentionally preserves the anonymous session
+  // to avoid orphaning a nonrecoverable online profile.
   signOutRemote: () => Promise<void>;
   // Permanently deletes the auth user (and, via cascade, its `profiles`
   // row) on the server. Requires the service-role key, which never ships
   // in the app — this calls the `delete-account` Edge Function instead.
-  // Best-effort: local wipe (SleepContext.deleteAccount) proceeds either
-  // way, so a failed/offline call here doesn't block the device-side
-  // reset, it just leaves the remote row behind until it succeeds later.
+  // Required, not best-effort: a network/server deletion error stops the
+  // local wipe. SleepContext also verifies native shields stopped before
+  // deleting on-device recovery state.
   deleteRemoteAccount: () => Promise<void>;
   // Pushes bedtime, the two streak numbers, and the current display name
   // to this user's profile row. Safe to call when signed out — it's a
@@ -48,8 +48,8 @@ interface AuthContextType {
   // (`how many people beat this number`), not a stored/precomputed field.
   // Used for a signed-in viewer who isn't in the top-50 fetched above.
   fetchMyRank: (metric: "current_streak" | "longest_streak", myValue: number) => Promise<number | null>;
-  // Every synced user's bedtime, for the community bedtime tracker chart.
-  // Capped — see the function body for why.
+  // Historical profile start times. Mixed Evening/Morning cohorts cannot
+  // be compared as "average bedtime"; the old chart is hidden from UI.
   fetchCommunityBedtimes: () => Promise<string[]>;
 }
 
