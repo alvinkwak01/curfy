@@ -70,14 +70,15 @@ public class CurfyStoreKitModule: Module {
         let transaction: Transaction
         switch update {
         case .verified(let verified):
+          guard verified.productID == "com.alvinkwak.curfy.premium" else { continue }
           transaction = verified
-          // Only verified transactions may be finished. The JS side never
-          // infers Premium from this event; it rechecks active ownership.
+          // Never finish an unrelated product transaction. Ownership remains
+          // determined only by a separate verified entitlement recheck.
           await verified.finish()
         case .unverified(let unverified, _):
+          guard unverified.productID == "com.alvinkwak.curfy.premium" else { continue }
           transaction = unverified
         }
-        guard transaction.productID == "com.alvinkwak.curfy.premium" else { continue }
         await MainActor.run {
           self?.sendEvent("onPremiumTransactionChanged", ["productId": transaction.productID])
         }
