@@ -1,6 +1,5 @@
 import Btn from "@/components/Btn";
-import { MoonGlyph } from "@/components/MoonGlyph";
-import { StarBackground } from "@/components/StarBackground";
+ import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
 import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults, routineExplainer, startQuestion, protectionWindowLabel } from "@/lib/protectionRoutine";
 import { assertMonitorableBedtimeSchedule } from "@/lib/bedtimeWindow";
@@ -65,8 +64,7 @@ export default function Onboarding() {
     setProtectionRoutine,
     completeOnboarding,
   } = useSleep();
-  const [showWelcome, setShowWelcome] = useState(true);
-  const [step, setStep] = useState(0);
+   const [step, setStep] = useState(0);
   const [routine, setRoutine] = useState<ProtectionRoutine | null>(null);
   const [localBedtime, setLocalBedtime] = useState("23:00");
   const [localWakeTime, setLocalWakeTime] = useState("06:00");
@@ -141,33 +139,22 @@ export default function Onboarding() {
   };
 
   const back = () => {
-    if (step === 0) {
-      setShowWelcome(true);
-      return;
-    }
-    setStep(step - 1);
+    if (step > 0) setStep(step - 1);
   };
 
   const isLastStep = step === STEP_COUNT - 1;
   // Leave Continue tappable so invalid selections get an explanation.
   const buttonDisabled = finishing;
 
-  if (showWelcome) {
-    return (
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <StarBackground />
-        <StepWelcome onStart={() => setShowWelcome(false)} />
-      </SafeAreaView>
-    );
-  }
-
   return (
     <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
       <StarBackground />
       <View style={styles.header}>
-        <TouchableOpacity onPress={back} hitSlop={12}>
-          <Ionicons name="chevron-back" size={22} color={Colors.textMuted} />
-        </TouchableOpacity>
+        {step > 0 ? (
+          <TouchableOpacity onPress={back} hitSlop={12} accessibilityRole="button" accessibilityLabel="Previous setup step">
+            <Ionicons name="chevron-back" size={22} color={Colors.textMuted} />
+          </TouchableOpacity>
+        ) : <View style={{ width: 22 }} />}
         <ProgressBar step={step} />
       </View>
 
@@ -229,25 +216,6 @@ export default function Onboarding() {
         </View>
       </KeyboardAvoidingView>
     </SafeAreaView>
-  );
-}
-
-function StepWelcome({ onStart }: { onStart: () => void }) {
-  return (
-    <View style={styles.welcomeWrap}>
-      <View style={styles.welcomeCenter}>
-        <MoonGlyph size={90} />
-        <Text style={styles.wordmark}>CURFY</Text>
-        <Text style={styles.tagline}>Bedtime. For real.</Text>
-        <Text style={styles.welcomeBody}>
-          Choose one distracting app. Set the hours it's off-limits.
-          Make the next tap intentional.
-        </Text>
-      </View>
-      <View style={styles.btnWrap}>
-        <Btn label="Get Started" onPress={onStart} />
-      </View>
-    </View>
   );
 }
 
@@ -707,38 +675,4 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   btnWrap: { paddingBottom: 56 },
-  welcomeWrap: {
-    flex: 1,
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    justifyContent: "space-between",
-  },
-  welcomeCenter: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 14,
-  },
-  wordmark: {
-    color: Colors.primaryCyan,
-    fontFamily: Fonts.bold,
-    fontSize: 34,
-    letterSpacing: 8,
-    marginTop: 8,
-  },
-  tagline: {
-    color: Colors.textMuted,
-    fontFamily: Fonts.regular,
-    fontSize: 14,
-    letterSpacing: 1,
-  },
-  welcomeBody: {
-    color: Colors.textMuted,
-    fontFamily: Fonts.regular,
-    fontSize: 15,
-    lineHeight: 22,
-    textAlign: "center",
-    marginTop: 12,
-    maxWidth: 280,
-  },
 });
