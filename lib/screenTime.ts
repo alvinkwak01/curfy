@@ -10,6 +10,7 @@
 // the JS side, but nothing here functions in Expo Go or the iOS Simulator
 // (Apple's Screen Time frameworks don't run in Simulator at all).
 import * as DeviceActivity from "react-native-device-activity";
+import { selectionIssueForEntitlement } from "@/lib/premiumPolicy";
 import { assertMonitorableBedtimeSchedule, currentBedtimeWindow, nativeDateComponents } from "@/lib/bedtimeWindow";
 
 export type ScreenTimeAuthStatus = "notDetermined" | "authorized" | "denied";
@@ -467,15 +468,14 @@ export function freeSelectionIssueForMetadata(
   meta: Pick<DeviceActivity.ActivitySelectionMetadata,
     "applicationCount" | "categoryCount" | "webDomainCount" | "includeEntireCategory"> | null | undefined
 ): FreeSelectionIssue | null {
-  if (!meta || (meta.applicationCount === 0 &&
-      meta.categoryCount === 0 && meta.webDomainCount === 0)) {
-    return "choose-one-app";
-  }
-  if (meta.applicationCount !== 1 || meta.categoryCount !== 0 ||
-      meta.webDomainCount !== 0 || meta.includeEntireCategory === true) {
-    return "too-many-apps-or-categories";
-  }
-  return null;
+  // Until real StoreKit verification AND one-app-per-hold exceptions ship,
+  // every native call continues to enforce the safe one-app free behavior.
+  // Reuse the shared premium policy so future gates cannot silently diverge.
+  const issue = selectionIssueForEntitlement(meta, "free");
+  if (!issue) return null;
+  return issue === "choose-one-app"
+    ? "choose-one-app"
+    : "too-many-apps-or-categories";
 }
 
 function assertOneFreeAppSelected(selectionId: string): void {
