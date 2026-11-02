@@ -191,6 +191,9 @@ export default function Onboarding() {
                 {step === 3 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
                 {step === 4 && (
                   <StepChooseApps
+                    routine={routine}
+                    start={localBedtime}
+                    end={localWakeTime}
                     blockMode={blockMode}
                     selectedCount={selectedCount}
                     onSelect={setBlockMode}
@@ -370,8 +373,8 @@ function StepScreenTimeAccess({
             <Text style={styles.retryText}>Try again</Text>
           </TouchableOpacity>
           <Text style={styles.deniedHint}>
-            You can also enable this later in Settings — Curfy just can't
-            block anything until you do.
+            Screen Time permission is required to finish setup.
+            If you denied access, update it in iOS Settings and retry.
           </Text>
         </View>
       ) : (
@@ -393,12 +396,18 @@ function StepScreenTimeAccess({
 }
 
 function StepChooseApps({
+  routine,
+  start,
+  end,
   blockMode,
   selectedCount,
   onSelect,
   onSelectionChange,
   selectionIssue,
 }: {
+  routine: ProtectionRoutine | null;
+  start: string;
+  end: string;
   blockMode: BlockModeId | null;
   selectedCount: number | null;
   onSelect: (m: BlockModeId) => void;
@@ -428,6 +437,18 @@ function StepChooseApps({
         Choose one distracting app to shield during your chosen hours.
         Free protects one app. Multiple apps are planned for Premium.
       </Text>
+      <View style={styles.trustCard}>
+        <Text style={styles.featureTitle}>
+          {routine === "morning" ? "Morning" : routine === "both" ? "Night + morning" : "Evening"} protection
+        </Text>
+        <Text style={styles.bodyText}>
+          {clockLabel(start)} – {clockLabel(end)} every day
+        </Text>
+        <Text style={styles.fineprint}>
+          Need temporary access? Open Curfy and hold for 120 uninterrupted seconds
+          to request up to 15 minutes. Releasing early starts over.
+        </Text>
+      </View>
 
       <View style={{ gap: 10, marginTop: 4 }}>
         {BLOCK_MODE_PRESETS.filter((preset) => preset.id === "custom").map((preset) => {
