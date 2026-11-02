@@ -44,3 +44,11 @@ Sources checked 2026-11-02:
 - Unsigned Xcode run **`41484550157`** was still executing at this update, on an earlier commit lacking the newest observer. A new Swift compilation check is needed after any native-source changes, even if the older job succeeds.
 - Per-app native token flow: third-party source `packages/react-native-device-activity/ios/Shared.swift` uses App Group `familyActivitySelectionIds` and encoded `FamilyActivitySelection`. Compare installed `0.6.1` before relying on source layouts. Do NOT emit app names/token strings into JS; instead use iOS native labels and indexed verified token selections.
 - Premium purchase remains **not exposed** and multi-app protection remains **disabled** until app-specific shielding/unshielding is proven. Do not silently repurpose the one-app free selection path.
+
+## 2026-11-02: native private protected-app labels foundation
+
+- **Added** local Expo module `modules/curfy-protected-apps/` (iOS Swift + React Native wrapper), and `tests/protectedAppChoices.test.cjs`. The module fetches the saved, committed, app-only opaque `FamilyActivitySelection` from Curfy's App Group, in the exact pinned native library's 0.6.1 base64-JSON UserDefaults format.
+- JS gets only `{ count, revision }`; no app names, bundle IDs, tokens, or per-app identifiers. Native `CurfyAppLabel` uses Apple's `Label(ApplicationToken)` via a `UIHostingController` and validates index/revision before rendering, replacing stale selections with a neutral unavailable label. The deterministic order lives inside Swift only.
+- **123/123 Node tests, TypeScript, 18/18 Expo Doctor, lockfile, iOS project generation, and both native module autolinking checks passed** in GitHub Actions `41487260116` at code commit `79f3495`. This is code/static evidence, **not native Xcode compilation or iPhone proof**.
+- Checkout stays disabled, the new label view is not yet placed on Home, and multi-app exception remains unimplemented. Next native slice must validate the exact chosen token, scope/unshield/reblock one token only, and recover automatically while Curfy is killed; no JS timer-only exception.
+- Apple official native app label API: https://developer.apple.com/documentation/familycontrols/displayingactivitylabels

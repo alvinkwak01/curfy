@@ -10,6 +10,22 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 `feat/ios-shield-from-august`, draft PR #2 (base `backup/local-curfy-august`). `main` is untouched. Existing August native implementation and EAS iOS extension targets are preserved.
 
+## Milestone: privacy-safe protected-app chooser foundation (2026-11-02)
+
+**Goal:** show each explicitly protected app on the future Premium escape chooser without revealing Apple Screen Time app tokens, names, or bundle IDs to React Native, and ensure stale selections fail closed. Do not change the free tier or sell Premium before per-app exception works.
+
+**Implemented** on `feat/ios-shield-from-august` (`modules/curfy-protected-apps/package.json`, `expo-module.config.json`, `ios/CurfyProtectedApps.podspec`, `ios/CurfyProtectedAppsModule.swift`, `index.tsx`):
+- iPhone-local Expo module reads **only** Curfy's committed `curfy-block-social/most/custom` selection from the private App Group using **the pinned `react-native-device-activity@0.6.1` format** (`familyActivitySelectionIds` dictionary of base64 JSON-encoded `FamilyActivitySelection`). Exact pinned-library Swift implementation was checked rather than relying on current `main` source.
+- Decode opaque `ApplicationToken` objects **in native Swift only**, reject empty/category/web-domain/entire-category selections, sort token encoding deterministically (only in native memory), and return `count` plus a whole-selection SHA256 revision to JS. Native view renders Apple's `Label(token)` for a validated index and exact revision. JS does not receive raw tokens, app names, bundle identifiers or individual app fingerprints.
+- `tests/protectedAppChoices.test.cjs` covers data-minimized response, rejection of draft/invalid IDs, malformed metadata, platform guards, stale view input and no early purchased unlock. Existing single-app native shields and 120s exception behavior are untouched.
+- `.github/workflows/curfy-checks.yml` now fails if either the existing StoreKit or new protected-app module fails Expo autolinking.
+
+**Verified by test:** GitHub Actions **`41487260116`** at code commit `79f3495` passed **123/123 Node tests**, `npx tsc --noEmit`, **18/18 Expo Doctor**, lockfile stability, `npx expo prebuild --platform ios --no-install`, and **both local native pod/module discovery checks**. Earlier CI flagged a TS syntax error in the JSX wrapper; fixed before the full green run. No EAS credit, no iPhone and no completed native Swift compile for this new module. `main` untouched.
+
+**Remaining blocker:** The native chooser is **read-only and not yet reachable from the user flow**. Its row index/revision cannot be trusted as an unshield command until a later native bridge verifies the same committed token selection, installs a **one-token** exception monitor, atomically unshields only that app and can re-shield it with Curfy terminated while other apps remain restricted. The main cutoff, interrupted hold, multiple independent exceptions and permission/reboot behavior must pass hardware testing. Native Swift compilation is outstanding; source guards/Expo prebuild are insufficient. The existing unsigned StoreKit compile run `41484550157` was still running at this update and predates this module.
+
+**Next:** unsigned macOS Xcode compile on this commit, then implement the app-specific exception bridge and minimal Home → app chooser → 120s hold flow without enabling payments beforehand. Run consolidated native iPhone acceptance once code and signing gates are ready.
+
 ## Milestone: StoreKit transaction lifecycle and module autolinking (2026-11-02)
 
 **Goal:** handle pending purchases, Apple Account/other-device transactions, foreground refresh and refund/revocation without trusting a local Premium flag; verify that Expo actually discovers Curfy's StoreKit pod before anyone uses a signed device build.

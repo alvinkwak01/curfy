@@ -38,6 +38,8 @@ Updated 2026-11-02. **NOT a claim of device testing.** Use this after the next s
 
 - Verify that resuming Curfy or receiving an Apple StoreKit transaction update rechecks **verified current entitlements**; a cancelled/pending/invalid/refunded purchase must not authorize new multi-app configuration. Failed entitlement refresh must show unknown status without erasing a surviving native restriction. The purchase button stays hidden until the complete multi-app one-app-per-hold behavior is signed-device verified.
 
+- **Private selected-app chooser:** on a signed iPhone with 2+ manually selected individual apps, verify the chosen native row displays the correct Apple app icon/name with VoiceOver, scrolls on a smaller phone, never exposes names/tokens to JS or network, detects a changed selected-app list and refuses to unlock a stale row. On iOS picker category promotion, show a recoverable selection error rather than presenting an unrelated app. The new native label module is *not yet exposed* in a shipping UI; these are future acceptance cases, not passed tests.
+
 ## Evidence record (fill after actual testing)
 
 | Case | Status | Observed build/iPhone/iOS | Repro/log/video |
