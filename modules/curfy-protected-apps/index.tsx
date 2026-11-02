@@ -54,7 +54,6 @@ export function CurfyAppLabel(props: CurfyAppLabelProps) {
     throw new Error("Invalid native app label reference.");
   }
   if (Platform.OS !== "ios") return null;
-  const NativeLabel = requireNativeViewManager("CurfyProtectedApps")
-    as ComponentType<CurfyAppLabelProps>;
+  const NativeLabel = requireNativeViewManager("CurfyProtectedApps") as ComponentType<CurfyAppLabelProps>;
   return <NativeLabel {...props} />;
 }
