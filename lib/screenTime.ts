@@ -172,10 +172,53 @@ function timeToDateComponents(time: string): DeviceActivity.DateComponents {
 }
 
 // Register the native start/end actions BEFORE starting monitoring.
-// DeviceActivity may invoke intervalDidStart immediately when the schedule
-// is already active, so starting it first can lose the very first shield.
-// The shield-to-Curfy handoff is still unverified on a physical iPhone:
-// "openApp" is a library action, not proof that iOS will open our app.
+// Apple documents that startMonitoring with the SAME activity name overwrites
+// its previous schedule. Saving Settings therefore needs an explicit rollback.
+function dateComponentsForMinuteOfDay(value: number): DeviceActivity.DateComponents {
+  return { hour: Math.floor(value / 60), minute: value % 60 };
+}
+
+function clearBedtimeActions(): void {
+  for (const callbackName of ["intervalDidStart", "intervalDidEnd"] as const) {
+    DeviceActivity.configureActions({
+      activityName: BEDTIME_ACTIVITY_NAME, callbackName, actions: [],
+    });
+  }
+}
+
+async function restorePreviousBedtimeMonitor({
+  previousSelectionId,
+  previousClockWindow,
+  previouslyMonitored,
+}: {
+  previousSelectionId: string | null;
+  previousClockWindow: BedtimeClockWindow | undefined;
+  previouslyMonitored: boolean;
+}): Promise<void> {
+  // Restore extension-visible time and tokens BEFORE re-registering a monitor
+  // that could synchronously call intervalDidStart.
+  restoreBedtimeClockWindow(previousClockWindow);
+  if (previousSelectionId) configureBedtimeActions(previousSelectionId);
+  else clearBedtimeActions();
+
+  if (previouslyMonitored && previousSelectionId && previousClockWindow) {
+    await DeviceActivity.startMonitoring(BEDTIME_ACTIVITY_NAME, {
+      intervalStart: dateComponentsForMinuteOfDay(previousClockWindow.startMinute),
+      intervalEnd: dateComponentsForMinuteOfDay(previousClockWindow.endMinute),
+      repeats: true,
+    }, []);
+    if (!DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
+      throw new Error("iOS did not restore the previous native schedule.");
+    }
+  } else if (!previouslyMonitored) {
+    DeviceActivity.stopMonitoring([BEDTIME_ACTIVITY_NAME]);
+  } else {
+    // A legacy monitored install without saved boundaries cannot be safely
+    // reconstructed. Never claim its schedule was restored.
+    throw new Error("Previous native schedule has no saved clock boundaries.");
+  }
+}
+
 export async function configureBedtimeBlocking({
   bedtime,
   wakeTime,
@@ -186,95 +229,119 @@ export async function configureBedtimeBlocking({
   bedtime: string;
   wakeTime: string;
   mode: BlockModeId;
-  /** Injectable local time keeps boundary cases deterministic in tests. */
   now?: Date;
-  /** Only Settings passes a staged picker ID; never update live tokens on mere picker edits. */
+  /** Settings stages picker changes independently of live opaque tokens. */
   draftSelectionId?: string;
 }): Promise<void> {
   if (getScreenTimeAccessStatus() !== "authorized") {
     throw new Error("Screen Time permission is required to protect selected apps.");
   }
-  // Reject malformed, equal or sub-15-minute schedules before modifying
-  // native monitor actions, opaque selection tokens or the current blocklist.
   assertMonitorableBedtimeSchedule(bedtime, wakeTime);
   currentBedtimeWindow(now, bedtime, wakeTime);
   const selectionId = selectionIdForMode(mode);
   const pendingId = draftSelectionId ?? selectionId;
   assertOneFreeAppSelected(pendingId);
+  if (draftSelectionId && draftSelectionId !== draftSelectionIdForMode(mode)) {
+    throw new Error("Unexpected app selection draft. Open the picker and try again.");
+  }
+
+  // Snapshot the previous native schedule, not only its opaque selection.
+  // Otherwise an unsuccessful Settings save could leave new hours installed,
+  // despite the UI still showing the old hours.
   const previousSelectionId = previousScheduledSelectionId();
   const previousClockWindow = DeviceActivity.userDefaultsGet<BedtimeClockWindow>(BEDTIME_CLOCK_KEY);
-  // Record the local clock boundary before iOS starts a monitor, since
-  // intervalDidStart may run immediately and out-of-order callbacks must
-  // not shield apps outside the current bedtime window.
-  persistBedtimeClockWindow(bedtime, wakeTime);
+  const previouslyMonitored = DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME);
   const previousTokens = DeviceActivity.getFamilyActivitySelectionId(selectionId);
-  if (draftSelectionId) {
-    if (draftSelectionId !== draftSelectionIdForMode(mode)) {
-      throw new Error("Unexpected app selection draft. Open the picker and try again.");
-    }
-    const draftTokens = DeviceActivity.getFamilyActivitySelectionId(draftSelectionId);
-    if (!draftTokens) throw new Error("Choose an app in the picker before saving.");
-    // Monitor callbacks read by ID. Keep the committed ID stable, and restore
-    // its old opaque token selection if scheduling fails.
-    DeviceActivity.setFamilyActivitySelectionId({
-      id: selectionId, familyActivitySelection: draftTokens,
-    });
-  }
+  const previousException = readException();
+  let blocksChanged = false;
+  let nativeScheduleTouched = false;
 
-  // Register the proposed actions before starting the monitor, because an
-  // immediately-active schedule can call intervalDidStart synchronously.
-  // Do not clear existing restrictions or cancel an active exception until
-  // startMonitoring has actually succeeded.
-  configureBedtimeActions(selectionId);
-  refreshBedtimeShieldAppearance();
   try {
-    await DeviceActivity.startMonitoring(
-      BEDTIME_ACTIVITY_NAME,
-      {
-        intervalStart: timeToDateComponents(bedtime),
-        intervalEnd: timeToDateComponents(wakeTime),
-        repeats: true,
-      },
-      []
-    );
-    // The only proof a recurring schedule was accepted by the OS is
-    // reading DeviceActivityCenter.activities back after registration.
-    if (!DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
-      throw new Error("iOS did not register bedtime monitoring. Please retry.");
+    if (draftSelectionId) {
+      const draftTokens = DeviceActivity.getFamilyActivitySelectionId(draftSelectionId);
+      if (!draftTokens) throw new Error("Choose an app in the picker before saving.");
+      DeviceActivity.setFamilyActivitySelectionId({
+        id: selectionId, familyActivitySelection: draftTokens,
+      });
     }
+
+    persistBedtimeClockWindow(bedtime, wakeTime);
+    configureBedtimeActions(selectionId);
+    refreshBedtimeShieldAppearance();
+    // startMonitoring can overwrite a previously monitored activity.
+    nativeScheduleTouched = true;
+    await DeviceActivity.startMonitoring(BEDTIME_ACTIVITY_NAME, {
+      intervalStart: timeToDateComponents(bedtime),
+      intervalEnd: timeToDateComponents(wakeTime),
+      repeats: true,
+    }, []);
+    if (!DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
+      throw new Error("iOS did not register the new protection schedule.");
+    }
+
+    // Do not cancel an earned exception until the new restriction state has
+    // been applied and independently verified. A failed schedule edit must
+    // not silently steal minutes from a valid 120-second hold.
+    blocksChanged = true;
+    DeviceActivity.resetBlocks("curfy-schedule-change-clear-old-apps");
+    if (currentBedtimeWindow(now, bedtime, wakeTime)) {
+      DeviceActivity.blockSelection(
+        { activitySelectionId: selectionId }, "curfy-schedule-change-current-window"
+      );
+      if (!DeviceActivity.isShieldActive()) {
+        throw new Error("iOS did not apply the selected app restrictions. Please retry.");
+      }
+    }
+    DeviceActivity.userDefaultsSet(SCHEDULED_SELECTION_ID_KEY, selectionId);
+    cancelExceptionForScheduleChange();
   } catch (error) {
-    // The old monitor may still be running. Restore its callbacks rather
-    // than leaving them pointed at a selection that was never saved.
     if (draftSelectionId) restoreSelection(selectionId, previousTokens);
-    if (previousSelectionId) configureBedtimeActions(previousSelectionId);
-    restoreBedtimeClockWindow(previousClockWindow);
+
+    let rollbackError: unknown = null;
+    if (nativeScheduleTouched) {
+      try {
+        await restorePreviousBedtimeMonitor({
+          previousSelectionId, previousClockWindow, previouslyMonitored,
+        });
+      } catch (restoreError) {
+        rollbackError = restoreError;
+      }
+    } else {
+      restoreBedtimeClockWindow(previousClockWindow);
+      if (previousSelectionId) configureBedtimeActions(previousSelectionId);
+      else clearBedtimeActions();
+    }
+
+    // A reset of the app-owned blocklist must also be undone. Don't replace
+    // a currently active exception with a shield during failure recovery.
+    if (blocksChanged) {
+      DeviceActivity.resetBlocks("curfy-schedule-rollback-clear");
+      const exceptionStillActive = previousException &&
+        previousException.expiresAt > now.getTime() &&
+        previousException.bedtimeEndAt > now.getTime();
+      if (!exceptionStillActive && previousSelectionId && previousClockWindow) {
+        const oldStart = dateComponentsForMinuteOfDay(previousClockWindow.startMinute);
+        const oldEnd = dateComponentsForMinuteOfDay(previousClockWindow.endMinute);
+        const oldTime = (value: DeviceActivity.DateComponents) =>
+          `${String(value.hour).padStart(2, "0")}:${String(value.minute).padStart(2, "0")}`;
+        if (currentBedtimeWindow(now, oldTime(oldStart), oldTime(oldEnd))) {
+          DeviceActivity.blockSelection(
+            { activitySelectionId: previousSelectionId }, "curfy-schedule-rollback-old-app"
+          );
+          if (!DeviceActivity.isShieldActive()) {
+            rollbackError = new Error("The previous app shield could not be restored.");
+          }
+        }
+      }
+    }
+
+    // Do not report normal "save failed" if old protections may have been
+    // lost. State exactly what must be checked on the phone.
+    if (rollbackError) {
+      throw new Error("New schedule failed and Curfy couldn't confirm the previous native protection was restored. Open Curfy Settings and check your protected app and hours.");
+    }
     throw error;
   }
-
-  // This is Curfy's dedicated managed-settings blocklist. Native
-  // blockSelection unions tokens, so merely changing the selection in
-  // Settings leaves OLD apps blocked. Rebuild only after monitoring succeeds.
-  cancelExceptionForScheduleChange();
-  DeviceActivity.resetBlocks("curfy-schedule-change-clear-old-apps");
-  if (currentBedtimeWindow(now, bedtime, wakeTime)) {
-    DeviceActivity.blockSelection(
-      { activitySelectionId: selectionId }, "curfy-schedule-change-current-window"
-    );
-    if (!DeviceActivity.isShieldActive()) {
-      // Restore prior protection when possible rather than silently claim
-      // the newly saved selection is protected.
-      if (draftSelectionId) restoreSelection(selectionId, previousTokens);
-      restoreBedtimeClockWindow(previousClockWindow);
-      if (previousSelectionId) {
-        configureBedtimeActions(previousSelectionId);
-        DeviceActivity.blockSelection(
-          { activitySelectionId: previousSelectionId }, "curfy-schedule-change-rollback"
-        );
-      }
-      throw new Error("iOS did not apply the selected app restrictions. Please retry.");
-    }
-  }
-  DeviceActivity.userDefaultsSet(SCHEDULED_SELECTION_ID_KEY, selectionId);
 }
 
 /**
