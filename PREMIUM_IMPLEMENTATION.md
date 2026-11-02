@@ -6,7 +6,7 @@ Decision date: 2026-11-02. This supersedes the earlier pending-subscription/pric
 - **Free:** always protect exactly one explicitly selected application.
 - **Premium:** protect multiple explicitly selected applications. No whole categories or websites at launch.
 - **Purchase:** **$5.99 USD once**, using one Apple **non-consumable** in-app purchase. **No subscription, trial, recurring charge, or account prerequisite**. App Store storefront localization/taxes must use Apple's returned product price; do not hard-code USD in a live purchase button.
-- Proposed StoreKit product identifier: `com.alvinkwak.curfy.premium` (not created in App Store Connect yet).
+- Proposed StoreKit product identifier: `com.alvinkwak.curfy.premium` (App Store Connect creation/status has not been verified).
 - Restore purchases and cross-device entitlement must follow the user's Apple Account, not Curfy's optional Supabase profile.
 - **Unlock:** choose exactly one protected application and complete the usual uninterrupted **120-second hold** for up to **15 minutes** of access. All other protected apps remain shielded. Exit/back to Curfy Home must never unlock anything. No 120-second shortcut for paying users.
 - **Free flow:** skip app choice when only one app is protected. **Premium flow:** Home's Unlock an app action first presents only the user's protected apps with minimal private Apple labels; a specific choice precedes the hold. Do not claim third-party launch/deep-link support.
