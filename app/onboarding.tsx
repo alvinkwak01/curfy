@@ -5,6 +5,7 @@ import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
 import { clockLabel, protectionWindowLabel, inferRoutineFromStart } from "@/lib/protectionRoutine";
 import { assertMonitorableBedtimeSchedule } from "@/lib/bedtimeWindow";
+import { waitForPersistedPickerCommit } from "@/lib/pickerSettlement";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import {
@@ -102,6 +103,7 @@ export default function Onboarding() {
   const [reasons, setReasons] = useState<string[]>([]);
   const [name, setName] = useState("");
   const firstPickerOpened = useRef(false);
+  const pendingPickerCommit = useRef<Promise<void> | null>(null);
   // These clock positions are based on the user's current time, not bedtime advice.
   const [firstWindow] = useState(() => initialClockWindow());
   const [localBedtime, setLocalBedtime] = useState(firstWindow.start);
@@ -154,6 +156,17 @@ export default function Onboarding() {
       }
     }
     if (step === 7) {
+      // The native picker uses a 100ms debounced save. Never read/unmount
+      // before its final selection has reached shared iOS storage.
+      if (pendingPickerCommit.current) {
+        try {
+          await pendingPickerCommit.current;
+        } catch (error) {
+          Alert.alert("Couldn't save your selected app",
+            error instanceof Error ? error.message : "Reopen Apple's picker and try again.");
+          return;
+        }
+      }
       // Source of truth is the opaque native selection, not a possibly stale
       // onSelectionChange event. Never bypass the one-app Free restriction.
       let metadata: ActivitySelectionMetadata | null = null;
@@ -253,6 +266,7 @@ export default function Onboarding() {
           end={localWakeTime}
           blockMode={blockMode}
           selectedCount={selectedCount}
+          onPickerCommit={promise => { pendingPickerCommit.current = promise; }}
           onSelect={(mode) => {
             if (!firstPickerOpened.current) {
               beginFreshOnboardingAppSelection(mode);
@@ -629,6 +643,7 @@ function StepChooseApps({
   selectedCount,
   onSelect,
   onSelectionChange,
+  onPickerCommit,
   selectionIssue,
 }: {
   start: string;
@@ -637,12 +652,18 @@ function StepChooseApps({
   selectedCount: number | null;
   onSelect: (m: BlockModeId) => void;
   onSelectionChange: (metadata: ActivitySelectionMetadata) => void;
+  onPickerCommit: (promise: Promise<void> | null) => void;
   selectionIssue: FreeSelectionIssue | null;
 }) {
   const [pickerMode, setPickerMode] = useState<BlockModeId | null>(null);
+  const pickerIsClosing = useRef(false);
+  const sawNativeSelectionEvent = useRef(false);
 
   const handlePick = (id: BlockModeId) => {
     try {
+      sawNativeSelectionEvent.current = false;
+      pickerIsClosing.current = false;
+      onPickerCommit(null);
       onSelect(id);
       setPickerMode(id);
     } catch (error) {
@@ -654,6 +675,8 @@ function StepChooseApps({
   const handleSelectionChange = (
     event: NativeSyntheticEvent<ActivitySelectionMetadata>
   ) => {
+    // The native persisted picker emits this only AFTER saving opaque tokens.
+    sawNativeSelectionEvent.current = true;
     onSelectionChange(event.nativeEvent);
   };
 
@@ -723,20 +746,30 @@ function StepChooseApps({
           footerText="Choose one individual app, not a category."
           onSelectionChange={handleSelectionChange}
           onDismissRequest={() => {
-            // Some iOS picker dismissals don't emit a final change event.
-            // Re-read persisted opaque-token metadata before validating step 7.
-            try {
+            if (pickerIsClosing.current) return;
+            pickerIsClosing.current = true;
+            const closingMode = pickerMode;
+            const commit = (async () => {
+              // v0.6.1 uses a 100ms Combine debounce for its native selection
+              // write. Keep the native view mounted until that write can run.
+              await waitForPersistedPickerCommit(
+                () => sawNativeSelectionEvent.current,
+              );
               const metadata = activitySelectionMetadata({
-                activitySelectionId: selectionIdForMode(pickerMode),
+                activitySelectionId: selectionIdForMode(closingMode),
               });
               if (metadata) onSelectionChange(metadata);
-            } catch (error) {
-              console.warn("[Curfy] Picker dismissal metadata unavailable", error);
+            })();
+            // If Continue is tapped immediately, it awaits the SAME commit.
+            onPickerCommit(commit);
+            void commit.catch(error => {
+              console.warn("[Curfy] Native picker save/metadata unavailable", error);
               Alert.alert("Selection wasn't confirmed",
-                "Curfy couldn't verify Apple's app selection. Reopen the picker and try again.");
-            } finally {
+                "Curfy couldn't verify Apple's saved app choice. Reopen the picker and try again.");
+            }).finally(() => {
               setPickerMode(null);
-            }
+              pickerIsClosing.current = false;
+            });
           }}
         />
       )}
