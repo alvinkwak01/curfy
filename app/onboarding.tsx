@@ -1,5 +1,5 @@
 import Btn from "@/components/Btn";
- import { StarBackground } from "@/components/StarBackground";
+import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
 import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults, routineExplainer, startQuestion, protectionWindowLabel } from "@/lib/protectionRoutine";
 import { assertMonitorableBedtimeSchedule } from "@/lib/bedtimeWindow";
@@ -14,6 +14,7 @@ import {
   FreeSelectionIssue,
   requestScreenTimeAccess,
   selectionIdForMode,
+  stopBedtimeBlocking,
 } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
 import React, { useRef, useState } from "react";
@@ -64,7 +65,7 @@ export default function Onboarding() {
     setProtectionRoutine,
     completeOnboarding,
   } = useSleep();
-   const [step, setStep] = useState(0);
+  const [step, setStep] = useState(0);
   const [routine, setRoutine] = useState<ProtectionRoutine | null>(null);
   const [localBedtime, setLocalBedtime] = useState("23:00");
   const [localWakeTime, setLocalWakeTime] = useState("06:00");
@@ -117,12 +118,17 @@ export default function Onboarding() {
     if (finishingRef.current) return;
     finishingRef.current = true;
     setFinishing(true);
+    let nativeScheduleStarted = false;
     try {
       await configureBedtimeBlocking({
         bedtime: localBedtime,
         wakeTime: localWakeTime,
         mode: blockMode,
       });
+      nativeScheduleStarted = true;
+      // Never mark onboarding complete until all local settings exist.
+      // The user must be able to reach Curfy Home's 120s escape screen
+      // whenever an OS-level schedule may already be running.
       await setBedtime(localBedtime, routine);
       await setWakeTime(localWakeTime);
       await persistBlockMode(blockMode);
@@ -130,6 +136,18 @@ export default function Onboarding() {
       await completeOnboarding();
     } catch (error) {
       console.warn("[Curfy] Failed to finish onboarding", error);
+      if (nativeScheduleStarted) {
+        try {
+          stopBedtimeBlocking();
+        } catch (nativeStopError) {
+          console.warn("[Curfy] Onboarding rollback could not stop iOS", nativeStopError);
+          Alert.alert(
+            "App protection may still be active",
+            "Setup couldn't finish, and iOS did not confirm it stopped shielding your app. Retry setup, or revoke Curfy's Screen Time access in iPhone Settings to regain access."
+          );
+          return;
+        }
+      }
       Alert.alert("Setup couldn't finish",
         error instanceof Error ? error.message : "Please try saving again.");
     } finally {
