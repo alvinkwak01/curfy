@@ -18,7 +18,7 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 **Research finding:** The existing `react-native-device-activity@0.6.1`/Apple picker may auto-promote multiple individual selections into a category token on iOS; that must be investigated rather than selling multi-app access which unlocks categories or unrelated apps. Apple's `Transaction.currentEntitlements` includes owned non-consumables but not refunded/revoked ones; future native integration must use verified transactions. Expo IAP supports Expo SDK 53+, but the exact Expo SDK 54 library version/build needs reproduction against the generated targets. No paid native build used.
 
-**Evidence:** Pending latest CI verification for these changes; do not assume passing checks before reading GitHub Actions results. No signed iPhone or StoreKit tests in this slice. **Next:** wire a compatible StoreKit module and restore/entitlement state; then implement one-token-per-hold exception and safe shield reapplication, before presenting a purchasable paywall.
+**Verified by test:** GitHub Actions run **41483101006** on commit **53ec054** passed **103/103 Node tests**, `npx tsc --noEmit`, **18/18 Expo Doctor** checks, lockfile integrity and `npx expo prebuild --platform ios --no-install`. No fresh native Swift compile (native CI skipped), signed iPhone, StoreKit or EAS test in this slice. **Next:** wire a compatible StoreKit module and restore/entitlement state; then implement one-token-per-hold exception and safe shield reapplication, before presenting a purchasable paywall.
 
 ## Milestone: failed-stop callback restoration and partial onboarding rollback (2026-11-02)
 
