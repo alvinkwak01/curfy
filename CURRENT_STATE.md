@@ -10,6 +10,16 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 `feat/ios-shield-from-august`, draft PR #2 (base `backup/local-curfy-august`). `main` is untouched. Existing August native implementation and EAS iOS extension targets are preserved.
 
+## Product proposal: onboarding evening / morning / both (2026-11-02) — NOT APPROVED OR IMPLEMENTED
+
+User proposed a clearer early onboarding question: "When do you need to reduce phone time?" with three discoverable choices: **In the evening**, **In the morning**, and **Both**. This reveals two distinct use cases: delaying distracting-app use near bedtime and postponing first-use of distracting apps after waking. **Current Curfy implements only ONE nightly window**, from chosen bedtime until configurable morning end (new-user default 06:00), and one 120s hold for a 15m native exception. Current code does NOT provide a separate post-wake morning interval; don't display a Morning/Both choice and misrepresent functionality.
+
+**Proposed, requires product approval because it broadens previous bedtime-only v1 scope:** put three equally visible choices on onboarding before time setup; Evening sets bedtime-to-end window, Morning sets morning start/end window, Both configures two independent recurring windows and collision-safe combined app shields. The user may still choose one free protected app; multiple app selections remain Premium only. Shared 120-second hold concept must apply to each restricted period; per-app vs all-app Premium exception remains undecided. Do not implement a faux option or silently redefine 06:00.
+
+**Official Apple API context:** `DeviceActivityCenter.startMonitoring(_:during:events:)` accepts separately named recurring schedules, but warns that too many or tightly scheduled activities may throw; delivery of interval start/end callbacks can be deferred until device use. Morning + evening requires distinct activity names and a conflict-safe ManagedSettings state machine, not simply two sets of reset/unblock callbacks. Must account for overlapping/adjacent intervals and pre-existing 15m exception callbacks, timezone/DST, device restart, permissions and app-not-running behavior.
+
+**Recommended ordering:** finish and verify current native bedtime re-shield and exception behavior first; then, only if user approves morning as a launch feature, implement onboarding + second native interval as a separate vertical slice with tests and real iPhone acceptance. Otherwise keep Morning/Both for a deliberate post-launch scope decision.
+
 ## Milestone: short-window rejection, late native callback safety, and nightly log correctness (2026-11-02)
 
 **Continued engineering on PR #2; no EAS build.** Reviewed current code and verified Apple Developer documentation for DeviceActivityCenter's 15-minute interval minimum and deferred start/end callbacks (including callbacks upon later device use). See Apple's `DeviceActivityCenter.MonitoringError.intervalTooShort`, `DeviceActivitySchedule.nextInterval`, and `startMonitoring(_:during:events:)` documentation.
