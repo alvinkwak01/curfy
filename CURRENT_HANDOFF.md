@@ -5,8 +5,8 @@
 ## Where to resume
 - Repository: `alvinkwak01/curfy`.
 - Active work: **draft PR #2**, https://github.com/alvinkwak01/curfy/pull/2, branch `feat/ios-shield-from-august`; base `backup/local-curfy-august`; **do not merge into main** until release gates are satisfied.
-- Starting code checkpoint: `146b8bbc7d4da9c85378ad67ae35ab1c9c00a512` (2026-11-02). Re-fetch live HEAD; it may have progressed.
-- Starting CI: https://github.com/alvinkwak01/curfy/actions/runs/41533865411 succeeded on that code: **206/206 Node tests**, TypeScript, **18/18 Expo Doctor**, lockfile, Expo iOS prebuild, and both local module autolinking checks. **The ios-native-compile job was SKIPPED.** None of these checks is signed iPhone evidence.
+- Latest tested code checkpoint: `d7710b6d72242a272002050906369e60ed372555` (2026-11-02). Re-fetch live HEAD; it may have progressed.
+- Latest passing CI: https://github.com/alvinkwak01/curfy/actions/runs/41540378381 — **208/208 Node tests**, TypeScript, **18/18 Expo Doctor**, lockfile, Expo iOS prebuild, both local modules autolinked. Its macOS compile was **SKIPPED**. Native compilation separately RUNNING at https://github.com/alvinkwak01/curfy/actions/runs/41538110046 on earlier code-only checkpoint `ddcc15f` (same native Swift targets; JS-only Free guard/test commits follow). **Do not count a still-running or skipped Xcode job as a Swift compiler pass or signed-device proof.**
 - The native Swift compile is the immediate prerequisite; the workflow `.github/workflows/curfy-checks.yml` only opts into macOS compilation on a `pull_request` event while the PR title includes `[native-ci]`. Do not mistake a skipped job for a pass. After the run, remove `[native-ci]` from the title to avoid repeat macOS costs.
 
 ## Approved product decisions (newer than 2026-10-22 baseline)
@@ -19,6 +19,7 @@
 
 ## Code that exists, and honest boundaries
 - `lib/screenTime.ts`, `context/SleepContext.tsx`, iOS DeviceActivity/ManagedSettings extensions, `components/HoldButton.tsx`, `app/escape.tsx` implement the Free architecture. The latest patch avoids foreground re-shielding when the recurring native monitor is missing, to avoid leaving users stranded after the end time. **Automated mock-native test coverage is not physical-device proof.**
+- `lib/screenTime.ts` at `e434e519` adds a guarded Free exception precondition: when a saved daily native schedule/selection exists, a missing recurring `curfy-bedtime` monitor or mismatched committed selection rejects a new 15-minute exception before registering a monitor/unshielding. Two regression tests in `tests/screenTimeException.test.cjs` at `d7710b6d` confirm missing daily monitor and stale app selection do not unlock. The existing direct-grant unit fixtures without saved schedule metadata remain intentionally untouched; physical device behavior is still unknown.
 - `lib/pickerSettlement.ts` + `app/onboarding.tsx` address a native picker dismissal/save race, while retaining the exactly-one-app Free gate. **One-app Apple picker acceptance still failed on the previous installed preview and the fix has NOT been retested on an iPhone.**
 - Screen Time permission state now handles a short `notDetermined` transition after authorization; unverified on device.
 - `modules/curfy-storekit`, `modules/curfy-protected-apps`, `lib/premiumAppException.ts` and `lib/premiumExceptionRecovery.ts` contain dormant Premium foundations with verified-transaction ownership, private native labels/tickets, and independent app-exception recovery. **Multi-app UI, purchase checkout, and Premium feature activation remain OFF.** No signed StoreKit sandbox purchase/restore test.
