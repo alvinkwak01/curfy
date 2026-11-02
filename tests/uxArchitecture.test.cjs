@@ -151,7 +151,8 @@ test("reviewed onboarding confirms a readable time and actual Screen Time permis
 
 test("Delete Everything erases the previous protected app picker after stopping native restrictions", () => {
   const ctx = source("context/SleepContext.tsx");
-  const fn = ctx.slice(ctx.indexOf("const deleteAccount = async () => {"), ctx.indexOf("const streak = computeStreak"));
+  const start = ctx.indexOf("const deleteAccount = async () => {");
+  const fn = ctx.slice(start, ctx.indexOf("const streak = computeStreak", start));
   const stopped = fn.indexOf("stopBedtimeBlocking()");
   const erased = fn.indexOf("clearCurfyOnboardingSelectionsAfterAccountDeletion()");
   const wiped = fn.indexOf("AsyncStorage.multiRemove(ALL_STORAGE_KEYS)");
