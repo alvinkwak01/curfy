@@ -55,17 +55,17 @@ test("nightly records are described as Curfy logs, not proven sleep", () => {
   assert.doesNotMatch(journal, /let you actually fall asleep/);
 });
 
-test("onboarding lets users choose Morning, Evening or Both in only five steps", () => {
+test("onboarding preserves all original twelve pages alongside the added routine step", () => {
   const onboarding = source("app/onboarding.tsx");
   const settings = source("app/settings.tsx");
   const context = source("context/SleepContext.tsx");
-  assert.match(onboarding, /STEP_COUNT = 5/);
+  assert.match(onboarding, /STEP_COUNT = 13/);
   assert.match(onboarding, /const \[showWelcome, setShowWelcome\] = useState\(true\)/);
   assert.match(onboarding, /if \(showWelcome\)/);
   assert.match(onboarding, /<StepWelcome onStart=/);
   assert.match(onboarding, /<Btn label="Get Started"/);
   assert.match(onboarding, /PROTECTION_ROUTINES\.map/);
-  assert.match(onboarding, /When should your app be available again\?/);
+  assert.match(onboarding, /When should the app/);
   assert.doesNotMatch(onboarding, /What time do.*you wake up/);
   assert.match(settings, /PROTECTION_ROUTINES\.map/);
   assert.match(settings, /APPS AVAILABLE AGAIN/);
@@ -118,7 +118,7 @@ test("fresh and deleted-account onboarding restores Curfy welcome before routine
   assert.match(sleep, /const deleteAccount = async \(\) => \{/);
   assert.match(sleep, /setIsOnboardingComplete\(false\)/);
   const welcome = onboarding.indexOf("if (showWelcome)");
-  const routine = onboarding.indexOf('step === 0 && <StepRoutine');
+  const routine = onboarding.indexOf('step === 2 && <StepRoutine');
   assert.ok(welcome >= 0 && routine > welcome,
     "Welcome must render before the first actual setup question");
   assert.match(onboarding, /if \(step === 0\) setShowWelcome\(true\)/);
@@ -135,18 +135,32 @@ test("routine content cannot overlap a fixed progress header or push CTA offscre
   assert.match(src, /styles\.routineHero/);
 });
 
-test("reviewed onboarding confirms a readable time and actual Screen Time permission", () => {
+test("restored 13-page flow keeps usable time wheels, native permission and app picker", () => {
   const src = source("app/onboarding.tsx");
-  assert.match(src, /Starts at \{clockLabel\(value\)\}/);
-  assert.match(src, /Available again at \{clockLabel\(value\)\}/);
-  assert.match(src, /cutoffDayLabel\(start, value\)/);
-  assert.match(src, /getScreenTimeAccessStatus\(\)/);
-  assert.match(src, /if \(step !== 3\) return/);
-  assert.match(src, /finally \{\s*setIsRequesting\(false\)/);
+  for (const page of ["StepWakeUpCall", "StepWhyStayUp", "StepRoutine",
+    "StepCurrentBedtime", "StepSetBedtime", "StepWakeTime", "StepReveal",
+    "StepBenefits", "StepHowItWorks", "StepScreenTimeAccess",
+    "StepChooseApps", "StepPreview", "StepName"]) {
+    assert.match(src, new RegExp("<" + page + "(?:\\s|\\/)"));
+  }
+  assert.match(src, /Starts at \\{clockLabel\\(bedtime\\)\\}/);
+  assert.match(src, /Available at \\{clockLabel\\(wakeTime\\)\\}/);
+  assert.match(src, /getScreenTimeAccessStatus\\(\\)/);
+  assert.match(src, /if \\(step !== 9\\) return/);
+  assert.match(src, /finally \\{\\s*setIsRequesting\\(false\\)/);
   assert.match(src, /headerText="Choose exactly one app to protect"/);
-  assert.match(src, /onPress=\{\(\) => handlePick\("custom"\)\}/);
+  assert.match(src, /includeEntireCategory=\\{false\\}/);
+  assert.match(src, /beginFreshOnboardingAppSelection\\(mode\\)/);
+  assert.match(src, /if \\(step === 10\\)/);
   assert.match(src, /Finish setup/);
   assert.doesNotMatch(src, /BLOCK_MODE_PRESETS/);
+  assert.doesNotMatch(src, /suggested/);
+});
+test("clock steps have NO parent scrolling container to steal vertical gestures", () => {
+  const src = source("app/onboarding.tsx");
+  assert.match(src, /\\[3, 4, 5\\]\\.includes\\(step\\)/);
+  assert.match(src, /<View key=\\{step\\} style=\\{styles\\.timeStepContent\\}>/);
+  assert.match(src, /<ScrollView[\\s\\S]*style=\\{styles\\.stepScroll\\}/);
 });
 
 test("Delete Everything erases the previous protected app picker after stopping native restrictions", () => {
