@@ -146,9 +146,11 @@ private func prepareOneProtectedApp(
     throw CurfyAppChoiceError.invalidIndex
   }
   let defaults = try curfySharedDefaults()
-  var selections = defaults.dictionary(forKey: curfySelectionKey) as? [String: String] ?? [:]
   var tickets = storedChoiceTickets(defaults)
   pruneStaleChoiceTickets(defaults, choices: &tickets)
+  // Read after pruning, otherwise old pruned IDs could be resurrected when
+  // we save the new ticket.
+  var selections = defaults.dictionary(forKey: curfySelectionKey) as? [String: String] ?? [:]
 
   let identifier = curfyChoicePrefix + UUID().uuidString
   let token = snapshot.applications[index]
