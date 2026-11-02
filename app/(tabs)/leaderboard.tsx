@@ -377,16 +377,17 @@ export default function Leaderboard() {
           <View style={{ gap: 20, marginBottom: 20 }}>
             <View>
               <Text style={styles.title}>Leaderboard</Text>
-              <Text style={styles.subtitle}>Curfy nights logged — not measured sleep.</Text>
+              <Text style={styles.subtitle}>Curfy protection windows logged — not measured sleep.</Text>
             </View>
 
             <GlobalLeaderboard />
 
             <View style={styles.divider} />
 
-            <CommunityStats />
-
-            <View style={styles.divider} />
+            {/* Mixed Evening/Morning/Both windows cannot produce a meaningful
+                "average bedtime" or comparable histogram without a
+                routine-specific server cohort. Keep the global streak
+                leaderboard but do not display misleading aggregate hours. */}
 
             <View>
               <Text style={styles.sectionTitle}>YOUR RECORD</Text>
@@ -399,27 +400,27 @@ export default function Leaderboard() {
               <Text style={styles.heroLabel}>CURRENT STREAK</Text>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
                 <Text style={styles.heroNumber}>{streak}</Text>
-                <Text style={styles.heroUnit}>nights</Text>
+                <Text style={styles.heroUnit}>windows</Text>
               </View>
               {streak === 0 && (
-                <Text style={styles.heroHint}>Start tonight to build your streak.</Text>
+                <Text style={styles.heroHint}>Log your first protection window to build a streak.</Text>
               )}
             </View>
 
             <View style={styles.statsGrid}>
               <View style={styles.statBlock}>
                 <Text style={styles.statValue}>{totalNights}</Text>
-                <Text style={styles.statLabel}>Nights logged</Text>
+                <Text style={styles.statLabel}>Windows logged</Text>
               </View>
               <View style={styles.gridDivider} />
               <View style={styles.statBlock}>
                 <Text style={[styles.statValue, { color: Colors.primaryCyan }]}>{cleanNights}</Text>
-                <Text style={styles.statLabel}>No-unlock nights</Text>
+                <Text style={styles.statLabel}>No-exception windows</Text>
               </View>
               <View style={styles.gridDivider} />
               <View style={styles.statBlock}>
                 <Text style={[styles.statValue, { color: cleanRateColor }]}>{cleanRate}%</Text>
-                <Text style={styles.statLabel}>No-unlock rate</Text>
+                <Text style={styles.statLabel}>No-exception rate</Text>
               </View>
               <View style={styles.gridDivider} />
               <View style={styles.statBlock}>
@@ -435,15 +436,15 @@ export default function Leaderboard() {
               </View>
             </View>
 
-            <Text style={styles.sectionTitle}>NIGHT BY NIGHT</Text>
+            <Text style={styles.sectionTitle}>WINDOW BY WINDOW</Text>
           </View>
         }
         renderItem={({ item, index }) => <EntryRow entry={item} index={index} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No nights logged yet</Text>
+            <Text style={styles.emptyTitle}>No windows logged yet</Text>
             <Text style={styles.emptySub}>
-              Your first locked-in bedtime will show up here.
+              Your first recorded Curfy protection window will show up here.
             </Text>
           </View>
         }
