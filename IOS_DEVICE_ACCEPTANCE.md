@@ -27,6 +27,8 @@ Updated 2026-11-02. **NOT a claim of device testing.** Use this after the next s
 ## Recovery, privacy and boundaries
 - Permission denied/revoked, then reauthorized; app force-quit, device restart, offline mode; user switches timezones; DST transition via manual date/time adjustment only on a dedicated testing device. Test app background/foreground while window begins/ends.
 - Stop/restart setup during active protection must require the same 120-second exception, except genuine iOS permission recovery. Account deletion must be reachable, should not strand selected apps shielded, and must actually remove remote account information when the backend is configured; test with sandbox account, never a real personal account.
+- On a diagnostic device or via controlled native-failure injection, make `stopMonitoring` fail while its recurring schedule remains registered. Confirm Curfy does **not** discard opaque tokens/clock boundaries, the native extension still has BOTH start and end actions, and a previously earned 15-minute exception still has its automatic reblock monitor. Retry stop and confirm actions, monitors, and shields clear only after success.
+- Simulate onboarding's initial iOS monitor registration succeeding followed by failure to persist an onboarding setting. Confirm Curfy attempts to stop that monitor before offering a retry; if native stop fails too, the user sees iOS Screen Time permission recovery guidance rather than being shown a false success.
 - Onboard a Morning user and confirm NO 'bedtime approaching' notification at 5:50 a.m. Confirm Home's cutoff and stats don't claim to measure sleep, and no average bedtime is shown for a mixed Morning+Evening cohort.
 - Check Dynamic Type/VoiceOver/Reduce Motion and an explicit accessibility alternative to the continuous hold; document emergency-access expectations (Curfy protects selected distracting apps, not emergency calls or the whole phone).
 - After native cases pass: separately verify IAP sandbox purchase, Restore Purchases, cancellation/refunds, offline status, downgrade to one selected app, App Store privacy/support data and Family Controls distribution entitlements for **app and extensions**.
@@ -42,6 +44,8 @@ Updated 2026-11-02. **NOT a claim of device testing.** Use this after the next s
 | Native cutoff with Curfy closed | **NOT TESTED** | | |
 | Evening / Morning / Both default + custom hours | **NOT TESTED** | | |
 | Failed Settings save restores native schedule | **MOCKED only** | | |
+| Failed native stop preserves start/end callbacks and earned 15-minute exception | **MOCKED only** | | |
+| Local onboarding failure after native registration stops shielding or shows a recovery path | **Source-guarded only** | | |
 | Permission/reboot/DST/timezone recovery | **NOT TESTED** | | |
 | Account deletion with live backend | **NOT TESTED** | | |
 | Sandbox Premium purchase and restore | **NOT IMPLEMENTED** | | |
