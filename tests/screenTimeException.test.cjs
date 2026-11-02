@@ -872,3 +872,52 @@ test("denied iOS Screen Time request reports denial without blind retries", asyn
   assert.equal(await f.screenTime.requestScreenTimeAccess(), "denied");
   assert.equal(reads, 1);
 });
+
+test("expired exception re-shields even when token-overlap introspection is unavailable", async () => {
+  const f = fixture({ overlapUnavailable: true });
+  const now = new Date("2026-11-01T23:00:00");
+  const expiry = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  assert.equal(f.isBlocked(), false);
+  assert.doesNotThrow(() =>
+    f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2_000))
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+});
+
+test("expired exception keeps retry state if native shield cannot be restored and overlap unavailable", async () => {
+  const f = fixture({ overlapUnavailable: true, ignoreBlockOnCalls: [1] });
+  const now = new Date("2026-11-01T23:00:00");
+  const expiry = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2_000));
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.storage.has("curfy-active-exception"), true);
+});
+
+test("expired exception at cutoff clears only after native shield is absent without token introspection", async () => {
+  const f = fixture({ overlapUnavailable: true });
+  const now = new Date("2026-11-02T05:50:00");
+  const expiry = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2_000));
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+});
+
+test("stale shield after cutoff preserves recovery state if unshield fails without token introspection", async () => {
+  const f = fixture({ overlapUnavailable: true, initiallyBlocked: true });
+  const now = new Date("2026-11-02T05:50:00");
+  const expiry = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  f.native.blockSelection({ activitySelectionId: "curfy-block-custom" });
+  f.native.unblockSelection = () => {};
+  f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2_000));
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.storage.has("curfy-active-exception"), true);
+});

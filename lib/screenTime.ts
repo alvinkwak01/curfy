@@ -808,16 +808,23 @@ export function reconcileBedtimeException(
     DeviceActivity.blockSelection(
       { activitySelectionId: state.selectionId }, "curfy-exception-foreground-recovery"
     );
-    if (selectedAppShieldCount(state.selectionId) === 0 && !DeviceActivity.isShieldActive()) {
-      return; // neither token overlap nor native shield confirms reblocking; retry later
+    // Token intersection is not always available for a genuine native shield.
+    // Require either verified selected-token overlap or the native shield.
+    const overlap = selectedShieldCountOrNull(state.selectionId);
+    if ((overlap ?? 0) === 0 && !DeviceActivity.isShieldActive()) {
+      return; // neither native probe confirms re-shielding; retry later
     }
   } else {
-    // The standard bedtime end should already have unshielded the apps.
-    // This also repairs an old exception callback that arrived late.
+    // This is AFTER the configured cutoff. Never re-shield a stale exception.
     DeviceActivity.unblockSelection(
       { activitySelectionId: state.selectionId }, "curfy-exception-bedtime-ended"
     );
-    if (selectedAppShieldCount(state.selectionId) !== 0) return;
+    const overlap = selectedShieldCountOrNull(state.selectionId);
+    // If token introspection is unavailable, require the native managed
+    // shield to be absent before dropping our recovery record.
+    if (overlap === null
+      ? DeviceActivity.isShieldActive()
+      : overlap > 0 || DeviceActivity.isShieldActive()) return;
   }
   stopExceptionMonitor(state);
   DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
