@@ -6,6 +6,7 @@ import {
   getScreenTimeAccessStatus,
   grantBedtimeException,
   reconcileBedtimeException,
+  reconcileProtectionWindow,
   refreshBedtimeShieldAppearance,
   stopBedtimeBlocking,
 } from "@/lib/screenTime";
@@ -249,6 +250,24 @@ function dedupeSleepLog(log: SleepEntry[]): SleepEntry[] {
   return Array.from(byDate.values()).sort((a, b) => b.createdAt - a.createdAt);
 }
 
+/** iOS may defer native start/end callbacks; reopen Curfy to repair
+ * missing starts and stale restrictions without invalidating an active escape.
+ */
+function reconcileNativeProtection(bedtime: string, wakeTime: string, blockMode: string | null): void {
+  try {
+    reconcileBedtimeException(bedtime, wakeTime);
+  } catch (error) {
+    console.warn("[Curfy] Exception recovery needs retry", error);
+  }
+  if (blockMode === "social" || blockMode === "most" || blockMode === "custom") {
+    try {
+      reconcileProtectionWindow(bedtime, wakeTime, blockMode);
+    } catch (error) {
+      console.warn("[Curfy] Protection-window recovery needs retry", error);
+    }
+  }
+}
+
 export function SleepProvider({ children }: { children: React.ReactNode }) {
   const [bedtime, setBedtimeState] = useState("23:00");
   const [wakeTime, setWakeTimeState] = useState("06:00");
@@ -406,12 +425,8 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     } catch (error) {
       console.warn("[Curfy] Could not refresh native shield appearance", error);
     }
-    try {
-      reconcileBedtimeException(bedtime, wakeTime);
-    } catch (error) {
-      console.warn("[Curfy] Exception recovery needs retry", error);
-    }
-  }, [isLoading, isOnboardingComplete, bedtime, wakeTime]);
+    reconcileNativeProtection(bedtime, wakeTime, blockMode);
+  }, [isLoading, isOnboardingComplete, bedtime, wakeTime, blockMode]);
 
   // Foreground-only safety net. The real re-shield is in iOS's native
   // extension, so this interval is not required for a closed app to work.
@@ -419,30 +434,22 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     if (isLoading || !isOnboardingComplete) return;
     const id = setInterval(() => {
       if (AppState.currentState !== "active") return;
-      try {
-        reconcileBedtimeException(bedtime, wakeTime);
-      } catch (error) {
-        console.warn("[Curfy] Exception recovery needs retry", error);
-      }
+      reconcileNativeProtection(bedtime, wakeTime, blockMode);
     }, 30000);
     return () => clearInterval(id);
-  }, [isLoading, isOnboardingComplete, bedtime, wakeTime]);
+  }, [isLoading, isOnboardingComplete, bedtime, wakeTime, blockMode]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         checkLock();
         if (isOnboardingComplete) {
-          try {
-            reconcileBedtimeException(bedtime, wakeTime);
-          } catch (error) {
-            console.warn("[Curfy] Exception recovery needs retry", error);
-          }
+          reconcileNativeProtection(bedtime, wakeTime, blockMode);
         }
       }
     });
     return () => sub.remove();
-  }, [checkLock, isOnboardingComplete, bedtime, wakeTime]);
+  }, [checkLock, isOnboardingComplete, bedtime, wakeTime, blockMode]);
 
   const setBedtime = async (time: string, routine = protectionRoutine) => {
     await AsyncStorage.setItem(BEDTIME_KEY, time);
