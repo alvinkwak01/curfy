@@ -1,3 +1,8 @@
+## Native safety gate: recurring monitor is required for foreground re-shield (2026-11-02)
+
+If the recurring `curfy-bedtime` DeviceActivity monitor is absent, Curfy must not put a new shield on the selected app in foreground recovery, because it cannot guarantee native release at cutoff. If an orphaned Curfy shield is already present, foreground recovery attempts to clear it; any failure is surfaced rather than hidden. Automated mock-native tests cover missing/present monitors and expired exceptions, but a real iPhone test (via a purpose-built debug scenario) is still required before classifying recovery as device-verified. Under Apple's documented DeviceActivity callback semantics, real-time end may be delivered when the user next uses the device: verify the selected app is available when opened after cutoff, not simply an idle clock screenshot. Do not treat CI/iOS prebuild as native Swift compilation or physical-device proof.
+
+---
 ## Critical picker Done → Continue race (2026-11-02)
 
 In react-native-device-activity 0.6.1 the persisted native picker writes after a 100ms Combine debounce. Curfy now keeps the native picker mounted through save and waits for its settlement before Continue reads metadata. Test on iPhone: in Apple's app picker select just one app and press Done, then **IMMEDIATELY** tap Continue. Expected: advance to the final preview without an erroneous "choose one app" warning, and native metadata reports exactly one individual app/no categories/websites. Repeat with a second selection change immediately before Done, after deleting everything (no inherited checkmarks), with no selection, two apps and an entire category. Record any error counts. Source tests and simulated adapter checks do NOT replace this acceptance.
