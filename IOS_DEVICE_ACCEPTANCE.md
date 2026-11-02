@@ -44,6 +44,8 @@ Updated 2026-11-02. **NOT a claim of device testing.** Use this after the next s
 
 - **Independent Premium exception callback matrix (not yet implemented end-to-end):** Start two holds for different protected apps several minutes apart; check each gets a distinct monitor name, each native end callback re-shields only its own token, and a delayed daily start preserves only currently active exceptions. A stopMonitoring-triggered early end must never reblock a still-active exception; a callback after cutoff must not re-shield. A changed committed selection, corrupted ledger, invalid singleton, or revoked Screen Time authorization must never silently unlock an unselected app. Confirm behavior with Curfy force-quit/reboot and at a time-zone boundary. This is NOT verified by CI source assertions.
 
+- **Per-app post-hold coordinator (currently internal-only):** signed iPhone must prove fresh verified ownership required, permission required, chosen native ticket still belongs to the committed app-only selection, and every completed hold unshields exactly one specific selected app. Check simultaneous app A/B exceptions, individual expiry, old group-wide exception conflict, monitor-start failure, swallowed block/unblock native errors, and independent group shield counts. DeviceActivity end callbacks depend on device use; record actual time-to-reblock instead of inventing exact wall-clock guarantees. All of these remain UNVERIFIED on hardware.
+
 ## Evidence record (fill after actual testing)
 
 | Case | Status | Observed build/iPhone/iOS | Repro/log/video |
