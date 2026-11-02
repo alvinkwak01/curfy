@@ -284,6 +284,13 @@ export async function configureBedtimeBlocking({
     // not silently steal minutes from a valid 120-second hold.
     blocksChanged = true;
     DeviceActivity.resetBlocks("curfy-schedule-change-clear-old-apps");
+    // The library's reset is synchronous but may swallow native errors.
+    // If yesterday's selected app is STILL shielded, don't add another app
+    // and claim a clean update: the user could end up with two locked apps
+    // even though they only chose one.
+    if (DeviceActivity.isShieldActive()) {
+      throw new Error("iOS did not clear the old app restrictions. Your previous schedule was kept.");
+    }
     if (currentBedtimeWindow(now, bedtime, wakeTime)) {
       DeviceActivity.blockSelection(
         { activitySelectionId: selectionId }, "curfy-schedule-change-current-window"
