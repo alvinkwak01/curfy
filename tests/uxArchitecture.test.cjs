@@ -178,7 +178,7 @@ test("final preview includes optional name, and never pretends the hold lives on
   assert.match(src, /if \(name\.trim\(\)\) await setUserName\(name\.trim\(\)\)/);
   assert.doesNotMatch(src, /isLastStep && !name\.trim\(\)/);
   assert.match(src, /<Text style=\{styles\.phoneHoldBtnText\}>Not now<\/Text>/);
-  assert.match(src, /open Curfy separately for an exception/);
+  assert.match(src, /open Curfy separately and complete the continuous hold/);
 });
 
 test("Delete Everything erases the previous protected app picker after stopping native restrictions", () => {
@@ -201,4 +201,12 @@ test("clock wheel has no momentum jump after the user's finger releases", () => 
   const wheel = source("components/TimePicker.tsx");
   assert.match(wheel, /onPanResponderRelease/);
   assert.doesNotMatch(wheel, /flingSteps\(gesture\.vy\)/);
+});
+
+test("a native picker read failure shows an actionable error instead of trapping onboarding", () => {
+  const src = source("app/onboarding.tsx");
+  assert.match(src, /Can't verify your app yet/);
+  assert.match(src, /Native picker read failed/);
+  assert.match(src, /Picker dismissal metadata unavailable/);
+  assert.match(src, /finally \{[\s\S]*setPickerMode\(null\)/);
 });
