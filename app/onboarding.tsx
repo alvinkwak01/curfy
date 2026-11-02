@@ -249,6 +249,47 @@ export default function Onboarding() {
   // Leave Continue tappable so invalid selections get an explanation.
   const buttonDisabled = finishing || (isLastStep && !name.trim());
 
+  // Render the restored screen exactly once regardless of which layout
+  // wrapper it needs. Clock wheels deliberately bypass the parent ScrollView.
+  const stepNode = (
+    <>
+{step === 0 && <StepWakeUpCall />}
+          {step === 1 && <StepWhyStayUp reasons={reasons} onChange={setReasons} />}
+          {step === 2 && <StepRoutine routine={routine} onChange={chooseRoutine} />}
+          {step === 3 && <StepCurrentBedtime bedtime={currentBedtime} onChange={setCurrentBedtime} />}
+          {step === 4 && <StepSetBedtime bedtime={localBedtime} onChange={setLocalBedtime} />}
+          {step === 5 && <StepWakeTime wakeTime={localWakeTime} onChange={setLocalWakeTime} />}
+          {step === 6 && <StepReveal currentBedtime={currentBedtime} goalBedtime={localBedtime} wakeTime={localWakeTime} />}
+          {step === 7 && <StepBenefits />}
+          {step === 8 && <StepHowItWorks />}
+          {step === 9 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
+          {step === 10 && (
+            <StepChooseApps
+              routine={routine}
+              start={localBedtime}
+              end={localWakeTime}
+              blockMode={blockMode}
+              selectedCount={selectedCount}
+              onSelect={(mode) => {
+                if (!firstPickerOpened.current) {
+                  beginFreshOnboardingAppSelection(mode);
+                  firstPickerOpened.current = true;
+                }
+                setBlockMode(mode);
+              }}
+              selectionIssue={selectionIssue}
+              onSelectionChange={(metadata) => {
+                setSelectedCount(metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount);
+                setSelectionIssue(freeSelectionIssueForMetadata(metadata));
+              }}
+            />
+          )}
+          {step === 11 && <StepPreview bedtime={localBedtime} wakeTime={localWakeTime} />}
+          {step === 12 && <StepName name={name} onChange={setName} />}
+    </>
+  );
+
+
   if (showWelcome) {
     return (
       <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
@@ -275,44 +316,7 @@ export default function Onboarding() {
       >
         {([3, 4, 5].includes(step)) ? (
           <View key={step} style={styles.timeStepContent}>
-
-          {step === 0 && <StepWakeUpCall />}
-          {step === 1 && <StepWhyStayUp reasons={reasons} onChange={setReasons} />}
-          {step === 2 && <StepRoutine routine={routine} onChange={chooseRoutine} />}
-          {step === 3 && <StepCurrentBedtime bedtime={currentBedtime} onChange={setCurrentBedtime} />}
-          {step === 4 && <StepSetBedtime bedtime={localBedtime} onChange={setLocalBedtime} />}
-          {step === 5 && <StepWakeTime wakeTime={localWakeTime} onChange={setLocalWakeTime} />}
-          {step === 6 && <StepReveal currentBedtime={currentBedtime} goalBedtime={localBedtime} wakeTime={localWakeTime} />}
-          {step === 7 && <StepBenefits />}
-          {step === 8 && <StepHowItWorks />}
-          {step === 9 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
-          {step === 10 && (
-            <StepChooseApps
-              routine={routine}
-              start={localBedtime}
-              end={localWakeTime}
-              blockMode={blockMode}
-              selectedCount={selectedCount}
-              onSelect={(mode) => {
-                try {
-                  if (!firstPickerOpened.current) {
-                    beginFreshOnboardingAppSelection(mode);
-                    firstPickerOpened.current = true;
-                  }
-                  setBlockMode(mode);
-                } catch (error) {
-                  throw error;
-                }
-              }}
-              selectionIssue={selectionIssue}
-              onSelectionChange={(metadata) => {
-                setSelectedCount(metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount);
-                setSelectionIssue(freeSelectionIssueForMetadata(metadata));
-              }}
-            />
-          )}
-          {step === 11 && <StepPreview bedtime={localBedtime} wakeTime={localWakeTime} />}
-          {step === 12 && <StepName name={name} onChange={setName} />}
+            {stepNode}
           </View>
         ) : (
           <ScrollView
@@ -322,45 +326,7 @@ export default function Onboarding() {
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
-
-          {step === 0 && <StepWakeUpCall />}
-          {step === 1 && <StepWhyStayUp reasons={reasons} onChange={setReasons} />}
-          {step === 2 && <StepRoutine routine={routine} onChange={chooseRoutine} />}
-          {step === 3 && <StepCurrentBedtime bedtime={currentBedtime} onChange={setCurrentBedtime} />}
-          {step === 4 && <StepSetBedtime bedtime={localBedtime} onChange={setLocalBedtime} />}
-          {step === 5 && <StepWakeTime wakeTime={localWakeTime} onChange={setLocalWakeTime} />}
-          {step === 6 && <StepReveal currentBedtime={currentBedtime} goalBedtime={localBedtime} wakeTime={localWakeTime} />}
-          {step === 7 && <StepBenefits />}
-          {step === 8 && <StepHowItWorks />}
-          {step === 9 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
-          {step === 10 && (
-            <StepChooseApps
-              routine={routine}
-              start={localBedtime}
-              end={localWakeTime}
-              blockMode={blockMode}
-              selectedCount={selectedCount}
-              onSelect={(mode) => {
-                try {
-                  if (!firstPickerOpened.current) {
-                    beginFreshOnboardingAppSelection(mode);
-                    firstPickerOpened.current = true;
-                  }
-                  setBlockMode(mode);
-                } catch (error) {
-                  Alert.alert("Can't reset the app picker", error instanceof Error ? error.message : "Try again.");
-                  throw error;
-                }
-              }}
-              selectionIssue={selectionIssue}
-              onSelectionChange={(metadata) => {
-                setSelectedCount(metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount);
-                setSelectionIssue(freeSelectionIssueForMetadata(metadata));
-              }}
-            />
-          )}
-          {step === 11 && <StepPreview bedtime={localBedtime} wakeTime={localWakeTime} />}
-          {step === 12 && <StepName name={name} onChange={setName} />}
+            {stepNode}
           </ScrollView>
         )}
         <View style={styles.btnWrap}>
