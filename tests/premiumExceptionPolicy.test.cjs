@@ -119,3 +119,23 @@ test("multi-exception callback code does not replace the original Free hold reco
   assert.match(swift, /activity\.rawValue\.hasPrefix\("curfy-exception-"\)/);
   assert.match(swift, /activity\.rawValue\.hasPrefix\(premiumActivityPrefix\)/);
 });
+
+
+test("Premium callback guard runs BEFORE the extension can execute a re-shield action", () => {
+  const swift = readFileSync(join(__dirname,
+    "../targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift"), "utf8");
+  const start = swift.indexOf("override func intervalDidEnd(for activity:");
+  const end = swift.indexOf("func executeActionsForEvent(", start);
+  assert.ok(start >= 0 && end > start);
+  const block = swift.slice(start, end);
+  const guardIndex = block.indexOf("premiumReblockIsDue(activityName: activity.rawValue");
+  const executeIndex = block.indexOf("self.executeActionsForEvent(");
+  assert.ok(guardIndex >= 0 && executeIndex > guardIndex,
+    "A stale Premium callback must never execute a re-shield before validation");
+});
+
+test("the recurring iOS schedule does not acquire a Premium monitor from policy-only code", () => {
+  const screenTime = readFileSync(join(__dirname, "../lib/screenTime.ts"), "utf8");
+  assert.doesNotMatch(screenTime, /PREMIUM_EXCEPTIONS_KEY/);
+  assert.doesNotMatch(screenTime, /grantPremiumAppException\(/);
+});
