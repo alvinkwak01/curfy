@@ -26,7 +26,7 @@ jobs:
       - run: npx tsc --noEmit
       - name: Verify Curfy StoreKit local native autolinking
         run: |
-          npx expo-modules-autolinking resolve --platform apple > /tmp/curfy-modules.json
+          npx expo-modules-autolinking resolve --platform apple --json > /tmp/curfy-modules.json
           node -e '
             const fs = require("fs");
             const result = JSON.parse(fs.readFileSync("/tmp/curfy-modules.json", "utf8"));
