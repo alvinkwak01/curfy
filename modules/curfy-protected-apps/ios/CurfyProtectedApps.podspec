@@ -11,6 +11,7 @@ Pod::Spec.new do |s|
   s.static_framework = true
   s.swift_version    = '5.9'
   s.dependency 'ExpoModulesCore'
+  s.frameworks      = 'FamilyControls'
   s.source_files     = '**/*.{h,m,mm,swift}'
   s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
 end
