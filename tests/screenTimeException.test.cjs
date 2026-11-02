@@ -563,8 +563,13 @@ test("an Evening shield that lingers after the 6 AM cutoff clears when Curfy reo
   assert.equal(f.calls.filter(x => x[0] === "reset").length, 1);
 });
 
-test("a missed Morning start restores the selected-app shield on foreground", () => {
+test("a missed Morning start restores the selected-app shield on foreground only if native schedule exists", async () => {
   const f = fixture({ initiallyBlocked: false });
+  await f.native.startMonitoring("curfy-bedtime", {
+    intervalStart: { hour: 6, minute: 0 },
+    intervalEnd: { hour: 9, minute: 0 },
+    repeats: true,
+  });
   f.screenTime.reconcileProtectionWindow(
     "06:00", "09:00", "custom", new Date("2026-11-02T07:00:00")
   );
@@ -920,4 +925,48 @@ test("stale shield after cutoff preserves recovery state if unshield fails witho
   f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2_000));
   assert.equal(f.isBlocked(), true);
   assert.equal(f.storage.has("curfy-active-exception"), true);
+});
+
+test("missing recurring iOS monitor never re-shields an app on foreground", () => {
+  const f = fixture({ initiallyBlocked: false });
+  f.screenTime.reconcileProtectionWindow(
+    "06:00", "09:00", "custom", new Date("2026-11-02T07:00:00")
+  );
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.calls.some(x => x[0] === "block"), false);
+});
+
+test("missing recurring iOS monitor releases an orphaned shield, even within chosen hours", () => {
+  const f = fixture({ initiallyBlocked: true });
+  f.screenTime.reconcileProtectionWindow(
+    "23:00", "06:00", "custom", new Date("2026-11-02T23:30:00")
+  );
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.calls.filter(x => x[0] === "reset").length, 1);
+  assert.equal(f.calls.some(x => x[0] === "block"), false);
+});
+
+test("missing recurring monitor with unremovable shield reports an explicit failure", () => {
+  const f = fixture({ initiallyBlocked: true, ignoreResetOnCalls: [1] });
+  assert.throws(
+    () => f.screenTime.reconcileProtectionWindow(
+      "23:00", "06:00", "custom", new Date("2026-11-02T23:30:00")
+    ), /recurring iOS protection schedule is missing/
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.calls.some(x => x[0] === "block"), false);
+});
+
+test("registered iOS monitor retains existing shield during the chosen window", async () => {
+  const f = fixture({ initiallyBlocked: true });
+  await f.native.startMonitoring("curfy-bedtime", {
+    intervalStart: { hour: 23, minute: 0 },
+    intervalEnd: { hour: 6, minute: 0 },
+    repeats: true,
+  });
+  f.screenTime.reconcileProtectionWindow(
+    "23:00", "06:00", "custom", new Date("2026-11-02T23:30:00")
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.calls.filter(x => x[0] === "reset").length, 0);
 });

@@ -769,6 +769,21 @@ export function reconcileProtectionWindow(
   now = new Date()
 ): void {
   if (getScreenTimeAccessStatus() !== "authorized") return;
+  // Never manually shield apps unless iOS confirms a recurring monitor that
+  // can release them at the user's chosen cutoff, even with Curfy closed.
+  // A lost monitor after an OS update/restart must fail OPEN, not turn the
+  // foreground recovery into an indefinite block.
+  if (!DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
+    if (DeviceActivity.isShieldActive()) {
+      DeviceActivity.resetBlocks("curfy-orphan-shield-without-recurring-monitor");
+      if (DeviceActivity.isShieldActive()) {
+        throw new Error(
+          "Curfy's recurring iOS protection schedule is missing and the existing app shield could not be cleared. Check Screen Time permission and retry setup."
+        );
+      }
+    }
+    return;
+  }
   const withinWindow = currentBedtimeWindow(now, bedtime, wakeTime) !== null;
   if (!withinWindow) {
     if (!DeviceActivity.isShieldActive()) return;
