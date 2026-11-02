@@ -51,15 +51,6 @@ function initialClockWindow(now = new Date()): { start: string; end: string } {
   return { start: clock(nextHour), end: clock((nextHour + 120) % 1440) };
 }
 
-function formatTime12(time: string): string {
-  const [hStr, mStr] = time.split(":");
-  let h = parseInt(hStr, 10);
-  const period = h >= 12 ? "PM" : "AM";
-  h = h % 12;
-  if (h === 0) h = 12;
-  return `${h}:${mStr} ${period}`;
-}
-
 const REASON_OPTIONS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
   { id: "social", label: "Social media scrolling", icon: "phone-portrait-outline" },
   { id: "video", label: "Watching videos", icon: "play-circle-outline" },
@@ -163,10 +154,19 @@ export default function Onboarding() {
       }
     }
     if (step === 7) {
-      // Always read the *native saved selection*, not just a JS event.
-      const metadata = blockMode ? activitySelectionMetadata({
-        activitySelectionId: selectionIdForMode(blockMode),
-      }) : null;
+      // Source of truth is the opaque native selection, not a possibly stale
+      // onSelectionChange event. Never bypass the one-app Free restriction.
+      let metadata: ActivitySelectionMetadata | null = null;
+      try {
+        metadata = blockMode ? activitySelectionMetadata({
+          activitySelectionId: selectionIdForMode(blockMode),
+        }) ?? null : null;
+      } catch (error) {
+        console.warn("[Curfy] Native picker read failed", error);
+        Alert.alert("Can't verify your app yet",
+          "Curfy couldn't read Apple's saved selection. Reopen the picker, keep one app selected, then try again.");
+        return;
+      }
       const issue = freeSelectionIssueForMetadata(metadata);
       setSelectionIssue(issue);
       setSelectedCount(metadata
@@ -177,7 +177,7 @@ export default function Onboarding() {
           ? `${metadata.applicationCount} apps, ${metadata.categoryCount} categories and ${metadata.webDomainCount} websites saved.`
           : "Apple's picker hasn't saved a selection yet.";
         Alert.alert("Select one individual app",
-          `${details}\nReopen the picker and leave exactly one app checked. If the counts are wrong, tell us what is shown here.`);
+          `${details}\nReopen the picker and leave exactly one app checked. If the counts look wrong, share them with us.`);
         return;
       }
     }
@@ -519,13 +519,14 @@ function StepFinish({ bedtime, wakeTime, name, onNameChange }: {
           <Ionicons name="shield-checkmark" size={34} color={Colors.textMuted} />
         </View>
         <Text style={styles.phoneShieldTitle}>Blocked by Curfy</Text>
-        <Text style={styles.phoneShieldSub}>Until {clockLabel(wakeTime)}</Text>
+        <Text style={styles.phoneShieldSub}>For a 2-minute hold to unlock, open Curfy from your Home Screen.</Text>
         <View style={styles.phoneHoldBtn}>
           <Text style={styles.phoneHoldBtnText}>Not now</Text>
         </View>
       </View>
       <Text style={styles.fineprint}>
-        Preview only. Apple's shield cannot show the hold screen; open Curfy separately for an exception.
+        Preview only. To get temporary access, open Curfy separately and complete the continuous hold.
+        Protection ends at {clockLabel(wakeTime)}.
       </Text>
       <Text style={styles.featureTitle}>What should we call you? (optional)</Text>
       <TextInput
@@ -724,11 +725,18 @@ function StepChooseApps({
           onDismissRequest={() => {
             // Some iOS picker dismissals don't emit a final change event.
             // Re-read persisted opaque-token metadata before validating step 7.
-            const metadata = activitySelectionMetadata({
-              activitySelectionId: selectionIdForMode(pickerMode),
-            });
-            if (metadata) onSelectionChange(metadata);
-            setPickerMode(null);
+            try {
+              const metadata = activitySelectionMetadata({
+                activitySelectionId: selectionIdForMode(pickerMode),
+              });
+              if (metadata) onSelectionChange(metadata);
+            } catch (error) {
+              console.warn("[Curfy] Picker dismissal metadata unavailable", error);
+              Alert.alert("Selection wasn't confirmed",
+                "Curfy couldn't verify Apple's app selection. Reopen the picker and try again.");
+            } finally {
+              setPickerMode(null);
+            }
           }}
         />
       )}
