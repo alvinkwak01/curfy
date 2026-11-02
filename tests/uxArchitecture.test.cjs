@@ -207,6 +207,6 @@ test("a native picker read failure shows an actionable error instead of trapping
   const src = source("app/onboarding.tsx");
   assert.match(src, /Can't verify your app yet/);
   assert.match(src, /Native picker read failed/);
-  assert.match(src, /Picker dismissal metadata unavailable/);
+  assert.match(src, /Native picker save\/metadata unavailable/);
   assert.match(src, /finally \{[\s\S]*setPickerMode\(null\)/);
 });
