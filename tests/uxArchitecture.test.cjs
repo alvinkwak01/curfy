@@ -172,3 +172,28 @@ test("Delete Everything erases the previous protected app picker after stopping 
   const wiped = fn.indexOf("AsyncStorage.multiRemove(ALL_STORAGE_KEYS)");
   assert.ok(stopped >= 0 && erased > stopped && wiped > erased);
 });
+
+test("routine choice is only a setup style and cannot overwrite chosen hours", () => {
+  const onboarding = source("app/onboarding.tsx");
+  const settings = source("app/settings.tsx");
+  const initialChoice = onboarding.slice(
+    onboarding.indexOf("const chooseRoutine = (selected: ProtectionRoutine) =>"),
+    onboarding.indexOf("const [screenTimeStatus")
+  );
+  const settingsChoice = settings.slice(
+    settings.indexOf("const chooseRoutine = (selected: ProtectionRoutine) =>"),
+    settings.indexOf("const [localBlockMode")
+  );
+  for (const choice of [initialChoice, settingsChoice]) {
+    assert.match(choice, /setRoutine\(selected\)|setLocalRoutine\(selected\)/);
+    assert.doesNotMatch(choice, /routineDefaults\(|setLocalBedtime\(|setLocalWakeTime\(/);
+  }
+  assert.doesNotMatch(onboarding, /\} suggested</);
+  assert.doesNotMatch(settings, /Changing it suggests new hours/);
+});
+
+test("clock wheel has no momentum jump after the user's finger releases", () => {
+  const wheel = source("components/TimePicker.tsx");
+  assert.match(wheel, /onPanResponderRelease/);
+  assert.doesNotMatch(wheel, /flingSteps\(gesture\.vy\)/);
+});
