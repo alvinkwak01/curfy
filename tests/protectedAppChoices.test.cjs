@@ -178,12 +178,12 @@ test("native Screen Time chooser compiles against iOS 15.1 API availability boun
   const pod = readFileSync(join(__dirname,
     "../modules/curfy-protected-apps/ios/CurfyProtectedApps.podspec"), "utf8");
   assert.match(native, /import ManagedSettings/);
-  assert.match(pod, /s\\.frameworks\\s*=.*ManagedSettings/);
+  assert.match(pod, /s\.frameworks\s*=.*ManagedSettings/);
   for (const source of [native, monitor]) {
-    assert.match(source, /if #available\\(iOS 15\\.2, \\*\\)/);
-    assert.match(source, /return selection\\.includeEntireCategory/);
-    assert.match(source, /!curfyIncludesEntireCategory\\(/);
-    assert.equal((source.match(/\\.includeEntireCategory/g) || []).length, 1,
+    assert.match(source, /if #available\(iOS 15\.2, \*\)/);
+    assert.match(source, /return selection\.includeEntireCategory/);
+    assert.match(source, /!curfyIncludesEntireCategory\(/);
+    assert.equal((source.match(/\.includeEntireCategory/g) || []).length, 1,
       "Only the availability-guarded read may access the iOS 15.2 API");
   }
 });
