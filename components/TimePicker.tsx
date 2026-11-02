@@ -1,5 +1,5 @@
 import { Colors, Fonts } from "@/constants/theme";
-import { clockString, flingSteps, swipeSteps, wrapTimeUnit } from "@/lib/timeWheelMath";
+import { clockString, swipeSteps, wrapTimeUnit } from "@/lib/timeWheelMath";
 import * as Haptics from "expo-haptics";
 import React, { useMemo, useRef } from "react";
 import {
@@ -80,11 +80,9 @@ function Wheel({ value, count, onChange, digitSize, name }: WheelProps) {
       );
     },
     onPanResponderRelease: (_, gesture) => {
-      emitRef.current(
-        startRef.current
-          + swipeSteps(gesture.dy, stepPixels.current)
-          + flingSteps(gesture.vy)
-      );
+      // The old velocity-based coast snapped the clock several values after
+      // the user's finger stopped. Commit exactly what the wheel displays.
+      emitRef.current(startRef.current + swipeSteps(gesture.dy, stepPixels.current));
     },
     onPanResponderTerminate: () => {
       // No more updates, even when a system-level gesture interrupts the pan.
