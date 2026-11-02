@@ -61,6 +61,34 @@ export function selectionIdForMode(mode: BlockModeId): string {
   return `curfy-block-${mode}`;
 }
 
+/**
+ * Start each genuinely fresh onboarding picker from an empty native selection.
+ * The older build could leave curfy-block-custom tokens in the shared iOS
+ * app group after Delete Everything. Opening the persisted sheet previously
+ * displayed those old checkmarks, so choosing "one" new app meant 2+ tokens.
+ *
+ * Called only on the first picker open in a new onboarding session, AFTER
+ * protection has been stopped on account deletion/restart. If iOS refuses to
+ * clear the old selection, show an error rather than presenting a stale picker.
+ */
+export function beginFreshOnboardingAppSelection(mode: BlockModeId): void {
+  const id = selectionIdForMode(mode);
+  const selections = DeviceActivity.userDefaultsGet<unknown>("familyActivitySelectionIds");
+  if (selections == null) return;
+  if (typeof selections !== "object" || Array.isArray(selections)) {
+    throw new Error("Couldn't reset the previous app selection.");
+  }
+  const saved = selections as Record<string, unknown>;
+  if (!(id in saved)) return;
+  const fresh = { ...saved };
+  delete fresh[id];
+  DeviceActivity.userDefaultsSet("familyActivitySelectionIds", fresh);
+  const after = DeviceActivity.userDefaultsGet<Record<string, unknown>>("familyActivitySelectionIds");
+  if (!after || id in after) {
+    throw new Error("iOS didn't clear the previous app choice. Try restarting Curfy.");
+  }
+}
+
 /** Editing is isolated from the tokens used by the live DeviceActivity monitor. */
 export function draftSelectionIdForMode(mode: BlockModeId): string {
   return `curfy-draft-${mode}`;
