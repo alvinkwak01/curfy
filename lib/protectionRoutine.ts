@@ -11,9 +11,9 @@ export const PROTECTION_ROUTINES: ReadonlyArray<{
   description: string;
   icon: "moon-outline" | "sunny-outline" | "partly-sunny-outline";
 }> = [
-  { id: "evening", title: "In the evening", description: "Put distracting apps away at bedtime.", icon: "moon-outline" },
+  { id: "evening", title: "In the evening", description: "Keep selected apps away during your evening.", icon: "moon-outline" },
   { id: "morning", title: "In the morning", description: "Keep distracting apps out of your morning.", icon: "sunny-outline" },
-  { id: "both", title: "Both", description: "From bedtime until your morning cutoff.", icon: "partly-sunny-outline" },
+  { id: "both", title: "Both", description: "Continue through the evening and morning until your chosen cutoff.", icon: "partly-sunny-outline" },
 ];
 
 const DEFAULTS: Record<ProtectionRoutine, { start: string; end: string }> = {

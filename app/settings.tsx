@@ -1,6 +1,6 @@
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
-import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults, cutoffDayLabel, clockLabel } from "@/lib/protectionRoutine";
+import { PROTECTION_ROUTINES, ProtectionRoutine, cutoffDayLabel, clockLabel } from "@/lib/protectionRoutine";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import {
@@ -64,11 +64,8 @@ export default function Settings() {
   const [localWakeTime, setLocalWakeTime] = useState(wakeTime);
   const [localRoutine, setLocalRoutine] = useState<ProtectionRoutine>(protectionRoutine);
   const chooseRoutine = (selected: ProtectionRoutine) => {
-    if (selected === localRoutine) return;
-    const defaults = routineDefaults(selected);
+    // Routine is a description, not permission to overwrite user-set hours.
     setLocalRoutine(selected);
-    setLocalBedtime(defaults.start);
-    setLocalWakeTime(defaults.end);
   };
   const [localBlockMode, setLocalBlockMode] = useState<BlockModeId | null>(
     (blockMode as BlockModeId) || null
@@ -267,7 +264,7 @@ export default function Settings() {
 
         <View style={styles.section}>
           <Text style={styles.label}>WHEN DO YOU WANT FEWER DISTRACTIONS?</Text>
-          <Text style={styles.hint}>Choose a routine. Changing it suggests new hours; adjust the wheels before saving.</Text>
+          <Text style={styles.hint}>Pick the part of your day. Changing this never resets your selected hours.</Text>
           <View style={{ gap: 8, marginTop: 12 }}>
             {PROTECTION_ROUTINES.map((option) => {
               const selected = localRoutine === option.id;
