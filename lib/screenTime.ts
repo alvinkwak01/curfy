@@ -670,6 +670,21 @@ export async function grantBedtimeException({
   const selectionId = selectionIdForMode(mode);
   assertOneFreeAppSelected(selectionId);
 
+  // A failed/revoked native daily monitor can leave a visible orphan shield.
+  // Never register a fresh 15-minute reblock that might persist past the
+  // user's chosen end time when there is no recurring cutoff callback.
+  // Existing simulated-native tests without an installed schedule keep their
+  // separate direct-grant fixture; real configured installs save BOTH values.
+  const savedSelection = previousScheduledSelectionId();
+  const savedWindow = DeviceActivity.userDefaultsGet<BedtimeClockWindow>(BEDTIME_CLOCK_KEY);
+  if ((savedSelection !== null || savedWindow !== undefined) &&
+      (savedSelection !== selectionId ||
+       !DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME))) {
+    throw new Error(
+      "Curfy's recurring iOS protection schedule is missing or changed. Open Settings and restore protection before requesting an app exception."
+    );
+  }
+
   // A token intersection can produce a false negative for an actual
   // category shield. Require either explicit token overlap or an active
   // native ManagedSettingsStore shield before starting the exception.
