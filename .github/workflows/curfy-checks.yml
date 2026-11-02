@@ -24,20 +24,26 @@ jobs:
         env:
           TZ: America/Los_Angeles
       - run: npx tsc --noEmit
-      - name: Verify Curfy StoreKit local native autolinking
+      - name: Verify Curfy local native module autolinking
         run: |
           npx expo-modules-autolinking resolve --platform apple --json > /tmp/curfy-modules.json
           node -e '
             const fs = require("fs");
             const result = JSON.parse(fs.readFileSync("/tmp/curfy-modules.json", "utf8"));
-            const native = result.modules?.find(x => x.packageName === "curfy-storekit");
-            if (!native ||
-                !native.pods?.some(p => p.podName === "CurfyStoreKit") ||
-                !native.modules?.includes("CurfyStoreKitModule")) {
-              console.error("CurfyStoreKit local native module was not discovered: failing before a paid build.");
-              process.exit(1);
+            const required = [
+              ["curfy-storekit", "CurfyStoreKit", "CurfyStoreKitModule"],
+              ["curfy-protected-apps", "CurfyProtectedApps", "CurfyProtectedAppsModule"]
+            ];
+            for (const [packageName, podName, moduleName] of required) {
+              const native = result.modules?.find(x => x.packageName === packageName);
+              if (!native ||
+                  !native.pods?.some(p => p.podName === podName) ||
+                  !native.modules?.includes(moduleName)) {
+                console.error(packageName + " local native module was not discovered.");
+                process.exit(1);
+              }
+              console.log(podName + " pod and " + moduleName + " are autolinked.");
             }
-            console.log("CurfyStoreKit pod and module are autolinked.");
           '
       # Check configuration and native dependencies without consuming an EAS build.
       - run: npx expo-doctor
