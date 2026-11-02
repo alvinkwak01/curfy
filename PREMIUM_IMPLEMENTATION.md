@@ -35,3 +35,12 @@ Sources checked 2026-11-02:
 - Expo local native modules: https://docs.expo.dev/modules/get-started/
 - Expo autolinking: https://docs.expo.dev/modules/autolinking/
 - Apple StoreKit transaction entitlements: https://developer.apple.com/documentation/storekit/transaction/currententitlements
+
+## 2026-11-02 follow-up: actual StoreKit lifecycle
+
+- Local module now observes Apple `Transaction.updates` while a listener is attached; JS only receives a product-specific change signal and always re-fetches current **verified** entitlements.
+- `PremiumProvider` is mounted from root layout and re-queries on foreground, launch, and transaction updates; request generations guard against stale async responses. Ownership is never read from local AsyncStorage and cannot alter current native blocking by itself.
+- A native-module autolinking assertion in `.github/workflows/curfy-checks.yml` checks the pod and module are present. GitHub Actions **`41486054714` passed 116/116 tests**, TypeScript, **18/18 Expo Doctor**, lockfile and Expo iOS project generation, with successful StoreKit pod discovery. This does **not** compile Swift.
+- Unsigned Xcode run **`41484550157`** was still executing at this update, on an earlier commit lacking the newest observer. A new Swift compilation check is needed after any native-source changes, even if the older job succeeds.
+- Per-app native token flow: third-party source `packages/react-native-device-activity/ios/Shared.swift` uses App Group `familyActivitySelectionIds` and encoded `FamilyActivitySelection`. Compare installed `0.6.1` before relying on source layouts. Do NOT emit app names/token strings into JS; instead use iOS native labels and indexed verified token selections.
+- Premium purchase remains **not exposed** and multi-app protection remains **disabled** until app-specific shielding/unshielding is proven. Do not silently repurpose the one-app free selection path.

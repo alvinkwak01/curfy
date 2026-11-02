@@ -36,6 +36,8 @@ Updated 2026-11-02. **NOT a claim of device testing.** Use this after the next s
 - **Non-consumable sandbox matrix:** successful purchase changes verified current entitlement to owned; cancellation leaves free; Ask-to-Buy pending remains non-owned; app restart and offline refresh do not erase a surviving native shielding schedule; restore with same Apple Account re-detects entitlement; a different Apple Account with no purchase is free; refund/revocation no longer grants new multi-app changes. StoreKit/App Store errors must not delete configured shields.
 - **Launch gate:** do not enable the Premium buy button until an uninterrupted 120-second hold can target one selected app, with independently scheduled 15-minute re-shielding while all other chosen apps remain blocked, verified on hardware.
 
+- Verify that resuming Curfy or receiving an Apple StoreKit transaction update rechecks **verified current entitlements**; a cancelled/pending/invalid/refunded purchase must not authorize new multi-app configuration. Failed entitlement refresh must show unknown status without erasing a surviving native restriction. The purchase button stays hidden until the complete multi-app one-app-per-hold behavior is signed-device verified.
+
 ## Evidence record (fill after actual testing)
 
 | Case | Status | Observed build/iPhone/iOS | Repro/log/video |

@@ -10,6 +10,20 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 `feat/ios-shield-from-august`, draft PR #2 (base `backup/local-curfy-august`). `main` is untouched. Existing August native implementation and EAS iOS extension targets are preserved.
 
+## Milestone: StoreKit transaction lifecycle and module autolinking (2026-11-02)
+
+**Goal:** handle pending purchases, Apple Account/other-device transactions, foreground refresh and refund/revocation without trusting a local Premium flag; verify that Expo actually discovers Curfy's StoreKit pod before anyone uses a signed device build.
+
+**Implemented** on `feat/ios-shield-from-august`: `modules/curfy-storekit/ios/CurfyStoreKitModule.swift` listens to Apple `Transaction.updates` and emits a change notification for Curfy's non-consumable product only; `modules/curfy-storekit/index.ts` and `lib/premiumStore.ts` expose a subscribe/unsubscribe hook that conveys **no ownership assertion**. `context/PremiumContext.tsx` now refreshes StoreKit-verified `currentEntitlements` on launch, app resume and transaction change, invalidates out-of-order requests, and keeps unknown as a distinct state on failure. Root layout mounts it without enabling the purchase button or changing any Screen Time shields. Tests cover updates triggering rechecks, cancelled/pending purchases, restore verification and a UI gate preventing early checkout.
+
+**Verified by CI:** run **`41486054714`**, commit **`b9bc909`**, passed **116/116 Node tests**, `npx tsc --noEmit`, **18/18 Expo Doctor**, clean lockfile, Expo iOS prebuild and a new explicit `expo-modules-autolinking resolve --platform apple --json` assertion that confirms native `CurfyStoreKit` pod AND `CurfyStoreKitModule` class resolution. An initial CI attempt failed because the autolinking command was missing its required `--json` output flag; it was corrected and the subsequent complete run passed.
+
+**Still NOT proven:** native Swift compilation of the new transaction observer; the older StoreKit module's macOS unsigned Xcode job **`41484550157`** was still in progress at this handoff (and predates the observer); signed iPhone purchase/restore/refund; App Store Connect product configuration; actual native multi-app tokens and per-app 15-minute exception. Do not claim a complete Premium system or enable checkout. No EAS credit spent; `main` untouched.
+
+**Source inspection:** The maintained third-party Screen Time library's `ios/Shared.swift` stores persisted opaque `FamilyActivitySelection` values under `familyActivitySelectionIds` in the configured App Group and exposes token-level set operations. For Premium's one-app-per-hold design, verify the EXACT installed version's serialization, isolate token subsets natively, and show names/icons using Apple's protected native label APIs. Never send decoded app identities to JS or unblock the full selected group. Category-token picker promotion remains an explicit failure state.
+
+**Next smallest work:** get unsigned native compilation proof for the current Swift observer, then build the opaque-token per-app picker / exception bridge in a reversible native slice with mocked rollback tests. Keep the existing one-app free tier working throughout.
+
 ## Milestone: native StoreKit 2 foundation — verified tests, unsigned Swift compile pending (2026-11-02)
 
 **Goal:** implement the actual Apple non-consumable purchase bridge for the agreed $5.99 one-time Premium, without collecting money before multi-app/per-app exception behavior is ready.
