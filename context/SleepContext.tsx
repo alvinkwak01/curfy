@@ -19,7 +19,7 @@ import React, {
 } from "react";
 import { AppState, Platform } from "react-native";
 import { bedtimeNightKey, isBedtimeWindowActive } from "@/lib/bedtimeWindow";
-import { countLoggedNightStreak } from "@/lib/nightHistory";
+import { countLoggedNightStreak, shouldStartNightLog } from "@/lib/nightHistory";
 import { mayRestartSetup } from "@/lib/restartProtectionPolicy";
 import { useAuth } from "./AuthContext";
 import { useJournal } from "./JournalContext";
@@ -371,8 +371,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       // Use the local bedtime night KEY, not yesterday's boolean. If Curfy
       // stays backgrounded all day, the morning callback may never reset
       // lockedToday; today's log must still be created on return.
-      const alreadyLoggedToday = sleepLogRef.current.some((e) => e.date === today);
-      if (!alreadyLoggedToday) {
+      if (shouldStartNightLog(sleepLogRef.current, today)) {
         lockedToday.current = true;
         // New local bedtime night: never carry yesterday's unlock count
         // forward into a brand-new evening.
