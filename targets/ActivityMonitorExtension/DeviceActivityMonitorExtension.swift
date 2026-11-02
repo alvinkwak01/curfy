@@ -42,6 +42,15 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   private let premiumExceptionLedgerKey = "curfy-premium-active-exceptions"
   private let premiumActivityPrefix = "curfy-premium-exception-"
   private let premiumSelectionPrefix = "curfy-single-app-"
+  // API availability starts at iOS 15.2. Retain our configured iOS 15.1
+  // minimum; reject explicit category/web-domain tokens on every OS version.
+  private func curfyIncludesEntireCategory(_ selection: FamilyActivitySelection) -> Bool {
+    if #available(iOS 15.2, *) {
+      return selection.includeEntireCategory
+    }
+    return false
+  }
+
 
   private func validPremiumScopedSelection(
     for activityName: String, record: [String: Any]
@@ -60,9 +69,9 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       let committed = getFamilyActivitySelectionById(id: committedId),
       single.applicationTokens.count == 1,
       single.categoryTokens.isEmpty, single.webDomainTokens.isEmpty,
-      !single.includeEntireCategory,
+      !curfyIncludesEntireCategory(single),
       committed.categoryTokens.isEmpty, committed.webDomainTokens.isEmpty,
-      !committed.includeEntireCategory,
+      !curfyIncludesEntireCategory(committed),
       single.applicationTokens.isSubset(of: committed.applicationTokens)
     else { return nil }
     return single

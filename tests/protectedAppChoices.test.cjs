@@ -168,3 +168,22 @@ test("Swift prepared choice cannot unblock without a later 120-second hold coord
   assert.doesNotMatch(swift, /unblockSelection\(/);
   assert.doesNotMatch(swift, /store\.shield\./);
 });
+
+
+test("native Screen Time chooser compiles against iOS 15.1 API availability boundaries", () => {
+  const native = readFileSync(join(__dirname,
+    "../modules/curfy-protected-apps/ios/CurfyProtectedAppsModule.swift"), "utf8");
+  const monitor = readFileSync(join(__dirname,
+    "../targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift"), "utf8");
+  const pod = readFileSync(join(__dirname,
+    "../modules/curfy-protected-apps/ios/CurfyProtectedApps.podspec"), "utf8");
+  assert.match(native, /import ManagedSettings/);
+  assert.match(pod, /s\\.frameworks\\s*=.*ManagedSettings/);
+  for (const source of [native, monitor]) {
+    assert.match(source, /if #available\\(iOS 15\\.2, \\*\\)/);
+    assert.match(source, /return selection\\.includeEntireCategory/);
+    assert.match(source, /!curfyIncludesEntireCategory\\(/);
+    assert.equal((source.match(/\\.includeEntireCategory/g) || []).length, 1,
+      "Only the availability-guarded read may access the iOS 15.2 API");
+  }
+});

@@ -1,3 +1,11 @@
+## Build blocker: EAS preview Swift compilation errors (2026-11-02)
+
+**Actual device build evidence:** User's **EAS preview build `78de5ac0-91d1-4ad9-ad10-fd82f86f925c`** on `feat/ios-shield-from-august` after syncing to `d29d6bc` FAILED at Xcode Swift compilation with `cannot find type 'ApplicationToken' in scope` and two `'includeEntireCategory' is only available in iOS 15.2 or newer` diagnostics. Remote Ad Hoc signing for Curfy, ShieldConfiguration, ShieldAction, ActivityMonitorExtension **passed**. This is NOT a provisioning failure; earlier EAS preview `d34f2892-9704-49c7-af70-ca94d7a278f0` compiled but predated new native chooser and Premium code. No need to repeat Apple credential setup or pay for another build before native compile evidence.
+
+**Code fix (proposed until compiled):** `CurfyProtectedAppsModule.swift` now imports `ManagedSettings` for Apple's `ApplicationToken` type alias (Apple official ManagedSettings API) and only reads `includeEntireCategory` inside `#available(iOS 15.2, *)`. `DeviceActivityMonitorExtension.swift` uses the same guarded pattern. `CurfyProtectedApps.podspec` explicitly links `ManagedSettings`. iOS deployment target **remains 15.1**; category and web-domain tokens remain rejected even on iOS 15.1. Added regression assertions to `tests/protectedAppChoices.test.cjs`. **Do not call this fix compiled until unsigned macOS Xcode CI or a new device build actually succeeds.**
+
+**Next:** Verify JS/unit/Expo CI, run an unsigned native Xcode compile (macOS GitHub Actions; no EAS credit), inspect any additional Swift failures, then let the user perform ONE new EAS preview build only after native validation. Keep PR #2 draft, `main` untouched, no checkout.
+
 # Curfy — current engineering state
 
 Updated: 2026-11-02. Source of truth: current branch and device observations, not older claims in CONTEXT.md.

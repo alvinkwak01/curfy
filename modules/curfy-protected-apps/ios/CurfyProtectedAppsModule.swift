@@ -1,6 +1,7 @@
 import CryptoKit
 import ExpoModulesCore
 import FamilyControls
+import ManagedSettings
 import Foundation
 import SwiftUI
 import UIKit
@@ -15,6 +16,17 @@ import UIKit
 // in JavaScript. Verify this against the installed package before upgrading.
 private let curfySelectionKey = "familyActivitySelectionIds"
 private let curfyAppGroupInfoKey = "REACT_NATIVE_DEVICE_ACTIVITY_APP_GROUP"
+
+// FamilyActivitySelection.includeEntireCategory was introduced in iOS 15.2.
+// Curfy still targets iOS 15.1; only consult it where the API exists.
+// Category/web-domain token sets are always rejected independently.
+private func curfyIncludesEntireCategory(_ selection: FamilyActivitySelection) -> Bool {
+  if #available(iOS 15.2, *) {
+    return selection.includeEntireCategory
+  }
+  return false
+}
+
 
 private enum CurfyAppChoiceError: LocalizedError {
   case unsupportedSelection
@@ -68,7 +80,7 @@ private func loadCurfyProtectedSnapshot(_ selectionId: String) throws -> CurfyPr
   } catch {
     throw CurfyAppChoiceError.invalidSelection
   }
-  guard !selection.includeEntireCategory,
+  guard !curfyIncludesEntireCategory(selection),
         selection.categoryTokens.isEmpty,
         selection.webDomainTokens.isEmpty,
         !selection.applicationTokens.isEmpty else {
@@ -204,7 +216,7 @@ private func validateOneProtectedAppTicket(_ identifier: String) throws -> Bool 
         let scoped = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data),
         scoped.applicationTokens == Set([current.applications[ticket.index]]),
         scoped.categoryTokens.isEmpty, scoped.webDomainTokens.isEmpty,
-        !scoped.includeEntireCategory else {
+        !curfyIncludesEntireCategory(scoped) else {
     throw CurfyAppChoiceError.invalidSelection
   }
   return true
