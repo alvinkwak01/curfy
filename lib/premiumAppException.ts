@@ -29,7 +29,9 @@ function persistLedger(value: PremiumExceptionLedger): void {
   const stored = readLedger();
   const expected = Object.keys(value).sort();
   if (JSON.stringify(Object.keys(stored).sort()) !== JSON.stringify(expected) ||
-      expected.some(key => JSON.stringify(stored[key]) !== JSON.stringify(value[key]))) {
+      expected.some(key => Object.entries(value[key]).some(
+        ([field, fieldValue]) => stored[key]?.[field as keyof PremiumExceptionEntry] !== fieldValue
+      ))) {
     throw new Error("iOS did not save the Premium exception recovery record.");
   }
 }
@@ -173,7 +175,11 @@ export async function grantPremiumAppException({
           DeviceActivity.blockSelection(
             { activitySelectionId: ticketId }, "curfy-premium-exception-rollback"
           );
-          reblocked = exactOverlap(ticketId, { currentBlocklist: true }) === 1;
+          // Native APIs sometimes swallow errors or unshield more than the
+          // requested token. Confirm all originally blocked *other* apps
+          // are shielded again before claiming rollback recovered.
+          reblocked = exactOverlap(ticketId, { currentBlocklist: true }) === 1 &&
+            exactOverlap(committedId, { currentBlocklist: true }) === groupBefore;
         } catch { reblocked = false; }
       }
       let stopped = !monitorRequested;
