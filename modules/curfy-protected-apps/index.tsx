@@ -16,6 +16,7 @@ type NativeProtectedApps = {
 
 const validSelectionId = /^curfy-block-(social|most|custom)$/;
 const validRevision = /^[a-f0-9]{64}$/;
+const scopedTicketPattern = /^curfy-single-app-[0-9A-Fa-f]{8}-(?:[0-9A-Fa-f]{4}-){3}[0-9A-Fa-f]{12}$/;
 
 function assertSelectionId(selectionId: string) {
   if (!validSelectionId.test(selectionId)) {
@@ -57,7 +58,7 @@ export function prepareProtectedAppChoice(
   const ticket = requireNativeModule<NativeProtectedApps>("CurfyProtectedApps")
     .prepareProtectedApp(selectionId, revision, index);
   if (typeof ticket !== "string" ||
-      !/^curfy-single-app-[0-9A-Fa-f-]{36}$/.test(ticket)) {
+      !scopedTicketPattern.test(ticket)) {
     throw new Error("iOS did not prepare a valid protected-app choice.");
   }
   return ticket;
@@ -65,7 +66,7 @@ export function prepareProtectedAppChoice(
 
 /** Re-read Apple's saved opaque selection immediately before any later unlock. */
 export function validateProtectedAppChoice(ticketId: string): boolean {
-  if (!/^curfy-single-app-[0-9A-Fa-f-]{36}$/.test(ticketId)) {
+  if (!scopedTicketPattern.test(ticketId)) {
     throw new Error("Invalid prepared protected-app choice.");
   }
   if (Platform.OS !== "ios") {

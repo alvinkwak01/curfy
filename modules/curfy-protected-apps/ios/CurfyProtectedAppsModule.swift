@@ -126,7 +126,7 @@ private func pruneStaleChoiceTickets(
   let decoder = JSONDecoder()
   let now = Date()
   var selectionMap = defaults.dictionary(forKey: curfySelectionKey) as? [String: String] ?? [:]
-  for (id, data) in choices {
+  for (id, data) in Array(choices) {
     guard let ticket = try? decoder.decode(CurfyChoiceTicket.self, from: data),
           now.timeIntervalSince(ticket.createdAt) < curfyTicketRetention else {
       choices.removeValue(forKey: id)
