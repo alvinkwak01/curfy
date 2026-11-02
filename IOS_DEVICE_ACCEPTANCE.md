@@ -46,6 +46,8 @@ Updated 2026-11-02. **NOT a claim of device testing.** Use this after the next s
 
 - **Per-app post-hold coordinator (currently internal-only):** signed iPhone must prove fresh verified ownership required, permission required, chosen native ticket still belongs to the committed app-only selection, and every completed hold unshields exactly one specific selected app. Check simultaneous app A/B exceptions, individual expiry, old group-wide exception conflict, monitor-start failure, swallowed block/unblock native errors, and independent group shield counts. DeviceActivity end callbacks depend on device use; record actual time-to-reblock instead of inventing exact wall-clock guarantees. All of these remain UNVERIFIED on hardware.
 
+- **Premium foreground recovery (automated mocks passed, iPhone not tested):** allow app A's 15-minute exception to expire while B still has several minutes, then reopen Curfy. A must re-shield if the original protection window still runs; B must stay unshielded. Reopen again; no duplicate monitors or unexpected shield. At/after the original cutoff and after changing committed app selections, old tickets must NOT re-shield an unrelated app. Revoke Screen Time permission and confirm recovery defers without discarding native state. Inject failed shield/stop calls and confirm warning plus retry metadata survive; ensure the Free one-app hold still works unchanged.
+
 ## Evidence record (fill after actual testing)
 
 | Case | Status | Observed build/iPhone/iOS | Repro/log/video |

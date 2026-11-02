@@ -80,3 +80,11 @@ Sources checked 2026-11-02:
 ## Native CI status update — 2026-11-02
 
 The unsigned Xcode run `41494547150` (older native commit `0b4a04d`) ended with overall workflow failure **because the `ios-native-compile` job was cancelled before compiling Swift**; no compiler error or successful build can be inferred. The previous StoreKit-only run `41484550157` was successful but predates protected-app tickets and the Premium monitor extension. A fresh unsigned Xcode compile of the current branch is still a necessary gate. The 152/152 code tests in `41496665378` remain green.
+
+## 2026-11-02: foreground recovery and next-grant unblocking
+
+- Added `lib/premiumExceptionRecovery.ts`, called from `context/SleepContext.tsx` native startup/foreground reconciliation and before a new Premium grant in `lib/premiumAppException.ts`. The function is a no-op for Free if no Premium ledger exists.
+- Each expired native singleton gets an independent shield verification, reblock (only within original protection window), and exact per-app monitor teardown. Other active app exceptions must remain unshielded; the ledger entry disappears ONLY when cleanup is verified. If the original cutoff elapsed or scheduled app selection changed, recovery removes stale monitoring metadata without re-shielding the old app.
+- Added `tests/premiumExceptionRecovery.test.cjs` (15 cases) plus integration/regression cases in `tests/premiumAppException.test.cjs` for second hold after previous expiration, unchanged Free path and fixture errors. GitHub Actions `41498518062` **passed 169/169 Node tests**, TypeScript, Expo Doctor 18/18, iOS prebuild, both native-module discovery checks and lockfile integrity on code commit `ba95951`.
+- This is **not yet tested against real native Screen Time callbacks**. It cannot guarantee exactly-at-15-min reblock with the app terminated; Apple's official DeviceActivityCenter documentation says callbacks occur when the device is used. Native Swift compile of current branch and signed iPhone proof remain release gates. Checkout still disabled and Free one-app protection still in place.
+- Official Apple reference: https://developer.apple.com/documentation/deviceactivity/deviceactivitycenter
