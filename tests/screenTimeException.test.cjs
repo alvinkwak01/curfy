@@ -513,3 +513,35 @@ test("no token overlap and no native ManagedSettings shield always rejects an un
   );
   assert.equal(f.calls.some(x => x[0] === "unblock"), false);
 });
+
+test("an Evening shield that lingers after the 6 AM cutoff clears when Curfy reopens", () => {
+  const f = fixture({ initiallyBlocked: true });
+  f.screenTime.reconcileProtectionWindow(
+    "23:00", "06:00", "custom", new Date("2026-11-02T06:01:00")
+  );
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.calls.filter(x => x[0] === "reset").length, 1);
+});
+
+test("a missed Morning start restores the selected-app shield on foreground", () => {
+  const f = fixture({ initiallyBlocked: false });
+  f.screenTime.reconcileProtectionWindow(
+    "06:00", "09:00", "custom", new Date("2026-11-02T07:00:00")
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.calls.filter(x => x[0] === "block").length, 1);
+});
+
+test("foreground reconciliation never cancels an active 15-minute exception", async () => {
+  const f = fixture({ initiallyBlocked: true });
+  await f.screenTime.grantBedtimeException({
+    bedtime: "23:00", wakeTime: "09:00", mode: "custom",
+    now: new Date("2026-11-01T23:00:00"),
+  });
+  assert.equal(f.isBlocked(), false);
+  f.screenTime.reconcileProtectionWindow(
+    "23:00", "09:00", "custom", new Date("2026-11-01T23:05:00")
+  );
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.calls.filter(x => x[0] === "block").length, 0);
+});
