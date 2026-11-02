@@ -584,6 +584,47 @@ export async function grantBedtimeException({
   }
 }
 
+/**
+ * Foreground reconciliation for the *entire* recurring app-protection window.
+ * iOS may defer start/end callbacks until the device is used; if someone
+ * reopens Curfy after the cutoff, clear stale shields immediately instead
+ * of leaving an Evening app blocked well into the day.
+ *
+ * The native DeviceActivity monitor still owns restrictions with Curfy
+ * terminated. This is only a best-effort foreground repair.
+ */
+export function reconcileProtectionWindow(
+  bedtime: string,
+  wakeTime: string,
+  mode: BlockModeId,
+  now = new Date()
+): void {
+  if (getScreenTimeAccessStatus() !== "authorized") return;
+  const withinWindow = currentBedtimeWindow(now, bedtime, wakeTime) !== null;
+  if (!withinWindow) {
+    if (!DeviceActivity.isShieldActive()) return;
+    DeviceActivity.resetBlocks("curfy-window-ended-foreground-recovery");
+    if (DeviceActivity.isShieldActive()) {
+      throw new Error("iOS still reports Curfy app restrictions after the window ended.");
+    }
+    return;
+  }
+  if (freeSelectionIssue(mode)) return;
+  const state = readException();
+  if (state && now.getTime() < state.expiresAt &&
+      now.getTime() < state.bedtimeEndAt) {
+    return; // Never cancel an active exception earned by the 120-second hold.
+  }
+  if (DeviceActivity.isShieldActive()) return;
+  DeviceActivity.blockSelection(
+    { activitySelectionId: selectionIdForMode(mode) },
+    "curfy-window-start-foreground-recovery"
+  );
+  if (!DeviceActivity.isShieldActive()) {
+    throw new Error("iOS didn't restore the selected app restriction. Please retry.");
+  }
+}
+
 /** Foreground/restart recovery for callbacks iOS may defer until device use. */
 export function reconcileBedtimeException(
   bedtime: string, wakeTime: string, now = new Date()
