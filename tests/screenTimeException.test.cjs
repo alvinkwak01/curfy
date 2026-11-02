@@ -17,7 +17,7 @@ const time = loadTS("lib/bedtimeWindow.ts");
 
 function fixture({
   failStart = false, failUnblock = false, overlapReportsZero = false,
-  authorization = 2, selectionCount = 1, categoryCount = 0,
+  overlapUnavailable = false, authorization = 2, selectionCount = 1, categoryCount = 0,
   webDomainCount = 0, includeEntireCategory = false, initiallyBlocked = true,
   silentMonitorFailure = false,
 } = {}) {
@@ -32,7 +32,7 @@ function fixture({
     activitySelectionMetadata: () => ({
       applicationCount: selectionCount, categoryCount, webDomainCount, includeEntireCategory,
     }),
-    intersection: () => ({
+    intersection: () => overlapUnavailable ? undefined : ({
       applicationCount: blocked && !overlapReportsZero ? 1 : 0, categoryCount: 0, webDomainCount: 0,
     }),
     getFamilyActivitySelectionId: id => selections.get(id),
@@ -476,4 +476,40 @@ test("clock guard is present on BOTH native interval callbacks", () => {
   assert.match(swift, /isWithinConfiguredCurfyWindow\(\) == false/);
   assert.match(swift, /isWithinConfiguredCurfyWindow\(\) == true/);
   assert.match(swift, /Calendar\.current\.dateComponents/);
+});
+
+test("visible native shield allows an exception even if token intersection is unavailable", async () => {
+  const f = fixture({ overlapUnavailable: true, initiallyBlocked: true });
+  const expiresAt = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-01T23:00:00"),
+  });
+  assert.equal(f.isBlocked(), false);
+  assert.ok(expiresAt > new Date("2026-11-01T23:00:00").getTime());
+  assert.equal(f.calls.filter(x => x[0] === "unblock").length, 1);
+});
+
+test("unavailable token intersection never permits a false successful unshield", async () => {
+  const f = fixture({ overlapUnavailable: true, initiallyBlocked: true, failUnblock: true });
+  await assert.rejects(
+    f.screenTime.grantBedtimeException({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-11-01T23:00:00"),
+    }),
+    /did not release/
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+});
+
+test("no token overlap and no native ManagedSettings shield always rejects an unlock", async () => {
+  const f = fixture({ overlapUnavailable: true, initiallyBlocked: false });
+  await assert.rejects(
+    f.screenTime.grantBedtimeException({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-11-01T23:00:00"),
+    }),
+    /not reporting any active/
+  );
+  assert.equal(f.calls.some(x => x[0] === "unblock"), false);
 });
