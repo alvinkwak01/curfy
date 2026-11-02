@@ -693,3 +693,36 @@ test("account/reset stop refuses to discard metadata when managed app shield rem
   assert.equal(f.storage.has("curfy-scheduled-selection-id"), false);
   assert.equal(f.isBlocked(), false);
 });
+
+test("failed native stop restores bedtime start AND end callbacks for the existing app", async () => {
+  const f = fixture({ ignoreStopOnCalls: [1] });
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "23:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-02T23:30:00"),
+  });
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(), /still has Curfy's protection schedule/);
+  const callbacks = f.calls.filter(x => x[0] === "action" &&
+    x[1].activityName === "curfy-bedtime");
+  for (const callbackName of ["intervalDidStart", "intervalDidEnd"]) {
+    const action = callbacks.filter(x => x[1].callbackName === callbackName).at(-1);
+    assert.equal(action[1].actions.length, 1,
+      "A failed stop must not leave the surviving monitor without " + callbackName);
+    assert.equal(action[1].actions[0].familyActivitySelectionId, "curfy-block-custom");
+  }
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
+});
+
+test("successful native stop keeps recurring callback actions cleared", async () => {
+  const f = fixture();
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "23:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-02T23:30:00"),
+  });
+  f.screenTime.stopBedtimeBlocking();
+  const callbacks = f.calls.filter(x => x[0] === "action" &&
+    x[1].activityName === "curfy-bedtime");
+  for (const callbackName of ["intervalDidStart", "intervalDidEnd"]) {
+    assert.equal(callbacks.filter(x => x[1].callbackName === callbackName).at(-1)[1].actions.length, 0);
+  }
+  assert.equal(f.storage.has("curfy-scheduled-selection-id"), false);
+});
