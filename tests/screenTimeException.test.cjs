@@ -421,3 +421,15 @@ test("opening an unchanged native picker is not a protection change", () => {
   f.selections.set("curfy-draft-custom", "another-opaque-selection");
   assert.equal(f.screenTime.selectionDraftChanged("custom"), true);
 });
+
+test("short recurring windows are rejected before modifying native protection", async () => {
+  const f = fixture();
+  await assert.rejects(
+    f.screenTime.configureBedtimeBlocking({
+      bedtime: "05:50", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-10-31T05:55:00"),
+    }), /at least 15 minutes/
+  );
+  assert.equal(f.calls.filter(x => ["start", "reset", "block"].includes(x[0])).length, 0);
+  assert.equal(f.isBlocked(), true);
+});
