@@ -296,6 +296,13 @@ export async function configureBedtimeBlocking({
     cancelExceptionForScheduleChange();
   } catch (error) {
     if (draftSelectionId) restoreSelection(selectionId, previousTokens);
+    // A failure after writing the new ID cannot leave JS and the extension
+    // disagreeing about which opaque app selection was last committed.
+    if (previousSelectionId) {
+      DeviceActivity.userDefaultsSet(SCHEDULED_SELECTION_ID_KEY, previousSelectionId);
+    } else {
+      DeviceActivity.userDefaultsRemove(SCHEDULED_SELECTION_ID_KEY);
+    }
 
     let rollbackError: unknown = null;
     if (nativeScheduleTouched) {
