@@ -12,6 +12,10 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 ## Milestone: independent Premium exception ledger and native callback guards (2026-11-02)
 
+**Latest checks and macOS compile trigger (2026-11-02):** GitHub Actions **`41494537455`**, code commit **`0b4a04d`**, passed **141/141 Node tests**, TypeScript, Expo Doctor **18/18**, lockfile, iOS prebuild and both native module autolinking checks. Two additional tests assert that Premium expiry guards execute *before* any native re-shield action and that no new Premium monitors have been scheduled by the Free app yet. The **actual unsigned Xcode Swift/extension compile** was correctly requested in PR run **`41494547150`** and its `ios-native-compile` job was **queued** when checked; this is **NOT** a successful native compile. The previous initial attempt (`41494419043`) skipped the macOS job because the `[native-ci]` title flag was applied after that run was triggered. PR title has been reset so future docs/JS commits don't consume Mac runner time. The Xcode result must be checked before proceeding to device testing.
+
+
+
 **Goal:** introduce an independently keyed per-app DeviceActivity exception contract so a second protected app cannot overwrite the first app's 15-minute re-shield. Make delayed callbacks safe at the protection cutoff without changing the existing Free 120-second hold.
 
 **Implemented in code:** `lib/premiumExceptionPolicy.ts` defines a strict `curfy-premium-active-exceptions` ledger keyed by an activity name derived from the native UUID ticket. Each entry pins one opaque singleton selection ID, its committed parent selection ID, original start, expiration and original window end. The pure planning policy rejects malformed shared state, duplicate tickets, stale entries requiring recovery, and expired windows; it plans a 15-minute+1-second iOS monitor only when that fits before the cutoff. Otherwise the standard window end remains authoritative. `tests/premiumExceptionPolicy.test.cjs` covers two independent records, duplicate prevention, stale/bad data, cutoff boundaries and callback safety.
