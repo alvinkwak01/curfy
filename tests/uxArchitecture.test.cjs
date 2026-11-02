@@ -55,22 +55,27 @@ test("nightly records are described as Curfy logs, not proven sleep", () => {
   assert.doesNotMatch(journal, /let you actually fall asleep/);
 });
 
-test("onboarding preserves all original twelve pages alongside the added routine step", () => {
+test("ten-screen onboarding keeps Curfy's original visual moments and skips routine labels", () => {
   const onboarding = source("app/onboarding.tsx");
   const settings = source("app/settings.tsx");
   const context = source("context/SleepContext.tsx");
-  assert.match(onboarding, /STEP_COUNT = 13/);
+  assert.match(onboarding, /STEP_COUNT = 9/);
   assert.match(onboarding, /const \[showWelcome, setShowWelcome\] = useState\(true\)/);
-  assert.match(onboarding, /if \(showWelcome\)/);
   assert.match(onboarding, /<StepWelcome onStart=/);
   assert.match(onboarding, /<Btn label="Get Started"/);
-  assert.match(onboarding, /PROTECTION_ROUTINES\.map/);
-  assert.match(onboarding, /When should the app/);
-  assert.doesNotMatch(onboarding, /What time do.*you wake up/);
-  assert.match(settings, /PROTECTION_ROUTINES\.map/);
+  assert.match(onboarding, /step === 0 && <StepWakeUpCall/);
+  assert.match(onboarding, /step === 1 && <StepWhyStayUp/);
+  assert.match(onboarding, /step === 2 && <StepSetBedtime/);
+  assert.match(onboarding, /step === 3 && <StepWakeTime/);
+  assert.match(onboarding, /step === 4 && <StepReveal/);
+  assert.match(onboarding, /step === 5 && <StepWhyCurfy/);
+  assert.match(onboarding, /step === 6 && <StepScreenTimeAccess/);
+  assert.match(onboarding, /step === 7 && [\s\S]*<StepChooseApps/);
+  assert.match(onboarding, /step === 8 && [\s\S]*<StepFinish/);
+  assert.doesNotMatch(onboarding, /<StepRoutine|<StepCurrentBedtime|<StepName/);
+  assert.doesNotMatch(settings, /PROTECTION_ROUTINES\.map/);
   assert.match(settings, /APPS AVAILABLE AGAIN/);
   assert.match(context, /PROTECTION_ROUTINE_KEY/);
-  assert.match(context, /routineIsEveningBased\(routine\)/);
 });
 test("Home always tells users when a current protection window ends", () => {
   const home = source("app/(tabs)/index.tsx");
@@ -110,57 +115,70 @@ test("onboarding compensates for native schedule if local completion fails", () 
 });
 
 
-test("fresh and deleted-account onboarding restores Curfy welcome before routine", () => {
+test("fresh and deleted-account onboarding returns to original Curfy welcome first", () => {
   const onboarding = source("app/onboarding.tsx");
   const layout = source("app/_layout.tsx");
   const sleep = source("context/SleepContext.tsx");
   assert.match(layout, /!isOnboardingComplete[\s\S]*<Onboarding \/>/);
   assert.match(sleep, /const deleteAccount = async \(\) => \{/);
   assert.match(sleep, /setIsOnboardingComplete\(false\)/);
-  // The JSX node is assembled before the early welcome return for readability;
-  // rendering still returns the branded welcome until Get Started is tapped.
   assert.match(onboarding, /if \(showWelcome\) \{[\s\S]*<StepWelcome onStart=/);
-  assert.match(onboarding, /step === 2 && <StepRoutine/);
   assert.match(onboarding, /if \(step === 0\) setShowWelcome\(true\)/);
   assert.match(onboarding, /<MoonGlyph size=\{86\}/);
   assert.match(onboarding, /Bedtime\. For real\./);
 });
-test("routine content cannot overlap a fixed progress header or push CTA offscreen", () => {
+
+test("all nine setup screens preserve header, back action and scroll-safe fixed CTA", () => {
   const src = source("app/onboarding.tsx");
   assert.match(src, /<View style=\{styles\.header\}>/);
   assert.match(src, /<ScrollView[\s\S]*style=\{styles\.stepScroll\}/);
   assert.match(src, /stepScrollContent: \{ flexGrow: 1, paddingTop: 30, paddingBottom: 32 \}/);
   assert.match(src, /btnWrap: \{ paddingTop: 12, paddingBottom: 20 \}/);
   assert.doesNotMatch(src, /SlideOutLeft/);
-  assert.match(src, /styles\.routineHero/);
 });
 
-test("restored 13-page flow keeps usable time wheels, native permission and app picker", () => {
+test("onboarding validates native permission, one app and final native schedule before completion", () => {
   const src = source("app/onboarding.tsx");
-  for (const page of ["StepWakeUpCall", "StepWhyStayUp", "StepRoutine",
-    "StepCurrentBedtime", "StepSetBedtime", "StepWakeTime", "StepReveal",
-    "StepBenefits", "StepHowItWorks", "StepScreenTimeAccess",
-    "StepChooseApps", "StepPreview", "StepName"]) {
-    assert.match(src, new RegExp("<" + page + "(?:\\s|\\/)"));
-  }
-  assert.match(src, /Starts at \{clockLabel\(bedtime\)\}/);
-  assert.match(src, /Available at \{clockLabel\(wakeTime\)\}/);
   assert.match(src, /getScreenTimeAccessStatus\(\)/);
-  assert.match(src, /if \(step !== 9\) return/);
-  assert.match(src, /finally \{\s*setIsRequesting\(false\)/);
+  assert.match(src, /if \(step !== 6\) return/);
+  assert.match(src, /if \(step === 7\)/);
+  assert.match(src, /activitySelectionMetadata\(\{/);
+  assert.match(src, /freeSelectionIssueForMetadata\(metadata\)/);
+  assert.match(src, /await configureBedtimeBlocking\(\{/);
+  assert.match(src, /await completeOnboarding\(\)/);
+  assert.ok(src.indexOf("await configureBedtimeBlocking") < src.indexOf("await completeOnboarding"));
   assert.match(src, /headerText="Choose exactly one app to protect"/);
   assert.match(src, /includeEntireCategory=\{false\}/);
   assert.match(src, /beginFreshOnboardingAppSelection\(mode\)/);
-  assert.match(src, /if \(step === 10\)/);
-  assert.match(src, /Finish setup/);
-  assert.doesNotMatch(src, /BLOCK_MODE_PRESETS/);
-  assert.doesNotMatch(src, /suggested/);
+  assert.match(src, /finally \{\s*setIsRequesting\(false\)/);
 });
-test("clock steps have NO parent scrolling container to steal vertical gestures", () => {
+
+test("time wheel pages never share a parent scrolling container", () => {
   const src = source("app/onboarding.tsx");
-  assert.match(src, /\[3, 4, 5\]\.includes\(step\)/);
+  assert.match(src, /\[2, 3\]\.includes\(step\)/);
   assert.match(src, /<View key=\{step\} style=\{styles\.timeStepContent\}>/);
   assert.match(src, /<ScrollView[\s\S]*style=\{styles\.stepScroll\}/);
+  assert.match(src, /Starts at \{clockLabel\(bedtime\)\}/);
+  assert.match(src, /Available at \{clockLabel\(wakeTime\)\}/);
+});
+
+test("personal reveal uses the person's distraction reasons and not sleep estimates", () => {
+  const src = source("app/onboarding.tsx");
+  assert.match(src, /reasonSummary\(reasons\)/);
+  assert.match(src, /initialClockWindow\(\)/);
+  assert.match(src, /protectionWindowLabel\(bedtime, wakeTime\)/);
+  assert.doesNotMatch(src, /lost sleep a year|getting roughly|extra full nights of sleep/);
+  assert.doesNotMatch(src, /PROTECTION_ROUTINES\.map/);
+  assert.doesNotMatch(src, /suggested/);
+});
+
+test("final preview includes optional name, and never pretends the hold lives on the Apple shield", () => {
+  const src = source("app/onboarding.tsx");
+  assert.match(src, /function StepFinish/);
+  assert.match(src, /if \(name\.trim\(\)\) await setUserName\(name\.trim\(\)\)/);
+  assert.doesNotMatch(src, /isLastStep && !name\.trim\(\)/);
+  assert.match(src, /<Text style=\{styles\.phoneHoldBtnText\}>Not now<\/Text>/);
+  assert.match(src, /open Curfy separately for an exception/);
 });
 
 test("Delete Everything erases the previous protected app picker after stopping native restrictions", () => {
@@ -173,23 +191,10 @@ test("Delete Everything erases the previous protected app picker after stopping 
   assert.ok(stopped >= 0 && erased > stopped && wiped > erased);
 });
 
-test("routine choice is only a setup style and cannot overwrite chosen hours", () => {
-  const onboarding = source("app/onboarding.tsx");
-  const settings = source("app/settings.tsx");
-  const initialChoice = onboarding.slice(
-    onboarding.indexOf("const chooseRoutine = (selected: ProtectionRoutine) =>"),
-    onboarding.indexOf("const [screenTimeStatus")
-  );
-  const settingsChoice = settings.slice(
-    settings.indexOf("const chooseRoutine = (selected: ProtectionRoutine) =>"),
-    settings.indexOf("const [localBlockMode")
-  );
-  for (const choice of [initialChoice, settingsChoice]) {
-    assert.match(choice, /setRoutine\(selected\)|setLocalRoutine\(selected\)/);
-    assert.doesNotMatch(choice, /routineDefaults\(|setLocalBedtime\(|setLocalWakeTime\(/);
-  }
-  assert.doesNotMatch(onboarding, /\} suggested</);
-  assert.doesNotMatch(settings, /Changing it suggests new hours/);
+test("changing start time in Settings updates reminder behavior without a routine selector", () => {
+  const src = source("app/settings.tsx");
+  assert.match(src, /setLocalRoutine\(inferRoutineFromStart\(value\)\)/);
+  assert.doesNotMatch(src, /<Text style=\{styles\.label\}>WHEN DO YOU WANT FEWER DISTRACTIONS/);
 });
 
 test("clock wheel has no momentum jump after the user's finger releases", () => {
