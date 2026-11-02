@@ -226,7 +226,7 @@ function JournalIntroModal({ visible, onClose }: { visible: boolean; onClose: ()
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.introBackdrop}>
         <View style={styles.introCard}>
-          <Text style={styles.introTitle}>Why journal before bed?</Text>
+          <Text style={styles.introTitle}>Why write it down?</Text>
           <Text style={styles.introBody}>
             Got a thought, a worry, or tomorrow's to-do list on your mind?
             Write it here so you don't have to keep it all in your head.
