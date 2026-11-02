@@ -12,6 +12,10 @@ type NativeCurfyStoreKit = {
   getEntitlement(productId: string): Promise<string>;
   purchase(productId: string): Promise<string>;
   restore(productId: string): Promise<string>;
+  addListener(
+    event: "onPremiumTransactionChanged",
+    callback: (event: { productId: string }) => void
+  ): { remove(): void };
 };
 
 export function curfyStoreKit(): NativeCurfyStoreKit {

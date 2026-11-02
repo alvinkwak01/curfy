@@ -17,6 +17,7 @@ import "react-native-reanimated";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { JournalProvider } from "@/context/JournalContext";
 import { SleepProvider, useSleep } from "@/context/SleepContext";
+import { PremiumProvider } from "@/context/PremiumContext";
 import Onboarding from "./onboarding";
 
 export {
@@ -53,11 +54,13 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <JournalProvider>
         <AuthProvider>
+          <PremiumProvider>
           <SleepProvider>
             <EnsureLeaderboardIdentity />
             <StreakSync />
             <RootLayoutNav />
           </SleepProvider>
+          </PremiumProvider>
         </AuthProvider>
       </JournalProvider>
     </GestureHandlerRootView>

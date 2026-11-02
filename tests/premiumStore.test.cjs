@@ -22,7 +22,13 @@ function fixture({
   supportedPlatform = "ios",
 } = {}) {
   const calls = [];
+  let eventHandler = null;
   const native = {
+    addListener: (name, callback) => {
+      calls.push(["listen", name]);
+      eventHandler = callback;
+      return { remove: () => { calls.push(["remove-listener"]); eventHandler = null; } };
+    },
     getEntitlement: async id => {
       calls.push(["entitlement", id]);
       if (failEntitlement) throw new Error("StoreKit unavailable");
@@ -48,7 +54,10 @@ function fixture({
     if (name === "@/lib/premiumPolicy") return policy;
     throw new Error("Unexpected import " + name);
   });
-  return { store, calls, native };
+  return {
+    store, calls, native,
+    emit: (productId) => eventHandler?.({ productId }),
+  };
 }
 
 test("StoreKit returns native verified ownership and never reads a local premium flag", async () => {
@@ -113,4 +122,31 @@ test("the native StoreKit bridge is unavailable outside iOS", async () => {
 test("no purchase or entitlement can be inferred from an invalid product listing", async () => {
   const f = fixture({ productPrice: " " });
   await assert.rejects(() => f.store.fetchPremiumProduct(), /pricing is not available/);
+});
+
+test("StoreKit updates never directly grant entitlement; only trigger refresh", () => {
+  const f = fixture({ nativeEntitlement: "free" });
+  let changes = 0;
+  const stop = f.store.subscribePremiumTransactions(() => { changes++; });
+  f.emit("other.product");
+  assert.equal(changes, 0);
+  f.emit(policy.CURFY_PREMIUM_PRODUCT_ID);
+  assert.equal(changes, 1);
+  assert.equal(f.calls.filter(([name]) => name === "entitlement").length, 0);
+  stop();
+  f.emit(policy.CURFY_PREMIUM_PRODUCT_ID);
+  assert.equal(changes, 1);
+  assert.equal(f.calls.at(-1)[0], "remove-listener");
+});
+
+test("native purchase and restore remain gated off from user-facing screens", () => {
+  const { readFileSync } = require("node:fs");
+  const { join } = require("node:path");
+  const home = readFileSync(join(__dirname, "../app/(tabs)/index.tsx"), "utf8");
+  const settings = readFileSync(join(__dirname, "../app/settings.tsx"), "utf8");
+  const onboarding = readFileSync(join(__dirname, "../app/onboarding.tsx"), "utf8");
+  for (const screen of [home, settings, onboarding]) {
+    assert.doesNotMatch(screen, /purchasePremium\s*\(/);
+    assert.doesNotMatch(screen, /buyPremium\s*\(/);
+  }
 });

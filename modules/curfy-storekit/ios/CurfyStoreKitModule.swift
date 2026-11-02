@@ -57,8 +57,52 @@ private func currentPremiumOwnership(_ productID: String) async throws -> String
 }
 
 public class CurfyStoreKitModule: Module {
+  private var transactionObserver: Task<Void, Never>?
+
+  // Apple's transaction updates include pending Ask to Buy approvals, changes
+  // on other devices, and revocations. The event never carries ownership:
+  // JavaScript must re-read verified currentEntitlements after receiving it.
+  private func startTransactionObserver() {
+    guard transactionObserver == nil else { return }
+    transactionObserver = Task { [weak self] in
+      for await update in Transaction.updates {
+        if Task.isCancelled { break }
+        let transaction: Transaction
+        switch update {
+        case .verified(let verified):
+          transaction = verified
+          // Only verified transactions may be finished. The JS side never
+          // infers Premium from this event; it rechecks active ownership.
+          await verified.finish()
+        case .unverified(let unverified, _):
+          transaction = unverified
+        }
+        guard transaction.productID == "com.alvinkwak.curfy.premium" else { continue }
+        await MainActor.run {
+          self?.sendEvent("onPremiumTransactionChanged", ["productId": transaction.productID])
+        }
+      }
+    }
+  }
+
+  private func stopTransactionObserver() {
+    transactionObserver?.cancel()
+    transactionObserver = nil
+  }
+
+  deinit {
+    transactionObserver?.cancel()
+  }
+
   public func definition() -> ModuleDefinition {
     Name("CurfyStoreKit")
+    Events("onPremiumTransactionChanged")
+    OnStartObserving("onPremiumTransactionChanged") { [weak self] in
+      self?.startTransactionObserver()
+    }
+    OnStopObserving("onPremiumTransactionChanged") { [weak self] in
+      self?.stopTransactionObserver()
+    }
 
     AsyncFunction("getProduct") { (productID: String, promise: Promise) in
       Task {

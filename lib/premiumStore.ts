@@ -69,3 +69,18 @@ export async function restorePremium(): Promise<"owned" | "free"> {
   verifyEntitlementResult(nativeResult);
   return refreshPremiumEntitlement();
 }
+
+/**
+ * Apple notifies us when a transaction changes, including Ask to Buy approval
+ * and another-device purchases. The event is NOT an entitlement: callbacks
+ * should always re-read currentEntitlements before enabling Premium.
+ */
+export function subscribePremiumTransactions(onChanged: () => void): () => void {
+  const subscription = curfyStoreKit().addListener(
+    "onPremiumTransactionChanged",
+    (event) => {
+      if (event.productId === CURFY_PREMIUM_PRODUCT_ID) onChanged();
+    }
+  );
+  return () => subscription.remove();
+}
