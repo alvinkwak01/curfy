@@ -1,6 +1,6 @@
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
-import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults } from "@/lib/protectionRoutine";
+import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults, cutoffDayLabel, clockLabel } from "@/lib/protectionRoutine";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import {
@@ -302,7 +302,7 @@ export default function Settings() {
 
         <View style={styles.section}>
           <Text style={styles.label}>APPS AVAILABLE AGAIN</Text>
-          <Text style={styles.hint}>Your selected app is no longer shielded after this cutoff time.</Text>
+          <Text style={styles.hint}>Your app becomes available again at {clockLabel(localWakeTime)} ({cutoffDayLabel(localBedtime, localWakeTime)}).</Text>
           <View style={{ marginTop: 12 }}>
             <TimePicker value={localWakeTime} onChange={setLocalWakeTime} digitSize={48} />
           </View>
