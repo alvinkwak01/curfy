@@ -453,15 +453,13 @@ function StepChooseApps({
     onSelectionChange(event.nativeEvent);
   };
 
-  const activePreset = BLOCK_MODE_PRESETS.find((p) => p.id === pickerMode);
-
   return (
     <View style={styles.stepInner}>
       <Badge>CHOOSE WHAT TO BLOCK</Badge>
       <Text style={styles.hero}>Choose one app to protect</Text>
       <Text style={styles.bodyText}>
-        Choose one distracting app to shield during your chosen hours.
-        Free protects one app. Multiple apps are planned for Premium.
+        Free protects one app. Choose it with Apple's private app picker.
+        You can change it later in Settings.
       </Text>
       <View style={styles.trustCard}>
         <Text style={styles.featureTitle}>
@@ -476,34 +474,28 @@ function StepChooseApps({
         </Text>
       </View>
 
-      <View style={{ gap: 10, marginTop: 4 }}>
-        {BLOCK_MODE_PRESETS.filter((preset) => preset.id === "custom").map((preset) => {
-          const isSelected = blockMode === preset.id;
-          return (
-            <TouchableOpacity
-              key={preset.id}
-              onPress={() => handlePick(preset.id)}
-              activeOpacity={0.85}
-              style={[styles.presetCard, isSelected && styles.presetCardSelected]}
-            >
-              <View style={[styles.presetIconWrap, isSelected && styles.presetIconWrapSelected]}>
-                <Ionicons
-                  name={preset.icon}
-                  size={20}
-                  color={isSelected ? Colors.primaryCyan : Colors.textMuted}
-                />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.presetTitle}>{preset.title}</Text>
-                <Text style={styles.presetDesc}>{preset.description}</Text>
-              </View>
-              {isSelected && (
-                <Ionicons name="checkmark-circle" size={22} color={Colors.primaryCyan} />
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </View>
+      <TouchableOpacity
+        accessibilityRole="button"
+        accessibilityLabel={selectionIssue === null && selectedCount === 1 ? "Change selected app" : "Choose one app"}
+        onPress={() => handlePick("custom")}
+        activeOpacity={0.85}
+        style={[styles.presetCard, blockMode === "custom" && selectionIssue === null && styles.presetCardSelected]}
+      >
+        <View style={styles.presetIconWrap}>
+          <Ionicons name="apps-outline" size={22} color={Colors.primaryCyan} />
+        </View>
+        <View style={{ flex: 1, gap: 3 }}>
+          <Text style={styles.presetTitle}>
+            {selectionIssue === null && selectedCount === 1 ? "Change protected app" : "Choose one app"}
+          </Text>
+          <Text style={styles.presetDesc}>
+            {selectionIssue === null && selectedCount === 1
+              ? "One app selected. Tap to change it."
+              : "Open Apple's app picker to select one app."}
+          </Text>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={Colors.primaryCyan} />
+      </TouchableOpacity>
 
       {selectionIssue === "too-many-apps-or-categories" && (
         <View style={styles.selectionWarning}>
@@ -516,17 +508,6 @@ function StepChooseApps({
         </View>
       )}
 
-      {selectedCount !== null && blockMode && (
-        <TouchableOpacity
-          onPress={() => handlePick(blockMode)}
-          style={styles.selectedChip}
-        >
-          <Text style={styles.selectedChipText}>
-            {selectedCount === 1 ? "1 selection — tap to change" : `${selectedCount} selections — free protects one individual app`}
-          </Text>
-        </TouchableOpacity>
-      )}
-
       {/* Apple's native picker sheet — mounted only while open, per the
           library's documented pattern. It's an invisible 1x1 anchor; the
           actual UI is presented natively by iOS itself. Persisted variant
@@ -537,7 +518,7 @@ function StepChooseApps({
         <DeviceActivitySelectionSheetViewPersisted
           style={{ width: 1, height: 1, position: "absolute" }}
           familyActivitySelectionId={selectionIdForMode(pickerMode)}
-          headerText={activePreset?.pickerHint}
+          headerText="Choose exactly one app to protect"
           onSelectionChange={handleSelectionChange}
           onDismissRequest={() => {
             // Some iOS picker dismissals don't emit a final change event.
