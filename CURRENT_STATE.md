@@ -10,6 +10,20 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 `feat/ios-shield-from-august`, draft PR #2 (base `backup/local-curfy-august`). `main` is untouched. Existing August native implementation and EAS iOS extension targets are preserved.
 
+## Milestone: failed-stop callback restoration and partial onboarding rollback (2026-11-02)
+
+**Goal:** prevent Curfy itself from stranding a protected app if iOS accepts an initial schedule but local onboarding later fails, or if iOS refuses to stop an existing schedule. No new EAS build or signed device test.
+
+**Changes, draft PR #2, `main` unchanged:**
+- `lib/screenTime.ts`: `stopBedtimeBlocking()` first snapshots the committed opaque selection, clears bedtime start/end actions inside a protected `try`, asks native iOS to stop monitoring and clear shields, then verifies no Curfy native schedule or shield remains. On failure while the monitor still exists, it **restores both the native start and end callback actions** so a surviving monitor can still apply and lift shielding at the expected times. Explicitly warns if recovery can't be confirmed.
+- Also fixed exception order: a Stop attempt now cancels an earned **15-minute auto-reblock monitor only AFTER a verified successful stop**. A failed stop may otherwise cancel the one-shot exception and strand apps unshielded when Curfy is killed.
+- `app/onboarding.tsx`: finishing setup is compensating/transactional. If native schedule registration succeeds but local AsyncStorage writes fail before the Home/escape route becomes available, Curfy attempts a verified native stop instead of silently leaving restrictions active behind an incomplete onboarding flow. If even stopping fails, alert explains the possible active native restriction and directs the user to iPhone Screen Time permission recovery. No false claim that setup succeeded.
+- `components/HoldButton.tsx`: changed misleading `Unlocked X times tonight` to routine-neutral `Temporary exceptions this window` for morning and both users.
+- `tests/screenTimeException.test.cjs` adds native mock failure cases for stop refusal, successful stop and action clearing, interrupted action write during stop, and preservation of the live exception monitor on failed stop. `tests/uxArchitecture.test.cjs` guards the initial onboarding schedule compensation.
+- **Verified by test:** GitHub Actions **`41474910861`** at commit `17b76e7`: **94/94 Node tests passed**, TypeScript, **18/18 Expo Doctor**, clean lockfile, `npx expo prebuild --platform ios --no-install`. Swift/native iOS targets had passed unsigned Xcode compile in earlier run `41464243352`; these new changes are TypeScript/React Native, not newly compiled on a physical iPhone. **No EAS credits spent.**
+
+**Still required:** physical-iPhone verification of uninterrupted 120s hold, actual one-app shield with Curfy killed, 15-minute OS-driven re-shield, app availability after cutoff, onboarding compensation, native stop/deletion on real hardware; Apple Family Controls app+extension distribution entitlement approval; accessibility accommodation for people unable to press for two minutes; true StoreKit Premium purchase/restore/expiration once pricing/product type approved, user-approved per-app vs group Premium exception scope, and App Store privacy/support/TestFlight review. **Not release-ready.**
+
 ## Milestone: account deletion must never strand native iOS shields (2026-11-02)
 
 **Verified in code:** prior `context/SleepContext.tsx` did the remote Supabase deletion, wiped all local AsyncStorage state, then called `stopBedtimeBlocking()` inside an empty `catch`. If native stopping failed, an app could remain OS-shielded with no Curfy settings left for recovery. This is unacceptable for launch.
