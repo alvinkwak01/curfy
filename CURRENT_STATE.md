@@ -10,6 +10,20 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 `feat/ios-shield-from-august`, draft PR #2 (base `backup/local-curfy-august`). `main` is untouched. Existing August native implementation and EAS iOS extension targets are preserved.
 
+## Milestone: scoped one-app choice tickets, never an automatic unlock (2026-11-02)
+
+**Goal:** prepare one native, opaque app token for a future Premium 120-second hold without unshielding anything, trusting JavaScript token identities, or letting a stale app-row selection act on a new protected-app list.
+
+**Implemented:** `modules/curfy-protected-apps/ios/CurfyProtectedAppsModule.swift` adds `prepareProtectedApp` and `validatePreparedApp`. A strictly whitelisted committed selection must match its whole-selection revision and a valid row index. Swift creates a random UUID-based `curfy-single-app-...` ID with a **single** `ApplicationToken`, persisted in the pinned 0.6.1 App Group selection format. A separate native-only ticket records the source committed ID, revision, row index and creation date. Before any future exception, iOS must re-decode the saved singleton and confirm it equals the same token still in the current committed selection. Tickets expire for authorization after 10 minutes; orphaned scoped selections are pruned after 24 hours (enough to retain a token for an eventual 15-minute reblock monitor). The bridge returns ONLY the random scoped ID, never a token or app name. **Preparing and validating do not call ManagedSettings, unblock any app, or alter the live schedule.**
+
+`modules/curfy-protected-apps/index.tsx` exposes typed, input-validating wrappers; `tests/protectedAppChoices.test.cjs` adds tests for successful preparation/revalidation, invalid drafts/indexes/revisions, platform restrictions and a source-level prohibition on unshield side effects. Existing Free `grantBedtimeException` and exactly-one-app scheduling guard are untouched.
+
+**Verified by CI:** GitHub Actions **`41488530428`** at code commit `2e264a2` passed **127/127 Node tests**, TypeScript, **18/18 Expo Doctor**, lockfile, iOS prebuild and BOTH Expo native module autolinking checks. The original unsigned native compile on prior commit `636bf38` **PASSED** in run **`41484550157`**, including the earlier StoreKit module. The newer native compile `41487626181` (chooser before tickets) was **queued** when last checked, and **the newly added ticket Swift code has not been compiled in Xcode**. No EAS credits or signed iPhone tests. `main` untouched.
+
+**Important integration blocker:** This is only the secure selection **preparation**, not a working app-specific 120-second exception. The current `lib/screenTime.ts` and ActivityMonitorExtension use a **single** `curfy-active-exception` record and reject a second overlapping exception. For Premium's user-requested ability to return Home and choose another app, the extension and JS need a coordinated multi-exception record with independent one-shot monitor callbacks, interval boundary checks, cancellation and cleanup. In particular, native reblock must target the exact selected token while other apps stay blocked. Apple's DeviceActivity minimum monitoring interval is 15 minutes; failures and end-of-window exceptions need fail-closed handling. No Premium purchase UI, multi-app scheduling or per-app release has been enabled.
+
+**Next:** implement one-app-at-a-time scoped native reblock state/extension semantics with robust rollback tests. Before enabling more than one exception, prove native callbacks, cutoff, stale change, two overlapping holds, app-killed re-shield, device restart and iOS 26 picker behavior on real hardware. Do not call these complete from unit tests or autolinking.
+
 ## Milestone: privacy-safe protected-app chooser foundation (2026-11-02)
 
 **Goal:** show each explicitly protected app on the future Premium escape chooser without revealing Apple Screen Time app tokens, names, or bundle IDs to React Native, and ensure stale selections fail closed. Do not change the free tier or sell Premium before per-app exception works.

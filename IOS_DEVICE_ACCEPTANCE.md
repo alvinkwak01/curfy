@@ -40,6 +40,8 @@ Updated 2026-11-02. **NOT a claim of device testing.** Use this after the next s
 
 - **Private selected-app chooser:** on a signed iPhone with 2+ manually selected individual apps, verify the chosen native row displays the correct Apple app icon/name with VoiceOver, scrolls on a smaller phone, never exposes names/tokens to JS or network, detects a changed selected-app list and refuses to unlock a stale row. On iOS picker category promotion, show a recoverable selection error rather than presenting an unrelated app. The new native label module is *not yet exposed* in a shipping UI; these are future acceptance cases, not passed tests.
 
+- **Scoped choice-ticket safety:** select app A in native chooser, then change the committed protected selection before completing a hold: the prepared ticket must refuse revalidation (never unlock B). Reject invalid row indices, category picker promotion, and expired choice tickets. Early release, cancel or background must not call any unshield method; native singleton selections used for actual reblocking must not be deleted before their monitor ends. Verify two sequential/overlapping 120-second holds for different protected apps independently, with separate ~15-minute re-shielding and after app termination; current code does NOT yet support this.
+
 ## Evidence record (fill after actual testing)
 
 | Case | Status | Observed build/iPhone/iOS | Repro/log/video |
