@@ -1,8 +1,9 @@
 import Btn from "@/components/Btn";
 import { MoonGlyph } from "@/components/MoonGlyph";
+
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
-import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults, routineExplainer, startQuestion, protectionWindowLabel, clockLabel, cutoffDayLabel } from "@/lib/protectionRoutine";
+import { PROTECTION_ROUTINES, ProtectionRoutine, protectionWindowLabel, clockLabel, cutoffDayLabel } from "@/lib/protectionRoutine";
 import { assertMonitorableBedtimeSchedule } from "@/lib/bedtimeWindow";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
@@ -12,6 +13,7 @@ import {
   configureBedtimeBlocking,
   freeSelectionIssueForMetadata,
   getScreenTimeAccessStatus,
+  beginFreshOnboardingAppSelection,
   FreeSelectionIssue,
   requestScreenTimeAccess,
   selectionIdForMode,
@@ -28,6 +30,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -38,7 +41,47 @@ import {
 } from "react-native-device-activity";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-const STEP_COUNT = 5;
+const STEP_COUNT = 13;
+
+function toMinutes(time: string): number {
+  const [h, m] = time.split(":").map(Number);
+  return h * 60 + m;
+}
+
+function sleepDurationMinutes(bedtime: string, wake: string): number {
+  const b = toMinutes(bedtime);
+  const w = toMinutes(wake);
+  return w > b ? w - b : 24 * 60 - b + w;
+}
+
+function formatDuration(totalMinutes: number): string {
+  const h = Math.floor(totalMinutes / 60);
+  const m = Math.round(totalMinutes % 60);
+  if (h <= 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function formatTime12(time: string): string {
+  const [hStr, mStr] = time.split(":");
+  let h = parseInt(hStr, 10);
+  const period = h >= 12 ? "PM" : "AM";
+  h = h % 12;
+  if (h === 0) h = 12;
+  return `${h}:${mStr} ${period}`;
+}
+
+const REASON_OPTIONS: { id: string; label: string; icon: keyof typeof Ionicons.glyphMap }[] = [
+  { id: "social", label: "Doomscrolling social media", icon: "phone-portrait-outline" },
+  { id: "video", label: "\"One more episode\"", icon: "play-circle-outline" },
+  { id: "chat", label: "Texting or group chats", icon: "chatbubble-ellipses-outline" },
+  { id: "games", label: "Games", icon: "game-controller-outline" },
+  { id: "cant-sleep", label: "Can't fall asleep, so I pick up my phone", icon: "moon-outline" },
+  { id: "work", label: "Catching up on work or school", icon: "briefcase-outline" },
+  { id: "anxious", label: "Anxious thoughts, phone is the distraction", icon: "pulse-outline" },
+];
+
+
 
 function ProgressBar({ step }: { step: number }) {
   const progress = ((step + 1) / STEP_COUNT) * 100;
@@ -63,19 +106,22 @@ export default function Onboarding() {
     setWakeTime,
     setBlockMode: persistBlockMode,
     setProtectionRoutine,
+    setUserName,
     completeOnboarding,
   } = useSleep();
   // Restore the original branded first impression, including after Delete Everything.
   const [showWelcome, setShowWelcome] = useState(true);
   const [step, setStep] = useState(0);
+  const [reasons, setReasons] = useState<string[]>([]);
+  const [currentBedtime, setCurrentBedtime] = useState("00:30");
+  const [name, setName] = useState("");
+  const firstPickerOpened = useRef(false);
   const [routine, setRoutine] = useState<ProtectionRoutine | null>(null);
   const [localBedtime, setLocalBedtime] = useState("23:00");
   const [localWakeTime, setLocalWakeTime] = useState("06:00");
   const chooseRoutine = (selected: ProtectionRoutine) => {
-    const defaults = routineDefaults(selected);
+    // This choice changes the narrative, NEVER the user's actual clock choices.
     setRoutine(selected);
-    setLocalBedtime(defaults.start);
-    setLocalWakeTime(defaults.end);
   };
   const [screenTimeStatus, setScreenTimeStatus] =
     useState<ScreenTimeAuthStatus>("notDetermined");
@@ -85,7 +131,7 @@ export default function Onboarding() {
   // iOS Screen Time authorization survives deleting a Curfy account.
   // Check the actual device permission when the step becomes visible.
   useEffect(() => {
-    if (step !== 3) return;
+    if (step !== 9) return;
     try {
       setScreenTimeStatus(getScreenTimeAccessStatus());
     } catch (error) {
@@ -97,11 +143,15 @@ export default function Onboarding() {
   const finishingRef = useRef(false);
 
   const next = async () => {
-    if (step === 0 && !routine) {
+    if (step === 1 && reasons.length === 0) {
+      Alert.alert("Choose a distraction", "Choose at least one reason to continue.");
+      return;
+    }
+    if (step === 2 && !routine) {
       Alert.alert("Choose your routine", "Select Evening, Morning or Both to continue.");
       return;
     }
-    if (step === 2) {
+    if (step === 5) {
       try {
         assertMonitorableBedtimeSchedule(localBedtime, localWakeTime);
       } catch (error) {
@@ -109,7 +159,7 @@ export default function Onboarding() {
         return;
       }
     }
-    if (step === 3) {
+    if (step === 9) {
       let currentStatus: ScreenTimeAuthStatus;
       try {
         currentStatus = getScreenTimeAccessStatus();
@@ -123,19 +173,29 @@ export default function Onboarding() {
         return;
       }
     }
-    if (step === 4 && (selectionIssue || !blockMode)) {
-      Alert.alert("Start with one app",
-        selectionIssue === "too-many-apps-or-categories"
-          ? "Your free Curfy plan protects one individual app. Reopen Apple's picker and keep only one app selected. Multiple apps will require Premium."
-          : "Choose one individual app in Apple's picker to continue.");
-      return;
+    if (step === 10) {
+      // Trust the committed native picker selection, not a stale event from
+      // the last picker session or an old local React state.
+      const metadata = blockMode ? activitySelectionMetadata({
+        activitySelectionId: selectionIdForMode(blockMode),
+      }) : null;
+      const issue = freeSelectionIssueForMetadata(metadata);
+      setSelectionIssue(issue);
+      setSelectedCount(metadata ? metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount : null);
+      if (!blockMode || issue) {
+        const details = metadata
+          ? `${metadata.applicationCount} individual app(s), ${metadata.categoryCount} categories, ${metadata.webDomainCount} websites selected.`
+          : "No app selection was saved.";
+        Alert.alert("Choose exactly one app", `${details}\nOpen Apple's picker and remove any extra selections or categories.`);
+        return;
+      }
     }
     if (step < STEP_COUNT - 1) {
       setStep(step + 1);
       return;
     }
-    if (!blockMode || !routine) {
-      Alert.alert("Finish setup", "Choose a routine and one individual app first.");
+    if (!blockMode || !routine || !name.trim()) {
+      Alert.alert("Finish setup", "Choose a routine, one individual app and a name first.");
       return;
     }
     if (finishingRef.current) return;
@@ -156,6 +216,7 @@ export default function Onboarding() {
       await setWakeTime(localWakeTime);
       await persistBlockMode(blockMode);
       await setProtectionRoutine(routine);
+      await setUserName(name.trim());
       await completeOnboarding();
     } catch (error) {
       console.warn("[Curfy] Failed to finish onboarding", error);
@@ -186,7 +247,7 @@ export default function Onboarding() {
 
   const isLastStep = step === STEP_COUNT - 1;
   // Leave Continue tappable so invalid selections get an explanation.
-  const buttonDisabled = finishing;
+  const buttonDisabled = finishing || (isLastStep && !name.trim());
 
   if (showWelcome) {
     return (
@@ -212,25 +273,38 @@ export default function Onboarding() {
         style={styles.stepFlow}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        <ScrollView
-          key={step}
-          style={styles.stepScroll}
-          contentContainerStyle={styles.stepScrollContent}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-        >
-          {step === 0 && <StepRoutine routine={routine} onChange={chooseRoutine} />}
-          {step === 1 && routine && <StepTimeStart routine={routine} value={localBedtime} onChange={setLocalBedtime} />}
-          {step === 2 && routine && <StepTimeEnd routine={routine} start={localBedtime} value={localWakeTime} onChange={setLocalWakeTime} />}
-          {step === 3 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
-          {step === 4 && (
+        {([3, 4, 5].includes(step)) ? (
+          <View key={step} style={styles.timeStepContent}>
+
+          {step === 0 && <StepWakeUpCall />}
+          {step === 1 && <StepWhyStayUp reasons={reasons} onChange={setReasons} />}
+          {step === 2 && <StepRoutine routine={routine} onChange={chooseRoutine} />}
+          {step === 3 && <StepCurrentBedtime bedtime={currentBedtime} onChange={setCurrentBedtime} />}
+          {step === 4 && <StepSetBedtime bedtime={localBedtime} onChange={setLocalBedtime} />}
+          {step === 5 && <StepWakeTime wakeTime={localWakeTime} onChange={setLocalWakeTime} />}
+          {step === 6 && <StepReveal currentBedtime={currentBedtime} goalBedtime={localBedtime} wakeTime={localWakeTime} />}
+          {step === 7 && <StepBenefits />}
+          {step === 8 && <StepHowItWorks />}
+          {step === 9 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
+          {step === 10 && (
             <StepChooseApps
               routine={routine}
               start={localBedtime}
               end={localWakeTime}
               blockMode={blockMode}
               selectedCount={selectedCount}
-              onSelect={setBlockMode}
+              onSelect={(mode) => {
+                try {
+                  if (!firstPickerOpened.current) {
+                    beginFreshOnboardingAppSelection(mode);
+                    firstPickerOpened.current = true;
+                  }
+                  setBlockMode(mode);
+                } catch (error) {
+                  Alert.alert("Can't reset the app picker", error instanceof Error ? error.message : "Try again.");
+                  throw error;
+                }
+              }}
               selectionIssue={selectionIssue}
               onSelectionChange={(metadata) => {
                 setSelectedCount(metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount);
@@ -238,7 +312,58 @@ export default function Onboarding() {
               }}
             />
           )}
-        </ScrollView>
+          {step === 11 && <StepPreview bedtime={localBedtime} wakeTime={localWakeTime} />}
+          {step === 12 && <StepName name={name} onChange={setName} />}
+          </View>
+        ) : (
+          <ScrollView
+            key={step}
+            style={styles.stepScroll}
+            contentContainerStyle={styles.stepScrollContent}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+          >
+
+          {step === 0 && <StepWakeUpCall />}
+          {step === 1 && <StepWhyStayUp reasons={reasons} onChange={setReasons} />}
+          {step === 2 && <StepRoutine routine={routine} onChange={chooseRoutine} />}
+          {step === 3 && <StepCurrentBedtime bedtime={currentBedtime} onChange={setCurrentBedtime} />}
+          {step === 4 && <StepSetBedtime bedtime={localBedtime} onChange={setLocalBedtime} />}
+          {step === 5 && <StepWakeTime wakeTime={localWakeTime} onChange={setLocalWakeTime} />}
+          {step === 6 && <StepReveal currentBedtime={currentBedtime} goalBedtime={localBedtime} wakeTime={localWakeTime} />}
+          {step === 7 && <StepBenefits />}
+          {step === 8 && <StepHowItWorks />}
+          {step === 9 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
+          {step === 10 && (
+            <StepChooseApps
+              routine={routine}
+              start={localBedtime}
+              end={localWakeTime}
+              blockMode={blockMode}
+              selectedCount={selectedCount}
+              onSelect={(mode) => {
+                try {
+                  if (!firstPickerOpened.current) {
+                    beginFreshOnboardingAppSelection(mode);
+                    firstPickerOpened.current = true;
+                  }
+                  setBlockMode(mode);
+                } catch (error) {
+                  Alert.alert("Can't reset the app picker", error instanceof Error ? error.message : "Try again.");
+                  throw error;
+                }
+              }}
+              selectionIssue={selectionIssue}
+              onSelectionChange={(metadata) => {
+                setSelectedCount(metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount);
+                setSelectionIssue(freeSelectionIssueForMetadata(metadata));
+              }}
+            />
+          )}
+          {step === 11 && <StepPreview bedtime={localBedtime} wakeTime={localWakeTime} />}
+          {step === 12 && <StepName name={name} onChange={setName} />}
+          </ScrollView>
+        )}
         <View style={styles.btnWrap}>
           <Btn
             label={isLastStep ? (finishing ? "Setting up..." : "Finish setup") : "Continue"}
@@ -266,6 +391,311 @@ function StepWelcome({ onStart }: { onStart: () => void }) {
       <View style={styles.welcomeFooter}>
         <Btn label="Get Started" onPress={onStart} />
       </View>
+    </View>
+  );
+}
+
+function StepWakeUpCall() {
+  return (
+    <View style={styles.stepInner}>
+      <Badge>WAKE UP CALL</Badge>
+      <Text style={styles.hero}>
+        Your phone{"\n"}doesn't have{"\n"}
+        <Text style={styles.heroCyan}>a bedtime.</Text>
+      </Text>
+      <Text style={[styles.hero, styles.heroCyan]}>You do.</Text>
+      <Text style={styles.statement}>
+        Let's figure out exactly what that's costing you.
+      </Text>
+    </View>
+  );
+}
+
+function StepWhyStayUp({
+  reasons,
+  onChange,
+}: {
+  reasons: string[];
+  onChange: (r: string[]) => void;
+}) {
+  const toggle = (id: string) => {
+    if (reasons.includes(id)) {
+      onChange(reasons.filter((r) => r !== id));
+      return;
+    }
+    if (reasons.length >= 3) return;
+    onChange([...reasons, id]);
+  };
+
+  return (
+    <View style={styles.stepInner}>
+      <Badge>SO, TELL US</Badge>
+      <Text style={styles.hero}>What keeps{"\n"}you up?</Text>
+      <Text style={styles.bodyText}>Choose up to 3 — this shapes what Curfy shows you next.</Text>
+
+      <View style={{ gap: 10, marginTop: 4 }}>
+        {REASON_OPTIONS.map((opt) => {
+          const isSelected = reasons.includes(opt.id);
+          const isMaxed = !isSelected && reasons.length >= 3;
+          return (
+            <TouchableOpacity
+              key={opt.id}
+              onPress={() => toggle(opt.id)}
+              activeOpacity={0.85}
+              disabled={isMaxed}
+              style={[
+                styles.presetCard,
+                isSelected && styles.presetCardSelected,
+                isMaxed && styles.presetCardDim,
+              ]}
+            >
+              <View style={[styles.presetIconWrap, isSelected && styles.presetIconWrapSelected]}>
+                <Ionicons
+                  name={opt.icon}
+                  size={18}
+                  color={isSelected ? Colors.primaryCyan : Colors.textMuted}
+                />
+              </View>
+              <Text style={[styles.presetTitle, { flex: 1, marginBottom: 0 }]}>{opt.label}</Text>
+              {isSelected && (
+                <Ionicons name="checkmark-circle" size={20} color={Colors.primaryCyan} />
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+function StepCurrentBedtime({ bedtime, onChange }: { bedtime: string; onChange: (v: string) => void }) {
+  return (
+    <View style={[styles.stepInner, { alignItems: "center" }]}>
+      <Badge>BE HONEST</Badge>
+      <Text style={[styles.hero, { textAlign: "center" }]}>
+        What time do{"\n"}you actually{"\n"}fall asleep?
+      </Text>
+      <Text style={[styles.bodyText, { textAlign: "center" }]}>
+        Not the time you plan to. The time it really happens.
+      </Text>
+      <View style={{ marginVertical: 16 }}>
+        <TimePicker value={bedtime} onChange={onChange} digitSize={56} />
+      </View>
+    </View>
+  );
+}
+
+function StepSetBedtime({ bedtime, onChange }: { bedtime: string; onChange: (v: string) => void }) {
+  return (
+    <View style={[styles.stepInner, { alignItems: "center" }]}>
+      <Badge>SET YOUR BEDTIME</Badge>
+      <Text style={[styles.hero, { textAlign: "center" }]}>
+        And what time{"\n"}would you like{"\n"}to fall asleep{"\n"}instead?
+      </Text>
+      <Text style={[styles.bodyText, { textAlign: "center" }]}>
+        This is when the lock kicks in. Pick a time you know you should
+        actually be asleep.
+      </Text>
+      <View style={{ marginVertical: 16 }}>
+        <TimePicker value={bedtime} onChange={onChange} digitSize={56} />
+      </View>
+      <Text style={[styles.bodyText, { textAlign: "center" }]}>
+        You'll get a heads-up 10 and 2 minutes before.
+      </Text>
+    </View>
+  );
+}
+
+function StepWakeTime({ wakeTime, onChange }: { wakeTime: string; onChange: (v: string) => void }) {
+  return (
+    <View style={[styles.stepInner, { alignItems: "center" }]}>
+      <Badge>ALMOST THERE</Badge>
+      <Text style={[styles.hero, { textAlign: "center" }]}>
+        What time do{"\n"}you wake up?
+      </Text>
+      <Text style={[styles.bodyText, { textAlign: "center" }]}>
+        This is what we use to work out how much sleep you're actually
+        getting.
+      </Text>
+      <View style={{ marginVertical: 16 }}>
+        <TimePicker value={wakeTime} onChange={onChange} digitSize={56} />
+      </View>
+    </View>
+  );
+}
+
+function StepReveal({
+  currentBedtime,
+  goalBedtime,
+  wakeTime,
+}: {
+  currentBedtime: string;
+  goalBedtime: string;
+  wakeTime: string;
+}) {
+  const currentSleep = sleepDurationMinutes(currentBedtime, wakeTime);
+  const goalSleep = sleepDurationMinutes(goalBedtime, wakeTime);
+  const deficitPerNight = goalSleep - currentSleep;
+  const isAlreadyClose = deficitPerNight <= 5;
+
+  if (isAlreadyClose) {
+    return (
+      <View style={styles.stepInner}>
+        <Badge>THE NUMBERS</Badge>
+        <Text style={styles.hero}>
+          You're close{"\n"}to your goal{"\n"}
+          <Text style={styles.heroCyan}>already.</Text>
+        </Text>
+        <Text style={styles.bodyText}>
+          At {formatTime12(currentBedtime)}, you're getting roughly{" "}
+          {formatDuration(currentSleep)} of sleep a night. Curfy's job from
+          here isn't to fix a huge gap — it's to make {formatTime12(goalBedtime)}{" "}
+          happen every night, not just some.
+        </Text>
+      </View>
+    );
+  }
+
+  const deficitPerWeek = deficitPerNight * 7;
+  const deficitPerYearHours = Math.round((deficitPerNight * 365) / 60);
+  const extraNightsPerYear = Math.round((deficitPerYearHours * 60) / goalSleep);
+
+  return (
+    <View style={styles.stepInner}>
+      <Badge>THE NUMBERS</Badge>
+      <Text style={styles.hero}>
+        At {formatTime12(currentBedtime)},{"\n"}you're losing{"\n"}
+        <Text style={styles.heroDanger}>{formatDuration(deficitPerNight)}</Text> a night.
+      </Text>
+      <Text style={styles.bodyText}>
+        That's {formatDuration(deficitPerWeek)} a week — about{" "}
+        {deficitPerYearHours} hours of lost sleep a year.
+      </Text>
+
+      <View style={styles.revealDivider} />
+
+      <Text style={[styles.hero, { fontSize: 28, lineHeight: 34 }]}>
+        Stick to <Text style={styles.heroCyan}>{formatTime12(goalBedtime)}</Text> and
+        get it back.
+      </Text>
+      <Text style={styles.bodyText}>
+        That's like reclaiming roughly {extraNightsPerYear} extra full
+        nights of sleep this year — just from one changed habit.
+      </Text>
+    </View>
+  );
+}
+
+function StepBenefits() {
+  const cards = [
+    {
+      icon: "moon-outline" as const,
+      title: "1 in 3 adults don't get enough sleep.",
+      body: "Chronic short sleep is linked to worse mood, focus, and long-term health.",
+      source: "CDC, Morbidity and Mortality Weekly Report",
+    },
+    {
+      icon: "car-outline" as const,
+      title: "Awake ~18 hours straight? Same reaction time as legally drunk.",
+      body: "Sleep debt impairs coordination and judgment the same way alcohol does.",
+      source: "CDC / AAA Foundation for Traffic Safety",
+    },
+  ];
+
+  return (
+    <View style={styles.stepInner}>
+      <Badge>WHY IT MATTERS</Badge>
+      <Text style={styles.hero}>This isn't{"\n"}just about{"\n"}sleep.</Text>
+      <View style={{ gap: 10, marginTop: 4 }}>
+        {cards.map((c) => (
+          <View key={c.title} style={styles.benefitCard}>
+            <Ionicons name={c.icon} size={20} color={Colors.primaryCyan} style={{ marginBottom: 8 }} />
+            <Text style={styles.benefitTitle}>{c.title}</Text>
+            <Text style={styles.benefitBody}>{c.body}</Text>
+            <Text style={styles.fineprint}>Source: {c.source}</Text>
+          </View>
+        ))}
+        <View style={styles.benefitCard}>
+          <Ionicons name="sparkles-outline" size={20} color={Colors.primaryCyan} style={{ marginBottom: 8 }} />
+          <Text style={styles.benefitTitle}>Consistency is the whole game.</Text>
+          <Text style={styles.benefitBody}>
+            One good night doesn't move the needle. The same bedtime, every
+            night, is what actually protects focus and mood.
+          </Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function StepHowItWorks() {
+  const rows = [
+    { icon: "◉", title: "You choose what's blocked", desc: "Pick the apps that keep you up. We lock those, at your bedtime, every night." },
+    { icon: "◎", title: "120-second escape", desc: "Tap a blocked app and it's held behind Apple's own lock screen. Hold a button for 2 full minutes to get through." },
+    { icon: "○", title: "Repeating every 15 min", desc: "Get in anyway? It locks back up 15 minutes later. And it remembers." },
+  ];
+  return (
+    <View style={styles.stepInner}>
+      <Badge>HOW IT WORKS</Badge>
+      <Text style={styles.hero}>We lock the{"\n"}apps.{"\n"}<Text style={styles.heroCyan}>Not the phone.</Text></Text>
+      <View style={{ gap: 20, marginTop: 8 }}>
+        {rows.map((r) => (
+          <View key={r.title} style={styles.featureRow}>
+            <Text style={styles.featureIcon}>{r.icon}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.featureTitle}>{r.title}</Text>
+              <Text style={styles.featureDesc}>{r.desc}</Text>
+            </View>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function StepPreview({ bedtime, wakeTime }: { bedtime: string; wakeTime: string }) {
+  return (
+    <View style={styles.stepInner}>
+      <Badge>WHAT IT LOOKS LIKE</Badge>
+      <Text style={styles.hero}>Here's the{"\n"}moment it{"\n"}matters.</Text>
+      <Text style={styles.bodyText}>
+        At {formatTime12(bedtime)}, opening a blocked app looks like this —
+        Apple's own lock screen, not something you can swipe away.
+      </Text>
+
+      <View style={styles.phoneFrame}>
+        <View style={styles.phoneNotch} />
+        <View style={styles.phoneShieldIcon}>
+          <Ionicons name="shield-checkmark" size={34} color={Colors.textMuted} />
+        </View>
+        <Text style={styles.phoneShieldTitle}>Blocked by Curfy</Text>
+        <Text style={styles.phoneShieldSub}>Locked until {formatTime12(wakeTime)}</Text>
+        <View style={styles.phoneHoldBtn}>
+          <Text style={styles.phoneHoldBtnText}>Hold 120s to unlock</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function StepName({ name, onChange }: { name: string; onChange: (v: string) => void }) {
+  return (
+    <View style={[styles.stepInner, { alignItems: "center" }]}>
+      <Badge>ALMOST READY</Badge>
+      <Text style={[styles.hero, { textAlign: "center" }]}>
+        What should{"\n"}we call you?
+      </Text>
+      <Text style={[styles.bodyText, { textAlign: "center" }]}>
+        For your personal sleep log. Keep it honest.
+      </Text>
+      <TextInput
+        style={styles.nameInput}
+        value={name}
+        onChangeText={onChange}
+        placeholder="Your name"
+        placeholderTextColor={Colors.textGhost}
+        autoFocus
+      />
     </View>
   );
 }
@@ -304,39 +734,6 @@ function StepRoutine({ routine, onChange }: {
         })}
       </View>
       <Text style={styles.fineprint}>Each option uses one continuous daily protection window. Times are editable.</Text>
-    </View>
-  );
-}
-
-function StepTimeStart({ routine, value, onChange }: {
-  routine: ProtectionRoutine; value: string; onChange: (v: string) => void;
-}) {
-  return (
-    <View style={[styles.stepInner, { alignItems: "center" }]}>
-      <Badge>START PROTECTING</Badge>
-      <Text style={[styles.hero, { textAlign: "center", fontSize: 32, lineHeight: 40 }]}>{startQuestion(routine)}</Text>
-      <Text style={[styles.bodyText, { textAlign: "center" }]}>{routineExplainer(routine)}</Text>
-      <View style={{ marginVertical: 14 }}><TimePicker value={value} onChange={onChange} digitSize={52} /></View>
-      <Text style={styles.timeConfirmation} accessibilityLiveRegion="polite">Starts at {clockLabel(value)}</Text>
-      <Text style={styles.fineprint}>Swipe to adjust the 24-hour clock. You can edit it later.</Text>
-    </View>
-  );
-}
-
-function StepTimeEnd({ routine, start, value, onChange }: {
-  routine: ProtectionRoutine; start: string; value: string; onChange: (v: string) => void;
-}) {
-  return (
-    <View style={[styles.stepInner, { alignItems: "center" }]}>
-      <Badge>AVAILABLE AGAIN</Badge>
-      <Text style={[styles.hero, { textAlign: "center", fontSize: 32, lineHeight: 40 }]}>When should your app be available again?</Text>
-      <Text style={[styles.bodyText, { textAlign: "center" }]}>
-        Choose your cutoff. Curfy doesn't need to know when you actually sleep or wake up.
-        Your selected app stays shielded until this time.
-      </Text>
-      <View style={{ marginVertical: 14 }}><TimePicker value={value} onChange={onChange} digitSize={52} /></View>
-      <Text style={styles.timeConfirmation} accessibilityLiveRegion="polite">Available again at {clockLabel(value)} ({cutoffDayLabel(start, value)})</Text>
-      <Text style={styles.fineprint}>Suggested for {routine === "morning" ? "morning" : routine === "both" ? "night and morning" : "evening"} — fully adjustable.</Text>
     </View>
   );
 }
@@ -771,4 +1168,106 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   btnWrap: { paddingTop: 12, paddingBottom: 20 },
+  heroCyan: {
+    color: Colors.primaryCyan,
+  },
+  heroDanger: {
+    color: Colors.dangerRed,
+  },
+  statement: {
+    color: Colors.textPrimary,
+    fontFamily: Fonts.semiBold,
+    fontSize: 17,
+    marginTop: 8,
+  },
+  revealDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 4,
+  },
+  presetCardDim: {
+    opacity: 0.4,
+  },
+  featureRow: { flexDirection: "row", gap: 14, alignItems: "flex-start" },
+  featureIcon: { color: Colors.primaryCyan, fontSize: 20, marginTop: 2 },
+  featureDesc: { color: Colors.textMuted, fontSize: 14, fontFamily: Fonts.regular, lineHeight: 20 },
+  benefitCard: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: Layout.cardRadius,
+    padding: 16,
+  },
+  benefitTitle: { color: Colors.textPrimary, fontSize: 15, fontFamily: Fonts.semiBold, marginBottom: 4, lineHeight: 20 },
+  benefitBody: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular, lineHeight: 18, marginBottom: 6 },
+  phoneFrame: {
+    alignSelf: "center",
+    width: 200,
+    height: 280,
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    alignItems: "center",
+    paddingTop: 36,
+    paddingHorizontal: 18,
+    marginTop: 8,
+  },
+  phoneNotch: {
+    position: "absolute",
+    top: 10,
+    width: 60,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.background,
+  },
+  phoneShieldIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.background,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 14,
+  },
+  phoneShieldTitle: {
+    color: Colors.textPrimary,
+    fontFamily: Fonts.semiBold,
+    fontSize: 15,
+    textAlign: "center",
+  },
+  phoneShieldSub: {
+    color: Colors.textMuted,
+    fontFamily: Fonts.regular,
+    fontSize: 12,
+    marginTop: 4,
+    marginBottom: 20,
+    textAlign: "center",
+  },
+  phoneHoldBtn: {
+    borderWidth: 1,
+    borderColor: Colors.primaryCyan,
+    borderRadius: 999,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+  },
+  phoneHoldBtnText: {
+    color: Colors.primaryCyan,
+    fontFamily: Fonts.semiBold,
+    fontSize: 12,
+  },
+  nameInput: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 14,
+    padding: 18,
+    fontSize: 22,
+    fontFamily: Fonts.medium,
+    color: Colors.textPrimary,
+    textAlign: "center",
+    width: "100%",
+  },
+  timeStepContent: { flex: 1, paddingTop: 22, paddingBottom: 12, justifyContent: "center" },
+
 });
