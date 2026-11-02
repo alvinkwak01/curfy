@@ -457,9 +457,14 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     if (routineIsEveningBased(routine)) {
       await scheduleBedtimeNotifications(time);
     } else if (Platform.OS !== "web") {
-      // A morning-only routine must not trigger a 05:50 AM "bedtime soon"
-      // alarm left over from an earlier evening selection.
-      await Notifications.cancelAllScheduledNotificationsAsync();
+      // A morning-only routine must not trigger 05:50 AM bedtime alerts
+      // left over from a previous evening routine. A notification-service
+      // failure must not make an otherwise valid native schedule look unsaved.
+      try {
+        await Notifications.cancelAllScheduledNotificationsAsync();
+      } catch (error) {
+        console.warn("[Curfy] Couldn't clear old evening reminders", error);
+      }
     }
   };
 
