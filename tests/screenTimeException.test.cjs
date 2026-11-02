@@ -855,3 +855,20 @@ test("fresh onboarding cannot erase tokens while a native bedtime monitor is sti
   assert.equal(f.storage.get("familyActivitySelectionIds")["curfy-block-custom"],
     "existing-protected-app");
 });
+
+test("iOS permission request tolerates brief notDetermined status propagation after approval", async () => {
+  const f = fixture({ authorization: 0 });
+  f.native.requestAuthorization = async () => {};
+  let reads = 0;
+  f.native.getAuthorizationStatus = () => (++reads < 3 ? 0 : 2);
+  assert.equal(await f.screenTime.requestScreenTimeAccess(), "authorized");
+  assert.equal(reads, 3);
+});
+test("denied iOS Screen Time request reports denial without blind retries", async () => {
+  const f = fixture({ authorization: 1 });
+  f.native.requestAuthorization = async () => { throw Error("user denied"); };
+  let reads = 0;
+  f.native.getAuthorizationStatus = () => { reads++; return 1; };
+  assert.equal(await f.screenTime.requestScreenTimeAccess(), "denied");
+  assert.equal(reads, 1);
+});
