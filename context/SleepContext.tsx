@@ -594,17 +594,19 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Full wipe: local storage plus the real remote auth user (via the
-  // delete-account Edge Function — see AuthContext.deleteRemoteAccount).
-  // The remote call is best-effort and never blocks the local wipe below,
-  // so the device always ends up clean even if that call fails (e.g.
-  // offline) — see the App Store 5.1.1(v) note in CONTEXT.md for why the
-  // remote half exists at all.
+  // Account deletion must succeed on the remote backend first, then
+  // STOP the native OS restrictions and confirm they are gone, and ONLY
+  // THEN wipe local settings/history. Never orphan Screen Time shields
+  // with no Curfy configuration left to recover them.
   const deleteAccount = async () => {
     // Deleting an automatically-created Supabase account is not optional.
     // If the server is offline or rejects deletion, keep the local session
     // and Settings so the user can retry. Never report a false success.
     await deleteRemoteAccount();
+    // Keep the on-device Settings and previous selection if iOS refuses to
+    // stop its monitor. The remote account may already be deleted, but
+    // deletion is retryable because there is still a local recovery path.
+    stopBedtimeBlocking();
     setIsLocked(false);
     lockedToday.current = false;
     cooldownUntil.current = 0;
@@ -620,13 +622,6 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     setLongestStreak(0);
     setDevSkipLockState(false);
     await AsyncStorage.multiRemove(ALL_STORAGE_KEYS);
-    try {
-      // Stops the native schedule too — otherwise the block keeps running
-      // forever on-device, orphaned, after every trace of it is gone from
-      // the app itself. Platform-guarded implicitly: this is a no-op shape
-      // on a device where the module was never authorized/configured.
-      stopBedtimeBlocking();
-    } catch (_) {}
     try {
       await clearJournal();
     } catch (_) {}
