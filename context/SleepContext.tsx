@@ -152,41 +152,18 @@ async function sendMorningSummary(
     const { status } = await Notifications.requestPermissionsAsync();
     if (status !== "granted") return;
 
-    const today = new Date().toISOString().split("T")[0];
+    const todayDate = new Date();
+    const today = `${todayDate.getFullYear()}-${String(todayDate.getMonth()+1).padStart(2, "0")}-${String(todayDate.getDate()).padStart(2, "0")}`;
     const alreadySent = await AsyncStorage.getItem(MORNING_SENT_KEY);
     if (alreadySent === today) return;
     await AsyncStorage.setItem(MORNING_SENT_KEY, today);
 
-    let title = "";
-    let body = "";
-
-    if (streak >= 30 && escapes === 0) {
-      title = `${streak} nights. Legendary.`;
-      body = `Flawless night, ${name}. Actually impressive.`;
-    } else if (streak >= 7 && escapes === 0) {
-      title = "Last night's verdict: Flawless.";
-      body = `${streak}-night streak. Not a single escape. Look at you.`;
-    } else if (escapes === 0) {
-      title = "Clean night.";
-      body = streak > 1
-        ? `${streak}-night streak and counting, ${name}.`
-        : `First clean night, ${name}. That's how it starts.`;
-    } else if (escapes === 1) {
-      title = "One slip. Still standing.";
-      body = streak > 0
-        ? `${streak}-night streak survives, ${name}. Barely.`
-        : `You escaped once. No streak. Fresh start tonight, ${name}.`;
-    } else if (escapes === 2) {
-      title = "Twice. Interesting choice.";
-      body = streak > 0
-        ? `${streak}-night streak lives — barely. We need to talk.`
-        : `Two escapes. No streak. That's rough, ${name}.`;
-    } else {
-      title = `${escapes} escapes. Wow.`;
-      body = streak > 0
-        ? `${streak}-night streak somehow survives. How, ${name}? How.`
-        : `No streak. ${escapes} escapes. Let's regroup, ${name}.`;
-    }
+    // This is only an optional reminder, never a measurement of sleep or
+    // proof that Screen Time blocked every app without interruption.
+    const title = "Your Curfy window ended";
+    const body = escapes === 0
+      ? "Your selected-app boundary has ended. Open Curfy to review your routine."
+      : `Your boundary ended. You requested ${escapes} temporary ${escapes === 1 ? "exception" : "exceptions"} in Curfy.`;
 
     await Notifications.scheduleNotificationAsync({
       content: { title, body, sound: true },
@@ -216,8 +193,8 @@ async function scheduleBedtimeNotifications(bedtime: string) {
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "Bedtime in 10",
-        body: "Wrap it up. You know what's coming.",
+        title: "Curfy starts in 10 minutes",
+        body: "Your selected app will be shielded soon.",
         sound: true,
       },
       trigger: {
@@ -229,8 +206,8 @@ async function scheduleBedtimeNotifications(bedtime: string) {
 
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: "Two minutes.",
-        body: "Last call. Go to sleep.",
+        title: "Curfy starts in two minutes",
+        body: "Your selected app will be shielded at the scheduled time.",
         sound: true,
       },
       trigger: {
