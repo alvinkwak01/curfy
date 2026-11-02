@@ -1,5 +1,6 @@
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
+import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults, clockLabel } from "@/lib/protectionRoutine";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import {
@@ -46,6 +47,8 @@ export default function Settings() {
     setBedtime,
     wakeTime,
     setWakeTime,
+    protectionRoutine,
+    setProtectionRoutine,
     blockMode,
     setBlockMode,
     userName,
@@ -59,6 +62,14 @@ export default function Settings() {
   } = useSleep();
   const [localBedtime, setLocalBedtime] = useState(bedtime);
   const [localWakeTime, setLocalWakeTime] = useState(wakeTime);
+  const [localRoutine, setLocalRoutine] = useState<ProtectionRoutine>(protectionRoutine);
+  const chooseRoutine = (selected: ProtectionRoutine) => {
+    if (selected === localRoutine) return;
+    const defaults = routineDefaults(selected);
+    setLocalRoutine(selected);
+    setLocalBedtime(defaults.start);
+    setLocalWakeTime(defaults.end);
+  };
   const [localBlockMode, setLocalBlockMode] = useState<BlockModeId | null>(
     (blockMode as BlockModeId) || null
   );
@@ -99,8 +110,8 @@ export default function Settings() {
     const pickerEdited = stagedMode === localBlockMode &&
       selectionDraftChanged(localBlockMode);
     const protectionChanged = protectionSettingsChanged(
-      { bedtime, wakeTime, blockMode },
-      { bedtime: localBedtime, wakeTime: localWakeTime, blockMode: localBlockMode },
+      { bedtime, wakeTime, blockMode, routine: protectionRoutine },
+      { bedtime: localBedtime, wakeTime: localWakeTime, blockMode: localBlockMode, routine: localRoutine },
       pickerEdited
     );
     if (!allowProtectionReconfiguration({
@@ -112,7 +123,7 @@ export default function Settings() {
     })) {
       Alert.alert(
         "Your bedtime boundary is active",
-        "To change protected apps or bedtime hours tonight, complete the 120-second hold from Curfy Home first. You can still edit your name and motivation without changing protection."
+        "To change protected apps or your protection hours, complete the 120-second hold from Curfy Home first, or wait until this window ends. Name and motivation remain editable."
       );
       return;
     }
@@ -130,9 +141,12 @@ export default function Settings() {
             ? draftSelectionIdForMode(localBlockMode)
             : undefined,
         });
-        if (localBedtime !== bedtime) await setBedtime(localBedtime);
+        if (localBedtime !== bedtime || localRoutine !== protectionRoutine) {
+          await setBedtime(localBedtime, localRoutine);
+        }
         if (localWakeTime !== wakeTime) await setWakeTime(localWakeTime);
         if (localBlockMode !== blockMode) await setBlockMode(localBlockMode);
+        if (localRoutine !== protectionRoutine) await setProtectionRoutine(localRoutine);
       }
       if (localName.trim() !== userName) await setUserName(localName.trim());
       if (localMotivation.trim() !== motivation) await setMotivation(localMotivation.trim());
@@ -241,7 +255,7 @@ export default function Settings() {
 
         <View style={styles.section}>
           <Text style={styles.label}>YOUR NAME</Text>
-          <Text style={styles.hint}>Used in your sleep log</Text>
+          <Text style={styles.hint}>Optional display name for your Curfy activity log</Text>
           <TextInput
             style={styles.input}
             value={localName}
@@ -252,16 +266,43 @@ export default function Settings() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>BEDTIME</Text>
-          <Text style={styles.hint}>Curfy activates at this time every night</Text>
+          <Text style={styles.label}>WHEN DO YOU WANT FEWER DISTRACTIONS?</Text>
+          <Text style={styles.hint}>Choose a routine. Changing it suggests new hours; adjust the wheels before saving.</Text>
+          <View style={{ gap: 8, marginTop: 12 }}>
+            {PROTECTION_ROUTINES.map((option) => {
+              const selected = localRoutine === option.id;
+              return (
+                <TouchableOpacity
+                  key={option.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: selected }}
+                  onPress={() => chooseRoutine(option.id)}
+                  style={[styles.presetCard, selected && styles.presetCardSelected]}
+                >
+                  <Ionicons name={option.icon} size={20}
+                    color={selected ? Colors.primaryCyan : Colors.textMuted} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.presetTitle}>{option.title}</Text>
+                    <Text style={styles.presetDesc}>{option.description}</Text>
+                  </View>
+                  {selected && <Ionicons name="checkmark-circle" size={19} color={Colors.primaryCyan} />}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.label}>PROTECTION START</Text>
+          <Text style={styles.hint}>Curfy starts shielding your selected app at this time every day.</Text>
           <View style={{ marginTop: 12 }}>
             <TimePicker value={localBedtime} onChange={setLocalBedtime} digitSize={48} />
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>WAKE UP</Text>
-          <Text style={styles.hint}>Blocked apps unlock at this time every morning</Text>
+          <Text style={styles.label}>APPS AVAILABLE AGAIN</Text>
+          <Text style={styles.hint}>Your selected app is no longer shielded after this cutoff time.</Text>
           <View style={{ marginTop: 12 }}>
             <TimePicker value={localWakeTime} onChange={setLocalWakeTime} digitSize={48} />
           </View>
@@ -337,13 +378,13 @@ export default function Settings() {
         <View style={styles.section}>
           <Text style={styles.label}>WHY ARE YOU DOING THIS?</Text>
           <Text style={styles.hint}>
-            Shown back to you on the nights this is hard. Optional.
+            An optional reminder of why you chose this boundary.
           </Text>
           <TextInput
             style={[styles.input, styles.motivationInput]}
             value={localMotivation}
             onChangeText={setLocalMotivation}
-            placeholder="e.g. I want to actually feel rested"
+            placeholder="e.g. I want to start the day on my terms"
             placeholderTextColor={Colors.textGhost}
             multiline
           />
@@ -351,8 +392,9 @@ export default function Settings() {
 
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
-            Notifications are sent 10 and 2 minutes before your bedtime. Make
-            sure notifications are enabled in your device settings.
+            {localRoutine === "morning"
+              ? "Morning-only mode doesn't send bedtime reminders."
+              : "Curfy can remind you 10 and 2 minutes before evening protection starts, if notifications are enabled."}
           </Text>
         </View>
 
