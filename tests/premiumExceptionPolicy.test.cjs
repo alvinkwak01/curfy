@@ -90,3 +90,32 @@ test("the Free exception architecture is not replaced or enabled for Premium", (
   assert.match(screenTime, /assertOneFreeAppSelected\(selectionId\)/);
   assert.doesNotMatch(screenTime, /grantPremiumAppException\s*\(/);
 });
+
+test("native monitor extension accepts only exact current one-token premium callbacks", () => {
+  const swift = readFileSync(join(__dirname,
+    "../targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift"), "utf8");
+  assert.match(swift, /premiumExceptionLedgerKey = "curfy-premium-active-exceptions"/);
+  assert.match(swift, /premiumReblockIsDue\(activityName: activity\.rawValue, nowMs: nowMs\)/);
+  assert.match(swift, /guard isWithinConfiguredCurfyWindow\(\) == true/);
+  assert.match(swift, /nowMs >= expiresMs, nowMs < windowEndMs/);
+  assert.match(swift, /single\.applicationTokens\.count == 1/);
+  assert.match(swift, /single\.applicationTokens\.isSubset\(of: committed\.applicationTokens\)/);
+  assert.match(swift, /recordedActivity == activityName/);
+});
+
+test("late daily start re-unshields ONLY active validated one-app exceptions", () => {
+  const swift = readFileSync(join(__dirname,
+    "../targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift"), "utf8");
+  assert.match(swift, /for selection in activePremiumScopedSelections\(at: nowMs\)/);
+  assert.match(swift, /unblockSelection\(\s*removeSelection: selection/);
+  assert.match(swift, /startMs <= nowMs, nowMs < expiresMs, nowMs < windowEndMs/);
+  assert.match(swift, /if activity\.rawValue == "curfy-bedtime"/);
+});
+
+test("multi-exception callback code does not replace the original Free hold record", () => {
+  const swift = readFileSync(join(__dirname,
+    "../targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift"), "utf8");
+  assert.match(swift, /dictionary\(forKey: "curfy-active-exception"\)/);
+  assert.match(swift, /activity\.rawValue\.hasPrefix\("curfy-exception-"\)/);
+  assert.match(swift, /activity\.rawValue\.hasPrefix\(premiumActivityPrefix\)/);
+});
