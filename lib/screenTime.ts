@@ -395,8 +395,10 @@ export function stopBedtimeBlocking(): void {
   // Leave an earned 15-minute exception monitor intact until native stop
   // and clearing Curfy's shields BOTH succeed. A failed stop must not
   // silently cancel automatic reblocking if the app is force-quit.
-  clearBedtimeActions();
   try {
+    // Even clearing action metadata can fail. Keep that operation inside the
+    // rollback boundary, so a partly-cleared action set is reconstructed.
+    clearBedtimeActions();
     DeviceActivity.stopMonitoring([BEDTIME_ACTIVITY_NAME]);
     if (DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
       throw new Error("iOS still has Curfy's protection schedule. Try stopping protection again.");
