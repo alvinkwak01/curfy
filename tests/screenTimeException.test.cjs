@@ -22,7 +22,7 @@ function fixture({
   silentMonitorFailure = false,
   failOnStartCalls = [], failAfterOverwriteStartCalls = [],
   ignoreBlockOnCalls = [], ignoreResetOnCalls = [],
-  ignoreStopOnCalls = [],
+  ignoreStopOnCalls = [], failOnActionCalls = [],
 } = {}) {
   const storage = new Map();
   const selections = new Map();
@@ -46,7 +46,12 @@ function fixture({
     userDefaultsGet: key => storage.get(key),
     userDefaultsSet: (key, value) => { storage.set(key, value); },
     userDefaultsRemove: key => { storage.delete(key); },
-    configureActions: config => { calls.push(["action", config]); },
+    configureActions: config => {
+      calls.push(["action", config]);
+      if (failOnActionCalls.includes(calls.filter(x => x[0] === "action").length)) {
+        throw Error("Native callback metadata write failed");
+      }
+    },
     startMonitoring: async (name, schedule) => {
       calls.push(["start", name, schedule]);
       const count = calls.filter(call => call[0] === "start").length;
@@ -752,4 +757,19 @@ test("a failed Stop Protection keeps the live exception monitor and 15-minute ex
   assert.equal(f.monitorSchedules.has("curfy-bedtime"), false);
   assert.equal(f.monitorSchedules.has(stateBefore.activityName), false);
   assert.equal(f.storage.has("curfy-active-exception"), false);
+});
+
+test("failure while clearing native callbacks restores both actions instead of orphaning a live monitor", async () => {
+  const f = fixture({ failOnActionCalls: [3] });
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-02T23:00:00"),
+  });
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(), /Native callback metadata write failed/);
+  assert.equal(f.monitorSchedules.has("curfy-bedtime"), true);
+  for (const name of ["intervalDidStart", "intervalDidEnd"]) {
+    const actions = f.calls.filter(x => x[0] === "action" && x[1].callbackName === name);
+    assert.equal(actions.at(-1)[1].actions[0].familyActivitySelectionId, "curfy-block-custom");
+  }
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
 });
