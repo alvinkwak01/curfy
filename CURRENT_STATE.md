@@ -10,6 +10,16 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 `feat/ios-shield-from-august`, draft PR #2 (base `backup/local-curfy-august`). `main` is untouched. Existing August native implementation and EAS iOS extension targets are preserved.
 
+## Milestone: account deletion must never strand native iOS shields (2026-11-02)
+
+**Verified in code:** prior `context/SleepContext.tsx` did the remote Supabase deletion, wiped all local AsyncStorage state, then called `stopBedtimeBlocking()` inside an empty `catch`. If native stopping failed, an app could remain OS-shielded with no Curfy settings left for recovery. This is unacceptable for launch.
+
+- `lib/screenTime.ts` now checks `DeviceActivity.getActivities()` after `stopMonitoring` and checks the app-owned `isShieldActive()` after `resetBlocks`. The native selection/schedule shared metadata is deleted **only once both conditions indicate no active Curfy protection**. If either operation is swallowed by the native library, the function throws a clear retryable error and preserves recovery metadata.
+- `context/SleepContext.tsx` runs `await deleteRemoteAccount()`, then **verifies `stopBedtimeBlocking()`**, and **only then** clears local account data and navigation state. No swallowed native stop. If remote deletion succeeds but native stop fails, the remote user may already be deleted but local Settings intentionally stays available for a retry; the first-party deletion function is a no-op once its auth session is gone. This is not distributed transaction atomicity; physical test required.
+- `tests/screenTimeException.test.cjs` uses failure injection for swallowed native stop and swallowed native reset, verifies shared metadata stays in place and retry succeeds. `tests/uxArchitecture.test.cjs` guards the ordering of remote delete → native stop → local AsyncStorage wipe.
+- **Verification:** GitHub Actions `41473229735` on code commit `cae2e4e`: **89/89 Node tests passed**, `npx tsc --noEmit`, **18/18 Expo Doctor checks**, lockfile integrity and iOS Expo prebuild. Prior unsigned macOS Xcode native app/extensions compile **`41464243352` passed**, but there was **no new signed-device/EAS build**. Real Supabase account deletion and native stop must still be verified on device.
+- **Rollback:** revert the relevant code commits on `feat/ios-shield-from-august` if needed, leaving `main` untouched. The older code had a known risk of orphaning restrictions after deletion.
+
 ## Milestone: native schedule transaction rollback and iPhone-first release gate (2026-11-02)
 
 **Goal:** make Settings schedule edits recover safely when Apple accepts a replacement, then a later step fails. Apple officially documents that `DeviceActivityCenter.startMonitoring` with the same activity name **overwrites its previous schedule**. Previous Curfy code restored only callback/token metadata, so after a failed save, iOS could still be monitoring the rejected hours.
