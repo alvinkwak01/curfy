@@ -51,3 +51,16 @@ export function routineExplainer(routine: ProtectionRoutine): string {
 export function routineIsEveningBased(routine: ProtectionRoutine): boolean {
   return routine !== "morning";
 }
+
+/** Explain which day's clock time ends the continuous daily window. */
+export function cutoffDayLabel(start: string, end: string): "same day" | "next day" {
+  const minutes = (value: string) => {
+    const [hour, minute] = value.split(":").map(Number);
+    return hour * 60 + minute;
+  };
+  return minutes(end) <= minutes(start) ? "next day" : "same day";
+}
+
+export function protectionWindowLabel(start: string, end: string): string {
+  return `${clockLabel(start)} → ${clockLabel(end)} (${cutoffDayLabel(start, end)})`;
+}
