@@ -145,6 +145,40 @@ test("the wake-time boundary never re-shields apps just after morning", async ()
   assert.equal(f.isBlocked(), false);
 });
 
+test("a lost recurring monitor cannot start a new 15-minute exception after an earlier schedule was saved", async () => {
+  const f = fixture();
+  f.storage.set("curfy-scheduled-selection-id", "curfy-block-custom");
+  f.storage.set("curfy-bedtime-clock-window", { startMinute: 1320, endMinute: 360 });
+  // The visible shield is orphaned: today's recurring cutoff no longer exists.
+  await assert.rejects(
+    f.screenTime.grantBedtimeException({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-10-31T23:00:00"),
+    }),
+    /recurring iOS protection schedule is missing or changed/
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+  assert.equal(f.calls.some(call => call[0] === "start"), false);
+  assert.equal(f.calls.some(call => call[0] === "unblock"), false);
+});
+
+test("a stale committed app selection cannot receive a temporary exception", async () => {
+  const f = fixture();
+  f.storage.set("curfy-scheduled-selection-id", "curfy-block-social");
+  f.storage.set("curfy-bedtime-clock-window", { startMinute: 1320, endMinute: 360 });
+  await registerRecurringProtectionMonitor(f);
+  await assert.rejects(
+    f.screenTime.grantBedtimeException({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-10-31T23:00:00"),
+    }),
+    /recurring iOS protection schedule is missing or changed/
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+});
+
 test("failed native monitor prevents unlocking and retains shields", async () => {
   const f = fixture({ failStart: true });
   await assert.rejects(
