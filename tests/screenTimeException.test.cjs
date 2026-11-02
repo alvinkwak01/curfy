@@ -14,6 +14,7 @@ function loadTS(path, customRequire = require) {
   return mod.exports;
 }
 const time = loadTS("lib/bedtimeWindow.ts");
+const premiumPolicy = loadTS("lib/premiumPolicy.ts");
 
 function fixture({
   failStart = false, failUnblock = false, overlapReportsZero = false,
@@ -101,6 +102,7 @@ function fixture({
   const screenTime = loadTS("lib/screenTime.ts", moduleName => {
     if (moduleName === "react-native-device-activity") return native;
     if (moduleName === "@/lib/bedtimeWindow") return time;
+    if (moduleName === "@/lib/premiumPolicy") return premiumPolicy;
     throw Error("Unexpected import " + moduleName);
   });
   return {
