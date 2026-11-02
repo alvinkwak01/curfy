@@ -839,3 +839,19 @@ test("a fresh onboarding picker with no stale selection preserves other native d
     unrelated: "keep",
   });
 });
+
+test("fresh onboarding cannot erase tokens while a native bedtime monitor is still active", async () => {
+  const f = fixture({ initiallyBlocked: false });
+  f.storage.set("familyActivitySelectionIds", {
+    "curfy-block-custom": "existing-protected-app",
+  });
+  await f.native.startMonitoring("curfy-bedtime", {
+    intervalStart: { hour: 23, minute: 0 },
+    intervalEnd: { hour: 6, minute: 0 },
+    repeats: true,
+  });
+  assert.throws(() => f.screenTime.beginFreshOnboardingAppSelection("custom"),
+    /still active/);
+  assert.equal(f.storage.get("familyActivitySelectionIds")["curfy-block-custom"],
+    "existing-protected-app");
+});
