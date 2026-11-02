@@ -401,8 +401,16 @@ export function stopBedtimeBlocking(): void {
     actions: [],
   });
   DeviceActivity.stopMonitoring([BEDTIME_ACTIVITY_NAME]);
-  // A user deleting their Curfy account must not leave orphaned app shields.
+  // Third-party wrappers can swallow native stop/reset failures. Confirm
+  // the OS no longer has Curfy's recurring activity before removing the
+  // only metadata needed to recover a stranded restriction.
+  if (DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
+    throw new Error("iOS still has Curfy's protection schedule. Try stopping protection again.");
+  }
   DeviceActivity.resetBlocks("curfy-stop-blocking");
+  if (DeviceActivity.isShieldActive()) {
+    throw new Error("iOS still reports protected apps after stopping Curfy. Retry before deleting local setup.");
+  }
   DeviceActivity.userDefaultsRemove(SCHEDULED_SELECTION_ID_KEY);
   DeviceActivity.userDefaultsRemove(BEDTIME_CLOCK_KEY);
 }
