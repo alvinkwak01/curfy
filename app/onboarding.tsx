@@ -523,62 +523,28 @@ function StepWakeTime({ wakeTime, onChange }: { wakeTime: string; onChange: (v: 
 }
 
 function StepReveal({
-  currentBedtime,
-  goalBedtime,
-  wakeTime,
+  currentBedtime, goalBedtime, wakeTime,
 }: {
-  currentBedtime: string;
-  goalBedtime: string;
-  wakeTime: string;
+  currentBedtime: string; goalBedtime: string; wakeTime: string;
 }) {
-  const currentSleep = sleepDurationMinutes(currentBedtime, wakeTime);
-  const goalSleep = sleepDurationMinutes(goalBedtime, wakeTime);
-  const deficitPerNight = goalSleep - currentSleep;
-  const isAlreadyClose = deficitPerNight <= 5;
-
-  if (isAlreadyClose) {
-    return (
-      <View style={styles.stepInner}>
-        <Badge>THE NUMBERS</Badge>
-        <Text style={styles.hero}>
-          You're close{"\n"}to your goal{"\n"}
-          <Text style={styles.heroCyan}>already.</Text>
-        </Text>
-        <Text style={styles.bodyText}>
-          At {formatTime12(currentBedtime)}, you're getting roughly{" "}
-          {formatDuration(currentSleep)} of sleep a night. Curfy's job from
-          here isn't to fix a huge gap — it's to make {formatTime12(goalBedtime)}{" "}
-          happen every night, not just some.
-        </Text>
-      </View>
-    );
-  }
-
-  const deficitPerWeek = deficitPerNight * 7;
-  const deficitPerYearHours = Math.round((deficitPerNight * 365) / 60);
-  const extraNightsPerYear = Math.round((deficitPerYearHours * 60) / goalSleep);
-
   return (
     <View style={styles.stepInner}>
-      <Badge>THE NUMBERS</Badge>
+      <Badge>YOUR PLAN</Badge>
       <Text style={styles.hero}>
-        At {formatTime12(currentBedtime)},{"\n"}you're losing{"\n"}
-        <Text style={styles.heroDanger}>{formatDuration(deficitPerNight)}</Text> a night.
+        Your hours.{"\n"}
+        <Text style={styles.heroCyan}>Your boundaries.</Text>
       </Text>
       <Text style={styles.bodyText}>
-        That's {formatDuration(deficitPerWeek)} a week — about{" "}
-        {deficitPerYearHours} hours of lost sleep a year.
+        You usually reach for distracting apps around {formatTime12(currentBedtime)}.
+        You chose to start protection at {formatTime12(goalBedtime)}.
       </Text>
-
       <View style={styles.revealDivider} />
-
-      <Text style={[styles.hero, { fontSize: 28, lineHeight: 34 }]}>
-        Stick to <Text style={styles.heroCyan}>{formatTime12(goalBedtime)}</Text> and
-        get it back.
+      <Text style={[styles.hero, { fontSize: 27, lineHeight: 35 }]}>
+        {formatTime12(goalBedtime)}{" → "}{formatTime12(wakeTime)}
       </Text>
       <Text style={styles.bodyText}>
-        That's like reclaiming roughly {extraNightsPerYear} extra full
-        nights of sleep this year — just from one changed habit.
+        Your selected app is scheduled for protection during those hours.
+        Curfy doesn't track sleep or measure how much time you save.
       </Text>
     </View>
   );
@@ -588,39 +554,32 @@ function StepBenefits() {
   const cards = [
     {
       icon: "moon-outline" as const,
-      title: "1 in 3 adults don't get enough sleep.",
-      body: "Chronic short sleep is linked to worse mood, focus, and long-term health.",
-      source: "CDC, Morbidity and Mortality Weekly Report",
+      title: "Keep your chosen hours yours.",
+      body: "Select the app that distracts you. The rest of your iPhone remains available.",
     },
     {
-      icon: "car-outline" as const,
-      title: "Awake ~18 hours straight? Same reaction time as legally drunk.",
-      body: "Sleep debt impairs coordination and judgment the same way alcohol does.",
-      source: "CDC / AAA Foundation for Traffic Safety",
+      icon: "shield-checkmark-outline" as const,
+      title: "A real iOS restriction.",
+      body: "Curfy uses Apple's Screen Time APIs, which can shield apps while Curfy is closed.",
+    },
+    {
+      icon: "hourglass-outline" as const,
+      title: "Make exceptions deliberate.",
+      body: "Need access? A continuous 120-second hold in Curfy allows up to 15 minutes before protection returns.",
     },
   ];
-
   return (
     <View style={styles.stepInner}>
       <Badge>WHY IT MATTERS</Badge>
-      <Text style={styles.hero}>This isn't{"\n"}just about{"\n"}sleep.</Text>
+      <Text style={styles.hero}>Fewer{"\n"}automatic{"\n"}detours.</Text>
       <View style={{ gap: 10, marginTop: 4 }}>
-        {cards.map((c) => (
+        {cards.map(c => (
           <View key={c.title} style={styles.benefitCard}>
             <Ionicons name={c.icon} size={20} color={Colors.primaryCyan} style={{ marginBottom: 8 }} />
             <Text style={styles.benefitTitle}>{c.title}</Text>
             <Text style={styles.benefitBody}>{c.body}</Text>
-            <Text style={styles.fineprint}>Source: {c.source}</Text>
           </View>
         ))}
-        <View style={styles.benefitCard}>
-          <Ionicons name="sparkles-outline" size={20} color={Colors.primaryCyan} style={{ marginBottom: 8 }} />
-          <Text style={styles.benefitTitle}>Consistency is the whole game.</Text>
-          <Text style={styles.benefitBody}>
-            One good night doesn't move the needle. The same bedtime, every
-            night, is what actually protects focus and mood.
-          </Text>
-        </View>
       </View>
     </View>
   );
