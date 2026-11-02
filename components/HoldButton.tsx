@@ -222,7 +222,7 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
   return (
     <View style={styles.wrap}>
       {unlockCount > 0 && (
-        <Text style={styles.unlockBadge}>Unlocked {unlockCount}x tonight</Text>
+        <Text style={styles.unlockBadge}>Temporary exceptions this window: {unlockCount}</Text>
       )}
       <Text style={styles.message}>{message}</Text>
 
