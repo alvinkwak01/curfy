@@ -10,6 +10,16 @@ At the user's configured bedtime, shield only the apps they explicitly selected 
 
 `feat/ios-shield-from-august`, draft PR #2 (base `backup/local-curfy-august`). `main` is untouched. Existing August native implementation and EAS iOS extension targets are preserved.
 
+## Milestone: Premium product decision and fail-closed app-selection policy (2026-11-02)
+
+**User-approved:** Premium is a **$5.99 USD one-time Apple non-consumable purchase**, not a subscription; Free always protects one application, Premium will allow multiple explicitly selected applications. A completed continuous **120-second hold unlocks exactly one chosen protected app** for up to 15 minutes, while the others remain blocked. Free users skip the app chooser. Protected-app selection should be minimal and accessible through Apple's privacy-preserving native labels. **Product identifier proposed:** `com.alvinkwak.curfy.premium`; App Store Connect creation is outstanding. See `PREMIUM_IMPLEMENTATION.md` for full design and verification gates.
+
+**Implemented in code (first safe slice):** `lib/premiumPolicy.ts` defines the purchase-state-aware app-selection policy, including unknown entitlement and rejection of category/web-domain tokens even for Premium. `lib/screenTime.ts` now delegates its existing free-selection guard to the shared policy, retaining the one-app limit until real StoreKit AND the native per-app exception implementation are both ready. `tests/premiumPolicy.test.cjs` covers these decisions. This is **NOT** an IAP/paywall integration or entitlement verification. No purchases can occur, and no extra apps have been enabled.
+
+**Research finding:** The existing `react-native-device-activity@0.6.1`/Apple picker may auto-promote multiple individual selections into a category token on iOS; that must be investigated rather than selling multi-app access which unlocks categories or unrelated apps. Apple's `Transaction.currentEntitlements` includes owned non-consumables but not refunded/revoked ones; future native integration must use verified transactions. Expo IAP supports Expo SDK 53+, but the exact Expo SDK 54 library version/build needs reproduction against the generated targets. No paid native build used.
+
+**Evidence:** Pending latest CI verification for these changes; do not assume passing checks before reading GitHub Actions results. No signed iPhone or StoreKit tests in this slice. **Next:** wire a compatible StoreKit module and restore/entitlement state; then implement one-token-per-hold exception and safe shield reapplication, before presenting a purchasable paywall.
+
 ## Milestone: failed-stop callback restoration and partial onboarding rollback (2026-11-02)
 
 **Goal:** prevent Curfy itself from stranding a protected app if iOS accepts an initial schedule but local onboarding later fails, or if iOS refuses to stop an existing schedule. No new EAS build or signed device test.
