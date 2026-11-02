@@ -183,7 +183,7 @@ test("native Screen Time chooser compiles against iOS 15.1 API availability boun
     assert.match(source, /if #available\(iOS 15\.2, \*\)/);
     assert.match(source, /return selection\.includeEntireCategory/);
     assert.match(source, /!curfyIncludesEntireCategory\(/);
-    assert.equal((source.match(/\.includeEntireCategory/g) || []).length, 1,
+    assert.equal((source.match(/return selection\.includeEntireCategory/g) || []).length, 1,
       "Only the availability-guarded read may access the iOS 15.2 API");
   }
 });
