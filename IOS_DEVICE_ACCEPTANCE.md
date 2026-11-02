@@ -1,3 +1,7 @@
+## Onboarding restoration acceptance: user-reported failures (2026-11-02)
+
+Test on the fresh EAS preview containing the restored original flow, not the older five-step build. Verify **Welcome + all 13 steps**, in exact order and with working Back navigation. Test the current habit, chosen protection start, and end time wheels: finger drags change the intended digits and must **not scroll the page**; stopping a swipe must not jump extra values. Check the routine question contains **no time recommendations**, and switching its selection never changes previously chosen hours. Confirm legibility, top progress/header and fixed CTA at each step, including smallest device text settings and keyboard on the name page. The user's last real-iPhone screenshot showed a **FAIL** on the app picker. On one individual app selection, the native metadata must read `applicationCount=1, categoryCount=0, webDomainCount=0, includeEntireCategory=false`; Finish must proceed to Preview and Name and configure shielding. Check selecting a category or multiple apps still gives a clear rejection with actual counts. After Delete Everything, repeat full setup and confirm previous app isn't prechecked. Re-test native iOS shield and 120s hold only after full setup succeeds. Mark all untested until physically observed.
+
 # Curfy iPhone native acceptance — before the next EAS build
 
 Updated 2026-11-02. **NOT a claim of device testing.** Use this after the next single signed development/TestFlight build. No new EAS build was triggered when preparing this checklist.
