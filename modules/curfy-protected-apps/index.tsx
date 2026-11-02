@@ -10,6 +10,8 @@ export type CurfyProtectedAppsSnapshot = {
 
 type NativeProtectedApps = {
   getProtectedApps(selectionId: string): CurfyProtectedAppsSnapshot;
+  prepareProtectedApp(selectionId: string, revision: string, index: number): string;
+  validatePreparedApp(ticketId: string): boolean;
 };
 
 const validSelectionId = /^curfy-block-(social|most|custom)$/;
@@ -34,6 +36,45 @@ export function readProtectedAppChoices(selectionId: string): CurfyProtectedApps
     throw new Error("iOS did not return a valid protected-app selection.");
   }
   return { count: snapshot.count, revision: snapshot.revision };
+}
+
+
+/**
+ * Prepares exactly one opaque protected application for a future 120-second
+ * hold. This does NOT unshield anything or bypass the free tier.
+ * The ticket is random metadata, not an app identity or ApplicationToken.
+ */
+export function prepareProtectedAppChoice(
+  selectionId: string, revision: string, index: number
+): string {
+  assertSelectionId(selectionId);
+  if (!validRevision.test(revision) || !Number.isSafeInteger(index) || index < 0) {
+    throw new Error("Invalid protected-app choice.");
+  }
+  if (Platform.OS !== "ios") {
+    throw new Error("Protected-app choices are only available on iPhone.");
+  }
+  const ticket = requireNativeModule<NativeProtectedApps>("CurfyProtectedApps")
+    .prepareProtectedApp(selectionId, revision, index);
+  if (typeof ticket !== "string" ||
+      !/^curfy-single-app-[0-9A-Fa-f-]{36}$/.test(ticket)) {
+    throw new Error("iOS did not prepare a valid protected-app choice.");
+  }
+  return ticket;
+}
+
+/** Re-read Apple's saved opaque selection immediately before any later unlock. */
+export function validateProtectedAppChoice(ticketId: string): boolean {
+  if (!/^curfy-single-app-[0-9A-Fa-f-]{36}$/.test(ticketId)) {
+    throw new Error("Invalid prepared protected-app choice.");
+  }
+  if (Platform.OS !== "ios") {
+    throw new Error("Protected-app choices are only available on iPhone.");
+  }
+  const valid = requireNativeModule<NativeProtectedApps>("CurfyProtectedApps")
+    .validatePreparedApp(ticketId);
+  if (valid !== true) throw new Error("Protected-app choice has changed. Choose the app again.");
+  return true;
 }
 
 export type CurfyAppLabelProps = ViewProps & {
