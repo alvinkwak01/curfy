@@ -301,7 +301,6 @@ export default function Onboarding() {
                   }
                   setBlockMode(mode);
                 } catch (error) {
-                  Alert.alert("Can't reset the app picker", error instanceof Error ? error.message : "Try again.");
                   throw error;
                 }
               }}
@@ -405,7 +404,7 @@ function StepWakeUpCall() {
       </Text>
       <Text style={[styles.hero, styles.heroCyan]}>You do.</Text>
       <Text style={styles.statement}>
-        Let's figure out exactly what that's costing you.
+        Make room for the evening you want.
       </Text>
     </View>
   );
@@ -431,7 +430,7 @@ function StepWhyStayUp({
     <View style={styles.stepInner}>
       <Badge>SO, TELL US</Badge>
       <Text style={styles.hero}>What keeps{"\n"}you up?</Text>
-      <Text style={styles.bodyText}>Choose up to 3 — this shapes what Curfy shows you next.</Text>
+      <Text style={styles.bodyText}>Choose up to 3. This doesn't change which apps are blocked.</Text>
 
       <View style={{ gap: 10, marginTop: 4 }}>
         {REASON_OPTIONS.map((opt) => {
@@ -686,7 +685,7 @@ function StepName({ name, onChange }: { name: string; onChange: (v: string) => v
         What should{"\n"}we call you?
       </Text>
       <Text style={[styles.bodyText, { textAlign: "center" }]}>
-        For your personal sleep log. Keep it honest.
+        For your Curfy activity log and profile.
       </Text>
       <TextInput
         style={styles.nameInput}
@@ -706,12 +705,11 @@ function StepRoutine({ routine, onChange }: {
   return (
     <View style={styles.stepInner}>
       <Badge>YOUR ROUTINE</Badge>
-      <Text style={[styles.hero, styles.routineHero]}>When should Curfy keep distractions out?</Text>
-      <Text style={styles.bodyText}>Choose a starting point. You can adjust your protection hours next.</Text>
+      <Text style={[styles.hero, styles.routineHero]}>When do you want fewer distractions?</Text>
+      <Text style={styles.bodyText}>Choose the part of your day. You decide the exact hours later.</Text>
       <View style={{ gap: 12, marginTop: 8 }}>
         {PROTECTION_ROUTINES.map((option) => {
           const selected = option.id === routine;
-          const defaults = routineDefaults(option.id);
           return (
             <TouchableOpacity key={option.id} accessibilityRole="radio"
               accessibilityState={{ checked: selected }}
@@ -726,14 +724,13 @@ function StepRoutine({ routine, onChange }: {
               <View style={{ flex: 1, gap: 3 }}>
                 <Text style={styles.presetTitle}>{option.title}</Text>
                 <Text style={styles.presetDesc}>{option.description}</Text>
-                <Text style={styles.fineprint}>{protectionWindowLabel(defaults.start, defaults.end)} suggested</Text>
               </View>
               {selected && <Ionicons name="checkmark-circle" size={22} color={Colors.primaryCyan} />}
             </TouchableOpacity>
           );
         })}
       </View>
-      <Text style={styles.fineprint}>Each option uses one continuous daily protection window. Times are editable.</Text>
+      <Text style={styles.fineprint}>This chooses the setup style. It does not set your bedtime or wake-up time.</Text>
     </View>
   );
 }
@@ -840,8 +837,13 @@ function StepChooseApps({
   const [pickerMode, setPickerMode] = useState<BlockModeId | null>(null);
 
   const handlePick = (id: BlockModeId) => {
-    onSelect(id);
-    setPickerMode(id);
+    try {
+      onSelect(id);
+      setPickerMode(id);
+    } catch (error) {
+      Alert.alert("Couldn't open the app picker",
+        error instanceof Error ? error.message : "Please try again.");
+    }
   };
 
   const handleSelectionChange = (
@@ -915,7 +917,9 @@ function StepChooseApps({
         <DeviceActivitySelectionSheetViewPersisted
           style={{ width: 1, height: 1, position: "absolute" }}
           familyActivitySelectionId={selectionIdForMode(pickerMode)}
+          includeEntireCategory={false}
           headerText="Choose exactly one app to protect"
+          footerText="Choose one individual app, not a category."
           onSelectionChange={handleSelectionChange}
           onDismissRequest={() => {
             // Some iOS picker dismissals don't emit a final change event.
