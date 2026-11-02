@@ -103,6 +103,28 @@ function restoreSelection(id: string, previous: string | undefined): void {
 
 const BEDTIME_ACTIVITY_NAME = "curfy-bedtime";
 const SCHEDULED_SELECTION_ID_KEY = "curfy-scheduled-selection-id";
+const BEDTIME_CLOCK_KEY = "curfy-bedtime-clock-window";
+
+type BedtimeClockWindow = { startMinute: number; endMinute: number };
+
+function clockMinutes(time: string): number {
+  const [hour, minute] = time.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function restoreBedtimeClockWindow(previous: BedtimeClockWindow | undefined): void {
+  if (previous) DeviceActivity.userDefaultsSet(BEDTIME_CLOCK_KEY, previous);
+  else DeviceActivity.userDefaultsRemove(BEDTIME_CLOCK_KEY);
+}
+
+function persistBedtimeClockWindow(bedtime: string, wakeTime: string): void {
+  const value = { startMinute: clockMinutes(bedtime), endMinute: clockMinutes(wakeTime) };
+  DeviceActivity.userDefaultsSet(BEDTIME_CLOCK_KEY, value);
+  const saved = DeviceActivity.userDefaultsGet<BedtimeClockWindow>(BEDTIME_CLOCK_KEY);
+  if (saved?.startMinute !== value.startMinute || saved?.endMinute !== value.endMinute) {
+    throw new Error("iOS couldn't save bedtime boundary information for native monitoring.");
+  }
+}
 
 /** Last successfully configured app selection, shared with the native extensions. */
 function previousScheduledSelectionId(): string | null {
@@ -180,6 +202,11 @@ export async function configureBedtimeBlocking({
   const pendingId = draftSelectionId ?? selectionId;
   assertOneFreeAppSelected(pendingId);
   const previousSelectionId = previousScheduledSelectionId();
+  const previousClockWindow = DeviceActivity.userDefaultsGet<BedtimeClockWindow>(BEDTIME_CLOCK_KEY);
+  // Record the local clock boundary before iOS starts a monitor, since
+  // intervalDidStart may run immediately and out-of-order callbacks must
+  // not shield apps outside the current bedtime window.
+  persistBedtimeClockWindow(bedtime, wakeTime);
   const previousTokens = DeviceActivity.getFamilyActivitySelectionId(selectionId);
   if (draftSelectionId) {
     if (draftSelectionId !== draftSelectionIdForMode(mode)) {
@@ -220,6 +247,7 @@ export async function configureBedtimeBlocking({
     // than leaving them pointed at a selection that was never saved.
     if (draftSelectionId) restoreSelection(selectionId, previousTokens);
     if (previousSelectionId) configureBedtimeActions(previousSelectionId);
+    restoreBedtimeClockWindow(previousClockWindow);
     throw error;
   }
 
@@ -236,6 +264,7 @@ export async function configureBedtimeBlocking({
       // Restore prior protection when possible rather than silently claim
       // the newly saved selection is protected.
       if (draftSelectionId) restoreSelection(selectionId, previousTokens);
+      restoreBedtimeClockWindow(previousClockWindow);
       if (previousSelectionId) {
         configureBedtimeActions(previousSelectionId);
         DeviceActivity.blockSelection(
@@ -294,6 +323,7 @@ export function stopBedtimeBlocking(): void {
   // A user deleting their Curfy account must not leave orphaned app shields.
   DeviceActivity.resetBlocks("curfy-stop-blocking");
   DeviceActivity.userDefaultsRemove(SCHEDULED_SELECTION_ID_KEY);
+  DeviceActivity.userDefaultsRemove(BEDTIME_CLOCK_KEY);
 }
 
 // Reads back how many apps/categories are in a preset's already-persisted
