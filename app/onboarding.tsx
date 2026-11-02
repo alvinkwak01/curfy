@@ -27,7 +27,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from "react-native";
@@ -588,13 +587,6 @@ const styles = StyleSheet.create({
     fontSize: 40,
     lineHeight: 48,
   },
-  heroCyan: {
-    color: Colors.primaryCyan,
-  },
-  heroDanger: {
-    color: Colors.dangerRed,
-  },
-  // Soft, secondary description text (SetBedtime/Name steps).
   bodyText: {
     color: Colors.textMuted,
     fontFamily: Fonts.regular,
@@ -603,50 +595,7 @@ const styles = StyleSheet.create({
   },
   // A short, forceful closing line (Wake Up Call step) — deliberately
   // brighter/heavier than bodyText, this is a statement, not a caption.
-  statement: {
-    color: Colors.textPrimary,
-    fontFamily: Fonts.semiBold,
-    fontSize: 17,
-    marginTop: 8,
-  },
-  revealDivider: {
-    height: 1,
-    backgroundColor: Colors.border,
-    marginVertical: 4,
-  },
-  statsRow: { flexDirection: "row", gap: 10, marginTop: 8 },
-  statCard: {
-    flex: 1,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 14,
-    alignItems: "center",
-  },
-  statValue: { color: Colors.primaryCyan, fontSize: 24, fontFamily: Fonts.bold },
-  statLabel: { color: Colors.textMuted, fontSize: 11, fontFamily: Fonts.regular, textAlign: "center", marginTop: 4 },
-  featureRow: { flexDirection: "row", gap: 14, alignItems: "flex-start" },
-  featureIcon: { color: Colors.primaryCyan, fontSize: 20, marginTop: 2 },
   featureTitle: { color: Colors.textPrimary, fontSize: 16, fontFamily: Fonts.semiBold, marginBottom: 2 },
-  featureDesc: { color: Colors.textMuted, fontSize: 14, fontFamily: Fonts.regular, lineHeight: 20 },
-  quote: {
-    color: Colors.textPrimary,
-    fontFamily: Fonts.medium,
-    fontSize: 15,
-    fontStyle: "italic",
-    textAlign: "center",
-  },
-  attribution: { color: Colors.textGhost, fontSize: 12, fontFamily: Fonts.regular, textAlign: "center" },
-  benefitCard: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: Layout.cardRadius,
-    padding: 16,
-  },
-  benefitTitle: { color: Colors.textPrimary, fontSize: 15, fontFamily: Fonts.semiBold, marginBottom: 4, lineHeight: 20 },
-  benefitBody: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular, lineHeight: 18, marginBottom: 6 },
   trustCard: {
     backgroundColor: Colors.surface,
     borderWidth: 1,
@@ -719,9 +668,6 @@ const styles = StyleSheet.create({
   presetCardSelected: {
     borderColor: Colors.primaryCyan,
   },
-  presetCardDim: {
-    opacity: 0.4,
-  },
   presetIconWrap: {
     width: 40,
     height: 40,
@@ -760,76 +706,6 @@ const styles = StyleSheet.create({
     lineHeight: 16,
     marginTop: 2,
   },
-  phoneFrame: {
-    alignSelf: "center",
-    width: 200,
-    height: 280,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: "center",
-    paddingTop: 36,
-    paddingHorizontal: 18,
-    marginTop: 8,
-  },
-  phoneNotch: {
-    position: "absolute",
-    top: 10,
-    width: 60,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.background,
-  },
-  phoneShieldIcon: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: Colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
-  },
-  phoneShieldTitle: {
-    color: Colors.textPrimary,
-    fontFamily: Fonts.semiBold,
-    fontSize: 15,
-    textAlign: "center",
-  },
-  phoneShieldSub: {
-    color: Colors.textMuted,
-    fontFamily: Fonts.regular,
-    fontSize: 12,
-    marginTop: 4,
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  phoneHoldBtn: {
-    borderWidth: 1,
-    borderColor: Colors.primaryCyan,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-  },
-  phoneHoldBtnText: {
-    color: Colors.primaryCyan,
-    fontFamily: Fonts.semiBold,
-    fontSize: 12,
-  },
-  nameInput: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 14,
-    padding: 18,
-    fontSize: 22,
-    fontFamily: Fonts.medium,
-    color: Colors.textPrimary,
-    textAlign: "center",
-    width: "100%",
-  },
-  // Shared by every "Continue"/"Begin"/"Get Started" button so they all
-  // sit at the same height regardless of which step is showing.
   btnWrap: { paddingBottom: 56 },
   welcomeWrap: {
     flex: 1,
