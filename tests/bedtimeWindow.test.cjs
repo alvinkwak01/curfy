@@ -108,3 +108,13 @@ test("nightly logs honor user-configured morning end, including DST", () => {
     else process.env.TZ = previous;
   }
 });
+
+test("Apple's 15-minute monitoring minimum is validated using wall-clock minutes", () => {
+  const { assertMonitorableBedtimeSchedule: validate } = mod.exports;
+  assert.throws(() => validate("23:59", "00:00"), /at least 15 minutes/);
+  assert.throws(() => validate("05:50", "06:00"), /at least 15 minutes/);
+  assert.throws(() => validate("22:00", "22:00"), /different/);
+  assert.throws(() => validate("bad", "06:00"), /Invalid time/);
+  assert.doesNotThrow(() => validate("23:45", "00:00"));
+  assert.doesNotThrow(() => validate("22:00", "06:00"));
+});
