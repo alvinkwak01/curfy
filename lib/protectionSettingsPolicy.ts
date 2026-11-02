@@ -7,6 +7,7 @@ export type ProtectionSettingsSnapshot = {
   bedtime: string;
   wakeTime: string;
   blockMode: string | null;
+  routine?: string;
 };
 
 export function protectionSettingsChanged(
@@ -17,7 +18,8 @@ export function protectionSettingsChanged(
   return pickerEdited ||
     saved.bedtime !== draft.bedtime ||
     saved.wakeTime !== draft.wakeTime ||
-    saved.blockMode !== draft.blockMode;
+    saved.blockMode !== draft.blockMode ||
+    saved.routine !== draft.routine;
 }
 
 export function allowProtectionReconfiguration({
