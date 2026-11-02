@@ -143,24 +143,24 @@ test("restored 13-page flow keeps usable time wheels, native permission and app 
     "StepChooseApps", "StepPreview", "StepName"]) {
     assert.match(src, new RegExp("<" + page + "(?:\\s|\\/)"));
   }
-  assert.match(src, /Starts at \\{clockLabel\\(bedtime\\)\\}/);
-  assert.match(src, /Available at \\{clockLabel\\(wakeTime\\)\\}/);
-  assert.match(src, /getScreenTimeAccessStatus\\(\\)/);
-  assert.match(src, /if \\(step !== 9\\) return/);
-  assert.match(src, /finally \\{\\s*setIsRequesting\\(false\\)/);
+  assert.match(src, /Starts at \{clockLabel\(bedtime\)\}/);
+  assert.match(src, /Available at \{clockLabel\(wakeTime\)\}/);
+  assert.match(src, /getScreenTimeAccessStatus\(\)/);
+  assert.match(src, /if \(step !== 9\) return/);
+  assert.match(src, /finally \{\s*setIsRequesting\(false\)/);
   assert.match(src, /headerText="Choose exactly one app to protect"/);
-  assert.match(src, /includeEntireCategory=\\{false\\}/);
-  assert.match(src, /beginFreshOnboardingAppSelection\\(mode\\)/);
-  assert.match(src, /if \\(step === 10\\)/);
+  assert.match(src, /includeEntireCategory=\{false\}/);
+  assert.match(src, /beginFreshOnboardingAppSelection\(mode\)/);
+  assert.match(src, /if \(step === 10\)/);
   assert.match(src, /Finish setup/);
   assert.doesNotMatch(src, /BLOCK_MODE_PRESETS/);
   assert.doesNotMatch(src, /suggested/);
 });
 test("clock steps have NO parent scrolling container to steal vertical gestures", () => {
   const src = source("app/onboarding.tsx");
-  assert.match(src, /\\[3, 4, 5\\]\\.includes\\(step\\)/);
-  assert.match(src, /<View key=\\{step\\} style=\\{styles\\.timeStepContent\\}>/);
-  assert.match(src, /<ScrollView[\\s\\S]*style=\\{styles\\.stepScroll\\}/);
+  assert.match(src, /\[3, 4, 5\]\.includes\(step\)/);
+  assert.match(src, /<View key=\{step\} style=\{styles\.timeStepContent\}>/);
+  assert.match(src, /<ScrollView[\s\S]*style=\{styles\.stepScroll\}/);
 });
 
 test("Delete Everything erases the previous protected app picker after stopping native restrictions", () => {
