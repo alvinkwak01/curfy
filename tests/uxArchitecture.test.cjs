@@ -137,14 +137,14 @@ test("routine content cannot overlap a fixed progress header or push CTA offscre
 
 test("reviewed onboarding confirms a readable time and actual Screen Time permission", () => {
   const src = source("app/onboarding.tsx");
-  assert.match(src, /Starts at \\{clockLabel\\(value\\)\\}/);
-  assert.match(src, /Available again at \\{clockLabel\\(value\\)\\}/);
-  assert.match(src, /cutoffDayLabel\\(start, value\\)/);
-  assert.match(src, /getScreenTimeAccessStatus\\(\\)/);
-  assert.match(src, /if \\(step !== 3\\) return/);
-  assert.match(src, /finally \\{\\s*setIsRequesting\\(false\\)/);
+  assert.match(src, /Starts at \{clockLabel\(value\)\}/);
+  assert.match(src, /Available again at \{clockLabel\(value\)\}/);
+  assert.match(src, /cutoffDayLabel\(start, value\)/);
+  assert.match(src, /getScreenTimeAccessStatus\(\)/);
+  assert.match(src, /if \(step !== 3\) return/);
+  assert.match(src, /finally \{\s*setIsRequesting\(false\)/);
   assert.match(src, /headerText="Choose exactly one app to protect"/);
-  assert.match(src, /onPress=\\{\\(\\) => handlePick\\("custom"\\)\\}/);
+  assert.match(src, /onPress=\{\(\) => handlePick\("custom"\)\}/);
   assert.match(src, /Finish setup/);
   assert.doesNotMatch(src, /BLOCK_MODE_PRESETS/);
 });
