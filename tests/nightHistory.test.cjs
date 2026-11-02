@@ -10,7 +10,7 @@ const js = ts.transpileModule(
 ).outputText;
 const mod = { exports: {} };
 new Function("module", "exports", js)(mod, mod.exports);
-const { countLoggedNightStreak } = mod.exports;
+const { countLoggedNightStreak, shouldStartNightLog } = mod.exports;
 
 test("one recorded previous night still counts today before the next bedtime", () => {
   assert.equal(countLoggedNightStreak([{ date: "2026-10-31" }], new Date("2026-11-01T12:00:00")), 1);
@@ -44,4 +44,11 @@ test("calendar streak is correct through fall DST and spring DST", () => {
     if (previous === undefined) delete process.env.TZ;
     else process.env.TZ = previous;
   }
+});
+
+test("logging the next night doesn't depend on yesterday's in-memory locked flag", () => {
+  const older = [{ date: "2026-11-01" }];
+  assert.equal(shouldStartNightLog(older, "2026-11-02"), true);
+  assert.equal(shouldStartNightLog(older, "2026-11-01"), false);
+  assert.equal(shouldStartNightLog([{ date: "2026-11-02" }, ...older], "2026-11-02"), false);
 });
