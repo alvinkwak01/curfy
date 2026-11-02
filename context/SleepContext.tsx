@@ -360,23 +360,19 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     // a real-user cheat toggle. Preview Lock Screen (Settings) still works
     // normally for testing the lock UI itself while this is on.
     if (__DEV__ && devSkipLock) return;
-    const now = Date.now();
-    if (cooldownUntil.current > now) return;
-
+    // The local record is independent of a 15-minute Screen Time
+    // exception. The former cooldown gate skipped night logging entirely.
     const inWindow = isBedtimeWindowActive(new Date(), bedtime, wakeTime);
     // The native Screen Time shield protects selected apps. Never auto-lock
     // Curfy itself: users must be able to open Settings and manage protection.
     // Keep the daily log independent of the optional hold-screen preview.
-    if (inWindow && !lockedToday.current) {
+    if (inWindow) {
       const today = bedtimeNightKey(new Date(), bedtime, wakeTime);
-      // The persisted log is the real source of truth for "already
-      // logged tonight" — lockedToday is just an in-memory fast path.
-      // It resets to false on any JS restart (Expo Go reload, force-quit,
-      // dev fast-refresh) while still inside the bedtime window, which
-      // used to cause a duplicate entry for the same night. Checking the
-      // actual log closes that gap regardless of why the flag drifted.
+      // Use the local bedtime night KEY, not yesterday's boolean. If Curfy
+      // stays backgrounded all day, the morning callback may never reset
+      // lockedToday; today's log must still be created on return.
       const alreadyLoggedToday = sleepLogRef.current.some((e) => e.date === today);
-      if (!lockedToday.current && !alreadyLoggedToday) {
+      if (!alreadyLoggedToday) {
         lockedToday.current = true;
         // New local bedtime night: never carry yesterday's unlock count
         // forward into a brand-new evening.
@@ -393,11 +389,12 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
           onTime: true,
           createdAt: Date.now(),
         };
-        setSleepLog((prev) => {
-          const updated = [entry, ...prev];
-          AsyncStorage.setItem(SLEEP_LOG_KEY, JSON.stringify(updated));
-          return updated;
-        });
+        // Update the ref synchronously so two close calls to checkLock
+        // cannot both create an entry before React flushes state.
+        const updated = [entry, ...sleepLogRef.current];
+        sleepLogRef.current = updated;
+        setSleepLog(updated);
+        void AsyncStorage.setItem(SLEEP_LOG_KEY, JSON.stringify(updated));
       } else {
         lockedToday.current = true;
       }
