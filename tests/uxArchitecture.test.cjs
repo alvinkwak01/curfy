@@ -134,3 +134,26 @@ test("routine content cannot overlap a fixed progress header or push CTA offscre
   assert.doesNotMatch(src, /SlideOutLeft/);
   assert.match(src, /styles\.routineHero/);
 });
+
+test("reviewed onboarding confirms a readable time and actual Screen Time permission", () => {
+  const src = source("app/onboarding.tsx");
+  assert.match(src, /Starts at \\{clockLabel\\(value\\)\\}/);
+  assert.match(src, /Available again at \\{clockLabel\\(value\\)\\}/);
+  assert.match(src, /cutoffDayLabel\\(start, value\\)/);
+  assert.match(src, /getScreenTimeAccessStatus\\(\\)/);
+  assert.match(src, /if \\(step !== 3\\) return/);
+  assert.match(src, /finally \\{\\s*setIsRequesting\\(false\\)/);
+  assert.match(src, /headerText="Choose exactly one app to protect"/);
+  assert.match(src, /onPress=\\{\\(\\) => handlePick\\("custom"\\)\\}/);
+  assert.match(src, /Finish setup/);
+  assert.doesNotMatch(src, /BLOCK_MODE_PRESETS/);
+});
+
+test("Delete Everything erases the previous protected app picker after stopping native restrictions", () => {
+  const ctx = source("context/SleepContext.tsx");
+  const fn = ctx.slice(ctx.indexOf("const deleteAccount = async () => {"), ctx.indexOf("const streak = computeStreak"));
+  const stopped = fn.indexOf("stopBedtimeBlocking()");
+  const erased = fn.indexOf("clearCurfyOnboardingSelectionsAfterAccountDeletion()");
+  const wiped = fn.indexOf("AsyncStorage.multiRemove(ALL_STORAGE_KEYS)");
+  assert.ok(stopped >= 0 && erased > stopped && wiped > erased);
+});
