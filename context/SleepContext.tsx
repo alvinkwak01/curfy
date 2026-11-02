@@ -9,6 +9,7 @@ import {
   reconcileProtectionWindow,
   refreshBedtimeShieldAppearance,
   stopBedtimeBlocking,
+  clearCurfyOnboardingSelectionsAfterAccountDeletion,
 } from "@/lib/screenTime";
 import React, {
   createContext,
@@ -610,6 +611,9 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     // stop its monitor. The remote account may already be deleted, but
     // deletion is retryable because there is still a local recovery path.
     stopBedtimeBlocking();
+    // A successful Delete Everything must not carry the previous native
+    // app picker tokens into a fresh account's onboarding.
+    clearCurfyOnboardingSelectionsAfterAccountDeletion();
     setIsLocked(false);
     lockedToday.current = false;
     cooldownUntil.current = 0;
