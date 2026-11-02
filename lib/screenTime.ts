@@ -10,7 +10,7 @@
 // the JS side, but nothing here functions in Expo Go or the iOS Simulator
 // (Apple's Screen Time frameworks don't run in Simulator at all).
 import * as DeviceActivity from "react-native-device-activity";
-import { currentBedtimeWindow, nativeDateComponents } from "@/lib/bedtimeWindow";
+import { assertMonitorableBedtimeSchedule, currentBedtimeWindow, nativeDateComponents } from "@/lib/bedtimeWindow";
 
 export type ScreenTimeAuthStatus = "notDetermined" | "authorized" | "denied";
 
@@ -172,8 +172,9 @@ export async function configureBedtimeBlocking({
   if (getScreenTimeAccessStatus() !== "authorized") {
     throw new Error("Screen Time permission is required to protect selected apps.");
   }
-  // Reject equal/invalid endpoints rather than creating an ambiguous
-  // all-day interval or crashing the Home screen later.
+  // Reject malformed, equal or sub-15-minute schedules before modifying
+  // native monitor actions, opaque selection tokens or the current blocklist.
+  assertMonitorableBedtimeSchedule(bedtime, wakeTime);
   currentBedtimeWindow(now, bedtime, wakeTime);
   const selectionId = selectionIdForMode(mode);
   const pendingId = draftSelectionId ?? selectionId;
