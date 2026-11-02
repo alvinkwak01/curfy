@@ -33,7 +33,11 @@ function fixture({
   const calls = [];
   const tokensFor = (sel) => sel === group ? ["A","B","C"] :
     scope[sel] ? [scope[sel]] : [];
+  storage.set("curfy-scheduled-selection-id", group);
+  storage.set("curfy-bedtime-clock-window", {startMinute:22*60, endMinute:6*60});
   const native = {
+    AuthorizationStatus: {approved:2},
+    getAuthorizationStatus: () => authorized ? 2 : 1,
     userDefaultsGet: key => storage.get(key),
     userDefaultsSet: (key, value) => { calls.push(["persist", key]); storage.set(key, value); },
     activitySelectionMetadata: ({ activitySelectionId: id }) => ({
@@ -87,11 +91,19 @@ function fixture({
       getScreenTimeAccessStatus: () => authorized ? "authorized" : "denied",
       selectionIdForMode: mode => "curfy-block-" + mode,
     };
+    if (name === "@/lib/premiumExceptionRecovery") {
+      const recover = loadTS("lib/premiumExceptionRecovery.ts", recoverName => {
+        if (recoverName === "react-native-device-activity") return native;
+        if (recoverName === "@/lib/premiumExceptionPolicy") return policy;
+        throw Error("Unexpected recovery import " + recoverName);
+      });
+      return recover;
+    }
     if (name === "@/lib/premiumExceptionPolicy") return policy;
     throw Error("Unexpected dependency " + name);
   });
-  const grant = (ticketId=t1) => mod.grantPremiumAppException({
-    bedtime: "22:00", wakeTime: "06:00", mode: "custom", ticketId, now,
+  const grant = (ticketId=t1, at=now) => mod.grantPremiumAppException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", ticketId, now: at,
   });
   return { mod, native, calls, storage, activities, blocked, grant };
 }
@@ -190,4 +202,25 @@ test("no actual purchased multi-app route or checkout is exposed by the coordina
     const source = readFileSync(join(__dirname, "..", path), "utf8");
     assert.doesNotMatch(source, /grantPremiumAppException/);
   }
+});
+
+
+test("next app hold first re-shields only the previous expired app and safely retires its monitor", async () => {
+  const f = fixture();
+  await f.grant(t1);
+  assert.deepEqual([...f.blocked].sort(), ["B", "C"]);
+  const later = new Date(now.getTime() + 20*60_000);
+  await f.grant(t2, later);
+  assert.deepEqual([...f.blocked].sort(), ["A", "C"]);
+  const ledger = f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY);
+  assert.equal(Object.keys(ledger).length, 1);
+  assert.equal(Object.values(ledger)[0].selectionId, t2);
+  assert.equal(f.activities.size, 1);
+  assert.equal(f.calls.filter(x=>x[0]==="block").length, 1);
+});
+
+test("foreground native recovery is included independently of the Free hold path", () => {
+  const context = readFileSync(join(__dirname, "../context/SleepContext.tsx"), "utf8");
+  assert.match(context, /reconcilePremiumAppExceptions\(\)/);
+  assert.match(context, /reconcileBedtimeException\(bedtime, wakeTime\)/);
 });

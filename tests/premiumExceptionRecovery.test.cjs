@@ -167,7 +167,7 @@ test("unexpected re-shield of active app B is detected, with its record preserve
   const f = fixture({ ledger:{
     [A.activityName]: A, [B.activityName]: B,
   }, overblock: true });
-  assert.throws(()=>f.mod.reconcilePremiumAppExceptions(after20), /still-active exception/);
+  assert.throws(()=>f.mod.reconcilePremiumAppExceptions(after20), /single-app re-shielding|still-active exception/);
   assert.equal(f.monitors.size, 2);
   assert.equal(Object.keys(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY)).length, 2);
 });

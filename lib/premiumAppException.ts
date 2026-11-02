@@ -8,6 +8,7 @@
  */
 import * as DeviceActivity from "react-native-device-activity";
 import { validateProtectedAppChoice } from "@/modules/curfy-protected-apps";
+import { reconcilePremiumAppExceptions } from "@/lib/premiumExceptionRecovery";
 import { refreshPremiumEntitlement } from "@/lib/premiumStore";
 import { selectionIssueForEntitlement } from "@/lib/premiumPolicy";
 import { currentBedtimeWindow, nativeDateComponents } from "@/lib/bedtimeWindow";
@@ -105,6 +106,10 @@ export async function grantPremiumAppException({
       throw new Error("Finish the existing app exception before choosing another app.");
     }
     nativeOneAppSelection(ticketId);
+    // Expired records are reconciled before planning a new native monitor;
+    // only their own singleton may be re-shielded, never still-active apps.
+    // If iOS cannot confirm recovery, refuse the next unlock.
+    reconcilePremiumAppExceptions(now);
     const existing = readLedger();
     for (const entry of Object.values(existing)) {
       if (exactOverlap(ticketId, { activitySelectionId: entry.selectionId }) > 0) {

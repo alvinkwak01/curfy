@@ -23,6 +23,7 @@ import { bedtimeNightKey, isBedtimeWindowActive } from "@/lib/bedtimeWindow";
 import { ProtectionRoutine, parseProtectionRoutine, routineIsEveningBased } from "@/lib/protectionRoutine";
 import { countLoggedNightStreak, shouldStartNightLog } from "@/lib/nightHistory";
 import { mayRestartSetup } from "@/lib/restartProtectionPolicy";
+import { reconcilePremiumAppExceptions } from "@/lib/premiumExceptionRecovery";
 import { useAuth } from "./AuthContext";
 import { useJournal } from "./JournalContext";
 
@@ -253,6 +254,13 @@ function reconcileNativeProtection(bedtime: string, wakeTime: string, blockMode:
     reconcileBedtimeException(bedtime, wakeTime);
   } catch (error) {
     console.warn("[Curfy] Exception recovery needs retry", error);
+  }
+  // The premium ledger is absent on Free installations; this becomes a
+  // no-op and never changes the existing one-app exception path.
+  try {
+    reconcilePremiumAppExceptions();
+  } catch (error) {
+    console.warn("[Curfy] A protected-app exception needs native recovery", error);
   }
   if (blockMode === "social" || blockMode === "most" || blockMode === "custom") {
     try {
