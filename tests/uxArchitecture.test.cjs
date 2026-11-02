@@ -95,3 +95,14 @@ test("account deletion stops native protection before wiping local recovery data
   assert.doesNotMatch(deletion, /try\s*\{\s*stopBedtimeBlocking\(\);\s*\}\s*catch/,
     "Stop failures must never be silently swallowed during deletion");
 });
+
+test("onboarding compensates for native schedule if local completion fails", () => {
+  const onboarding = source("app/onboarding.tsx");
+  const start = onboarding.indexOf("let nativeScheduleStarted = false;");
+  const complete = onboarding.indexOf("await completeOnboarding();", start);
+  const fail = onboarding.indexOf("} catch (error) {", complete);
+  const stop = onboarding.indexOf("stopBedtimeBlocking();", fail);
+  assert.ok(start >= 0 && complete > start && fail > complete && stop > fail);
+  assert.match(onboarding.slice(fail, fail + 950), /nativeScheduleStarted/);
+  assert.match(onboarding.slice(stop, stop + 600), /Screen Time access in iPhone Settings/);
+});
