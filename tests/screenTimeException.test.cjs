@@ -111,6 +111,14 @@ function fixture({
   };
 }
 
+async function registerRecurringProtectionMonitor(f, startHour = 22, endHour = 6) {
+  await f.native.startMonitoring("curfy-bedtime", {
+    intervalStart: { hour: startHour, minute: 0 },
+    intervalEnd: { hour: endHour, minute: 0 },
+    repeats: true,
+  });
+}
+
 test("completing the hold schedules native reblock before unshielding", async () => {
   const f = fixture();
   const now = new Date("2026-10-31T23:00:00");
@@ -165,6 +173,7 @@ test("a native unshield failure rolls back the exception and stays protected", a
 
 test("foreground recovery re-shields expired exceptions inside bedtime", async () => {
   const f = fixture();
+  await registerRecurringProtectionMonitor(f);
   const now = new Date("2026-10-31T23:00:00");
   const expiry = await f.screenTime.grantBedtimeException({
     bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
@@ -232,6 +241,7 @@ test("the installed shield no longer offers a broken Open Curfy button", async (
 
 test("native category re-shield clears the exception despite missing token overlap", async () => {
   const f = fixture({ overlapReportsZero: true });
+  await registerRecurringProtectionMonitor(f);
   const now = new Date("2026-10-31T23:00:00");
   const expiry = await f.screenTime.grantBedtimeException({
     bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
@@ -880,6 +890,7 @@ test("denied iOS Screen Time request reports denial without blind retries", asyn
 
 test("expired exception re-shields even when token-overlap introspection is unavailable", async () => {
   const f = fixture({ overlapUnavailable: true });
+  await registerRecurringProtectionMonitor(f);
   const now = new Date("2026-11-01T23:00:00");
   const expiry = await f.screenTime.grantBedtimeException({
     bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
@@ -894,6 +905,7 @@ test("expired exception re-shields even when token-overlap introspection is unav
 
 test("expired exception keeps retry state if native shield cannot be restored and overlap unavailable", async () => {
   const f = fixture({ overlapUnavailable: true, ignoreBlockOnCalls: [1] });
+  await registerRecurringProtectionMonitor(f);
   const now = new Date("2026-11-01T23:00:00");
   const expiry = await f.screenTime.grantBedtimeException({
     bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
@@ -969,4 +981,44 @@ test("registered iOS monitor retains existing shield during the chosen window", 
   );
   assert.equal(f.isBlocked(), true);
   assert.equal(f.calls.filter(x => x[0] === "reset").length, 0);
+});
+
+test("expired exception cannot create an orphaned shield after recurring monitor disappears", async () => {
+  const f = fixture({ initiallyBlocked: true });
+  const now = new Date("2026-11-01T23:00:00");
+  const expiry = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  assert.equal(f.isBlocked(), false);
+  f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2000));
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+  assert.equal(f.calls.some(x => x[0] === "block"), false);
+});
+
+test("orphan shield left by exception callback is released when recurring monitor is gone", async () => {
+  const f = fixture();
+  const now = new Date("2026-11-01T23:00:00");
+  const expiry = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  f.native.blockSelection({ activitySelectionId: "curfy-block-custom" });
+  f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2000));
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+});
+
+test("unremovable orphan exception shield preserves recovery state for retry", async () => {
+  const f = fixture({ ignoreResetOnCalls: [1] });
+  const now = new Date("2026-11-01T23:00:00");
+  const expiry = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  f.native.blockSelection({ activitySelectionId: "curfy-block-custom" });
+  assert.throws(() =>
+    f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2000)),
+    /could not clear an orphaned app shield/
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.storage.has("curfy-active-exception"), true);
 });

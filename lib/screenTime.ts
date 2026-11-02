@@ -819,6 +819,21 @@ export function reconcileBedtimeException(
   const withinBedtime = currentBedtimeWindow(now, bedtime, wakeTime) !== null;
   if (getScreenTimeAccessStatus() !== "authorized") return;
 
+  // An expired exception must not resurrect a shield when the daily iOS
+  // monitor has disappeared: there would be no reliable end-of-window
+  // callback to release the app while Curfy is closed.
+  if (withinBedtime && !DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
+    if (DeviceActivity.isShieldActive()) {
+      DeviceActivity.resetBlocks("curfy-orphan-exception-without-recurring-monitor");
+      if (DeviceActivity.isShieldActive()) {
+        throw new Error("iOS lost Curfy's recurring monitor and could not clear an orphaned app shield.");
+      }
+    }
+    stopExceptionMonitor(state);
+    DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
+    return;
+  }
+
   if (withinBedtime) {
     DeviceActivity.blockSelection(
       { activitySelectionId: state.selectionId }, "curfy-exception-foreground-recovery"
