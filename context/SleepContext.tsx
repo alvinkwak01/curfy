@@ -106,11 +106,11 @@ interface SleepContextType {
   // including when the current streak breaks.
   longestStreak: number;
   isLoading: boolean;
-  // No real account system yet (see CONTEXT.md — local-only, no backend).
-  // signOut() re-triggers onboarding but keeps sleep history intact —
-  // it's the closest local equivalent until real sign-in exists.
+  // Restart Setup returns to onboarding while retaining local history
+  // and anonymous Supabase session; stops native restrictions first.
   signOut: () => Promise<void>;
-  // deleteAccount() wipes every persisted field back to a blank install.
+  // Delete Account confirms remote deletion and native OS shield stop
+  // before wiping local account and journal data.
   deleteAccount: () => Promise<void>;
   // Dev-build-only toggle (Settings screen only renders the switch when
   // `__DEV__`) to stop the real bedtime window from auto-locking the app
@@ -120,14 +120,9 @@ interface SleepContextType {
   // test the lock UI itself on demand while this is on.
   devSkipLock: boolean;
   setDevSkipLock: (skip: boolean) => Promise<void>;
-  // Dev-only escape hatch for the deadlock devSkipLock alone can't solve:
-  // the toggle above lives in Settings, but Settings is unreachable while
-  // the real LockScreen modal is covering the whole app — there was no way
-  // to get to the switch in the first place. This dismisses the current
-  // lock immediately AND turns devSkipLock on so it doesn't just re-lock
-  // 30 seconds later, without recording a real escape/unlock the way
-  // completing the 120-second hold does (todayUnlocks/sleepLog untouched).
-  // Rendered only on the LockScreen itself when `__DEV__`.
+  // Legacy developer-only control retained for the optional LockScreen
+  // preview; the obsolete full-app lock modal no longer runs. Never a
+  // production escape from selected-app iOS Screen Time shielding.
   devDismissLock: () => void;
 }
 
