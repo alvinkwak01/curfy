@@ -42,6 +42,8 @@ Updated 2026-11-02. **NOT a claim of device testing.** Use this after the next s
 
 - **Scoped choice-ticket safety:** select app A in native chooser, then change the committed protected selection before completing a hold: the prepared ticket must refuse revalidation (never unlock B). Reject invalid row indices, category picker promotion, and expired choice tickets. Early release, cancel or background must not call any unshield method; native singleton selections used for actual reblocking must not be deleted before their monitor ends. Verify two sequential/overlapping 120-second holds for different protected apps independently, with separate ~15-minute re-shielding and after app termination; current code does NOT yet support this.
 
+- **Independent Premium exception callback matrix (not yet implemented end-to-end):** Start two holds for different protected apps several minutes apart; check each gets a distinct monitor name, each native end callback re-shields only its own token, and a delayed daily start preserves only currently active exceptions. A stopMonitoring-triggered early end must never reblock a still-active exception; a callback after cutoff must not re-shield. A changed committed selection, corrupted ledger, invalid singleton, or revoked Screen Time authorization must never silently unlock an unselected app. Confirm behavior with Curfy force-quit/reboot and at a time-zone boundary. This is NOT verified by CI source assertions.
+
 ## Evidence record (fill after actual testing)
 
 | Case | Status | Observed build/iPhone/iOS | Repro/log/video |
