@@ -392,7 +392,9 @@ export function stopBedtimeBlocking(): void {
   // have stopped. Stopping can synchronously invoke intervalDidEnd, so its
   // actions must first be cleared, but a FAILED stop must restore them.
   const previousSelectionId = previousScheduledSelectionId();
-  cancelExceptionForScheduleChange();
+  // Leave an earned 15-minute exception monitor intact until native stop
+  // and clearing Curfy's shields BOTH succeed. A failed stop must not
+  // silently cancel automatic reblocking if the app is force-quit.
   clearBedtimeActions();
   try {
     DeviceActivity.stopMonitoring([BEDTIME_ACTIVITY_NAME]);
@@ -418,6 +420,7 @@ export function stopBedtimeBlocking(): void {
     }
     throw error;
   }
+  cancelExceptionForScheduleChange();
   DeviceActivity.userDefaultsRemove(SCHEDULED_SELECTION_ID_KEY);
   DeviceActivity.userDefaultsRemove(BEDTIME_CLOCK_KEY);
 }
