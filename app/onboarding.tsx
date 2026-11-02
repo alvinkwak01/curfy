@@ -2,7 +2,7 @@ import Btn from "@/components/Btn";
 import { MoonGlyph } from "@/components/MoonGlyph";
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
-import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults, routineExplainer, startQuestion, clockLabel } from "@/lib/protectionRoutine";
+import { PROTECTION_ROUTINES, ProtectionRoutine, routineDefaults, routineExplainer, startQuestion, protectionWindowLabel } from "@/lib/protectionRoutine";
 import { assertMonitorableBedtimeSchedule } from "@/lib/bedtimeWindow";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
@@ -277,7 +277,7 @@ function StepRoutine({ routine, onChange }: {
               <View style={{ flex: 1, gap: 3 }}>
                 <Text style={styles.presetTitle}>{option.title}</Text>
                 <Text style={styles.presetDesc}>{option.description}</Text>
-                <Text style={styles.fineprint}>{clockLabel(defaults.start)} – {clockLabel(defaults.end)} suggested</Text>
+                <Text style={styles.fineprint}>{protectionWindowLabel(defaults.start, defaults.end)} suggested</Text>
               </View>
               {selected && <Ionicons name="checkmark-circle" size={22} color={Colors.primaryCyan} />}
             </TouchableOpacity>
@@ -441,7 +441,7 @@ function StepChooseApps({
           {routine === "morning" ? "Morning" : routine === "both" ? "Night + morning" : "Evening"} protection
         </Text>
         <Text style={styles.bodyText}>
-          {clockLabel(start)} – {clockLabel(end)} every day
+          {protectionWindowLabel(start, end)} · every day
         </Text>
         <Text style={styles.fineprint}>
           Need temporary access? Open Curfy and hold for 120 uninterrupted seconds
