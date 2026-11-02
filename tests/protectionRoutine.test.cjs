@@ -66,3 +66,10 @@ test("routine uses timing labels, not inferred sleep and wake data", () => {
   assert.equal(routine.clockLabel("23:00"), "11:00 PM");
   assert.equal(routine.clockLabel("06:00"), "6:00 AM");
 });
+
+test("users can see whether the app unlocks today or tomorrow", () => {
+  assert.equal(routine.protectionWindowLabel("23:00", "06:00"), "11:00 PM → 6:00 AM (next day)");
+  assert.equal(routine.protectionWindowLabel("06:00", "09:00"), "6:00 AM → 9:00 AM (same day)");
+  assert.equal(routine.protectionWindowLabel("23:00", "09:00"), "11:00 PM → 9:00 AM (next day)");
+  assert.equal(routine.cutoffDayLabel("08:00", "09:00"), "same day");
+});
