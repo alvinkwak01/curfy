@@ -86,6 +86,129 @@ private func loadCurfyProtectedSnapshot(_ selectionId: String) throws -> CurfyPr
   return CurfyProtectedSnapshot(revision: revision, applications: sorted)
 }
 
+
+// An exception ticket is NOT an unlock permission. It only pins one private
+// token to a particular, unchanged committed app selection. A future
+// post-120-second native bridge must verify this ticket again before changing
+// any ManagedSettings state.
+private let curfyChoiceTicketKey = "curfy-prepared-app-choice-tickets"
+private let curfyChoicePrefix = "curfy-single-app-"
+private let curfyTicketValidity: TimeInterval = 10 * 60
+private let curfyTicketRetention: TimeInterval = 24 * 60 * 60
+
+private struct CurfyChoiceTicket: Codable {
+  let committedSelectionId: String
+  let revision: String
+  let index: Int
+  let createdAt: Date
+}
+
+private func curfySharedDefaults() throws -> UserDefaults {
+  guard let group = Bundle.main.object(forInfoDictionaryKey: curfyAppGroupInfoKey) as? String,
+        !group.isEmpty,
+        let defaults = UserDefaults(suiteName: group) else {
+    throw CurfyAppChoiceError.unavailableSharedStore
+  }
+  return defaults
+}
+
+private func storedChoiceTickets(_ defaults: UserDefaults) -> [String: Data] {
+  defaults.dictionary(forKey: curfyChoiceTicketKey) as? [String: Data] ?? [:]
+}
+
+// Strictly retain tickets needed by existing native monitors for a full day.
+// Stale tickets cannot be used to bypass a new hold; validation expires after
+// ten minutes and always checks the current committed token.
+private func pruneStaleChoiceTickets(
+  _ defaults: UserDefaults,
+  choices: inout [String: Data]
+) {
+  let decoder = JSONDecoder()
+  let now = Date()
+  var selectionMap = defaults.dictionary(forKey: curfySelectionKey) as? [String: String] ?? [:]
+  for (id, data) in choices {
+    guard let ticket = try? decoder.decode(CurfyChoiceTicket.self, from: data),
+          now.timeIntervalSince(ticket.createdAt) < curfyTicketRetention else {
+      choices.removeValue(forKey: id)
+      selectionMap.removeValue(forKey: id)
+      continue
+    }
+  }
+  defaults.set(selectionMap, forKey: curfySelectionKey)
+}
+
+private func prepareOneProtectedApp(
+  selectionId: String, revision: String, index: Int
+) throws -> String {
+  let snapshot = try loadCurfyProtectedSnapshot(selectionId)
+  guard snapshot.revision == revision else { throw CurfyAppChoiceError.staleSelection }
+  guard index >= 0 && index < snapshot.applications.count else {
+    throw CurfyAppChoiceError.invalidIndex
+  }
+  let defaults = try curfySharedDefaults()
+  var selections = defaults.dictionary(forKey: curfySelectionKey) as? [String: String] ?? [:]
+  var tickets = storedChoiceTickets(defaults)
+  pruneStaleChoiceTickets(defaults, choices: &tickets)
+
+  let identifier = curfyChoicePrefix + UUID().uuidString
+  let token = snapshot.applications[index]
+  var single = FamilyActivitySelection()
+  single.applicationTokens = Set([token])
+  guard let encoded = try? JSONEncoder().encode(single).base64EncodedString() else {
+    throw CurfyAppChoiceError.invalidSelection
+  }
+  let ticket = CurfyChoiceTicket(
+    committedSelectionId: selectionId, revision: revision,
+    index: index, createdAt: Date()
+  )
+  let data = try JSONEncoder().encode(ticket)
+  // Persist the same opaque format consumed by the pinned DeviceActivity
+  // extension; only the actual iOS process ever decodes the token.
+  selections[identifier] = encoded
+  tickets[identifier] = data
+  defaults.set(selections, forKey: curfySelectionKey)
+  defaults.set(tickets, forKey: curfyChoiceTicketKey)
+  guard (defaults.dictionary(forKey: curfySelectionKey)?[identifier] as? String) == encoded,
+        (defaults.dictionary(forKey: curfyChoiceTicketKey)?[identifier] as? Data) == data else {
+    throw CurfyAppChoiceError.invalidSelection
+  }
+  return identifier
+}
+
+private func validateOneProtectedAppTicket(_ identifier: String) throws -> Bool {
+  guard identifier.hasPrefix(curfyChoicePrefix),
+        UUID(uuidString: String(identifier.dropFirst(curfyChoicePrefix.count))) != nil else {
+    throw CurfyAppChoiceError.invalidSelection
+  }
+  let defaults = try curfySharedDefaults()
+  guard let data = storedChoiceTickets(defaults)[identifier],
+        let ticket = try? JSONDecoder().decode(CurfyChoiceTicket.self, from: data),
+        Date().timeIntervalSince(ticket.createdAt) < curfyTicketValidity,
+        ticket.createdAt.timeIntervalSinceNow <= 0 else {
+    throw CurfyAppChoiceError.staleSelection
+  }
+  let current = try loadCurfyProtectedSnapshot(ticket.committedSelectionId)
+  guard current.revision == ticket.revision else {
+    throw CurfyAppChoiceError.staleSelection
+  }
+  guard ticket.index >= 0 && ticket.index < current.applications.count else {
+    throw CurfyAppChoiceError.invalidIndex
+  }
+  guard let encoded = defaults.dictionary(forKey: curfySelectionKey)?[identifier] as? String,
+        let data = Data(base64Encoded: encoded),
+        let scoped = try? JSONDecoder().decode(FamilyActivitySelection.self, from: data),
+        scoped.applicationTokens == Set([current.applications[ticket.index]]),
+        scoped.categoryTokens.isEmpty, scoped.webDomainTokens.isEmpty,
+        !scoped.includeEntireCategory else {
+    throw CurfyAppChoiceError.invalidSelection
+  }
+  return true
+}
+
+// Only discard unused tickets before scheduling a monitor. Once a native
+// exception has started, its one-token selection must survive app termination
+// until reblocking. Therefore the future exception coordinator owns cleanup.
+
 final class CurfyProtectedAppLabelView: ExpoView {
   private let host = UIHostingController(rootView: AnyView(Text("App unavailable")))
   var selectionId = ""
@@ -140,6 +263,14 @@ public class CurfyProtectedAppsModule: Module {
       let snapshot = try loadCurfyProtectedSnapshot(selectionId)
       // No token values, names, bundle IDs, or app-specific hashes cross JS.
       return ["count": snapshot.applications.count, "revision": snapshot.revision]
+    }
+    Function("prepareProtectedApp") {
+      (selectionId: String, revision: String, index: Int) throws -> String in
+      try prepareOneProtectedApp(selectionId: selectionId, revision: revision, index: index)
+    }
+
+    Function("validatePreparedApp") { (ticketId: String) throws -> Bool in
+      try validateOneProtectedAppTicket(ticketId)
     }
 
     View(CurfyProtectedAppLabelView.self) {
