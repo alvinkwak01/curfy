@@ -808,3 +808,34 @@ test("a deleted Curfy account with no saved native picker selections is safe to 
     f.screenTime.clearCurfyOnboardingSelectionsAfterAccountDeletion()
   );
 });
+
+test("new onboarding picker starts empty instead of inheriting previously checked apps", () => {
+  const f = fixture();
+  f.storage.set("familyActivitySelectionIds", {
+    "curfy-block-custom": "old-app-that-was-still-checked",
+    "curfy-block-social": "keep-different-mode",
+  });
+  f.screenTime.beginFreshOnboardingAppSelection("custom");
+  assert.deepEqual(f.storage.get("familyActivitySelectionIds"), {
+    "curfy-block-social": "keep-different-mode",
+  });
+});
+test("fresh onboarding picker must fail loudly if native shared storage refuses to clear old checkmarks", () => {
+  const f = fixture();
+  f.storage.set("familyActivitySelectionIds", {
+    "curfy-block-custom": "old-choice",
+  });
+  f.native.userDefaultsSet = () => {};
+  assert.throws(() => f.screenTime.beginFreshOnboardingAppSelection("custom"),
+    /didn't clear/);
+});
+test("a fresh onboarding picker with no stale selection preserves other native data", () => {
+  const f = fixture();
+  f.storage.set("familyActivitySelectionIds", {
+    "unrelated": "keep",
+  });
+  f.screenTime.beginFreshOnboardingAppSelection("custom");
+  assert.deepEqual(f.storage.get("familyActivitySelectionIds"), {
+    unrelated: "keep",
+  });
+});
