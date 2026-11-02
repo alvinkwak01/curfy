@@ -433,3 +433,47 @@ test("short recurring windows are rejected before modifying native protection", 
   assert.equal(f.calls.filter(x => ["start", "reset", "block"].includes(x[0])).length, 0);
   assert.equal(f.isBlocked(), true);
 });
+
+test("native monitor persists local clock boundaries for delayed Swift callback filtering", async () => {
+  const f = fixture();
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:45", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-01T23:00:00"),
+  });
+  assert.deepEqual(
+    f.storage.get("curfy-bedtime-clock-window"),
+    { startMinute: 22 * 60 + 45, endMinute: 6 * 60 }
+  );
+});
+
+test("failed monitor replacement restores previous clock boundaries and protection", async () => {
+  const f = fixture({ failStart: true });
+  const before = { startMinute: 22 * 60, endMinute: 6 * 60 };
+  f.storage.set("curfy-bedtime-clock-window", before);
+  await assert.rejects(
+    f.screenTime.configureBedtimeBlocking({
+      bedtime: "21:30", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-11-01T22:00:00"),
+    }), /Native scheduling failed/
+  );
+  assert.deepEqual(f.storage.get("curfy-bedtime-clock-window"), before);
+  assert.equal(f.isBlocked(), true);
+});
+
+test("stopping protection also clears stale clock metadata used by native callbacks", async () => {
+  const f = fixture();
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "23:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-01T23:30:00"),
+  });
+  f.screenTime.stopBedtimeBlocking();
+  assert.equal(f.storage.has("curfy-bedtime-clock-window"), false);
+});
+
+test("clock guard is present on BOTH native interval callbacks", () => {
+  const fs = require("node:fs");
+  const swift = fs.readFileSync(join(__dirname, "../targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift"), "utf8");
+  assert.match(swift, /isWithinConfiguredCurfyWindow\(\) == false/);
+  assert.match(swift, /isWithinConfiguredCurfyWindow\(\) == true/);
+  assert.match(swift, /Calendar\.current\.dateComponents/);
+});
