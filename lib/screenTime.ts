@@ -276,7 +276,7 @@ export async function configureBedtimeBlocking({
       repeats: true,
     }, []);
     if (!DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
-      throw new Error("iOS did not register the new protection schedule.");
+      throw new Error("iOS did not register bedtime monitoring. Please retry.");
     }
 
     // Do not cancel an earned exception until the new restriction state has
