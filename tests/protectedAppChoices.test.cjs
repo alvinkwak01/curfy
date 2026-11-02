@@ -23,10 +23,20 @@ function fixture({ os = "ios", response = { count: 3, revision } } = {}) {
     if (name === "expo-modules-core") return {
       requireNativeModule: (id) => {
         calls.push(["module", id]);
-        return { getProtectedApps: (selectionId) => {
-          calls.push(["read", selectionId]);
-          return response;
-        } };
+        return {
+          getProtectedApps: (selectionId) => {
+            calls.push(["read", selectionId]);
+            return response;
+          },
+          prepareProtectedApp: (selectionId, choiceRevision, index) => {
+            calls.push(["prepare", selectionId, choiceRevision, index]);
+            return "curfy-single-app-2B5CE120-66A6-4E53-A6BB-661E51A9AD01";
+          },
+          validatePreparedApp: (ticketId) => {
+            calls.push(["validate", ticketId]);
+            return true;
+          },
+        };
       },
       requireNativeViewManager: (id) => {
         calls.push(["view", id]);
@@ -102,4 +112,58 @@ test("no user-facing purchase, multi-app unlock or profile change was enabled by
   const main = readFileSync(join(__dirname, "../lib/screenTime.ts"), "utf8");
   assert.doesNotMatch(home, /readProtectedAppChoices\(/);
   assert.match(main, /assertOneFreeAppSelected/);
+});
+
+
+test("scoped app choice preparation returns only a random ticket, not Apple tokens", () => {
+  const f = fixture();
+  const ticket = f.api.prepareProtectedAppChoice("curfy-block-custom", revision, 2);
+  assert.equal(ticket, "curfy-single-app-2B5CE120-66A6-4E53-A6BB-661E51A9AD01");
+  assert.deepEqual(f.calls, [
+    ["module", "CurfyProtectedApps"],
+    ["prepare", "curfy-block-custom", revision, 2],
+  ]);
+  assert.equal(f.api.validateProtectedAppChoice(ticket), true);
+  assert.deepEqual(f.calls.slice(-2), [
+    ["module", "CurfyProtectedApps"],
+    ["validate", ticket],
+  ]);
+});
+
+test("native bridge refuses drafts, invalid hashes, and invalid app indices before calling iOS", () => {
+  const f = fixture();
+  assert.throws(() => f.api.prepareProtectedAppChoice("curfy-draft-custom", revision, 0), /active Curfy/);
+  assert.throws(() => f.api.prepareProtectedAppChoice("curfy-block-custom", "wrong", 0), /Invalid protected-app choice/);
+  for (const value of [-1, NaN, 2.4, Infinity]) {
+    assert.throws(() => f.api.prepareProtectedAppChoice("curfy-block-custom", revision, value), /Invalid protected-app choice/);
+  }
+  assert.throws(() => f.api.validateProtectedAppChoice("../unsaved"), /Invalid prepared/);
+  assert.equal(f.calls.length, 0);
+});
+
+test("scoped app choices cannot silently run on Android", () => {
+  const f = fixture({ os: "android" });
+  assert.throws(
+    () => f.api.prepareProtectedAppChoice("curfy-block-custom", revision, 0),
+    /only available on iPhone/
+  );
+  assert.throws(
+    () => f.api.validateProtectedAppChoice("curfy-single-app-2B5CE120-66A6-4E53-A6BB-661E51A9AD01"),
+    /only available on iPhone/
+  );
+  assert.equal(f.calls.length, 0);
+});
+
+test("Swift prepared choice cannot unblock without a later 120-second hold coordinator", () => {
+  const swift = readFileSync(join(__dirname,
+    "../modules/curfy-protected-apps/ios/CurfyProtectedAppsModule.swift"), "utf8");
+  assert.match(swift, /selection\.applicationTokens/);
+  assert.match(swift, /single\.applicationTokens = Set\(\[token\]\)/);
+  assert.match(swift, /snapshot\.revision == revision/);
+  assert.match(swift, /current\.revision == ticket\.revision/);
+  assert.match(swift, /scoped\.applicationTokens == Set\(\[current\.applications\[ticket\.index\]\]\)/);
+  assert.match(swift, /curfyTicketValidity: TimeInterval = 10 \* 60/);
+  assert.doesNotMatch(swift, /ManagedSettingsStore\(\)/);
+  assert.doesNotMatch(swift, /unblockSelection\(/);
+  assert.doesNotMatch(swift, /store\.shield\./);
 });
