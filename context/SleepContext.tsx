@@ -72,11 +72,9 @@ export interface SleepEntry {
 
 interface SleepContextType {
   bedtime: string;
-  setBedtime: (time: string) => Promise<void>;
-  // Collected during onboarding alongside bedtime, mainly to compute the
-  // "here's how much sleep you're losing" reveal there. Also generally
-  // useful (e.g. a future "you got Xh of sleep last night" summary)
-  // without needing anything from the Screen Time integration.
+  setBedtime: (time: string, routine?: ProtectionRoutine) => Promise<void>;
+  // Legacy storage names: bedtime = protection start, wakeTime = apps
+  // available again. They are NOT measurements of when someone sleeps.
   wakeTime: string;
   setWakeTime: (time: string) => Promise<void>;
   protectionRoutine: ProtectionRoutine;
@@ -469,10 +467,16 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     return () => sub.remove();
   }, [checkLock, isOnboardingComplete, bedtime, wakeTime]);
 
-  const setBedtime = async (time: string) => {
-    setBedtimeState(time);
+  const setBedtime = async (time: string, routine = protectionRoutine) => {
     await AsyncStorage.setItem(BEDTIME_KEY, time);
-    await scheduleBedtimeNotifications(time);
+    setBedtimeState(time);
+    if (routineIsEveningBased(routine)) {
+      await scheduleBedtimeNotifications(time);
+    } else if (Platform.OS !== "web") {
+      // A morning-only routine must not trigger a 05:50 AM "bedtime soon"
+      // alarm left over from an earlier evening selection.
+      await Notifications.cancelAllScheduledNotificationsAsync();
+    }
   };
 
   const setWakeTime = async (time: string) => {
