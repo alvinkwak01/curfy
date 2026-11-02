@@ -19,6 +19,7 @@ import React, {
 } from "react";
 import { AppState, Platform } from "react-native";
 import { bedtimeNightKey, isBedtimeWindowActive } from "@/lib/bedtimeWindow";
+import { ProtectionRoutine, parseProtectionRoutine, routineIsEveningBased } from "@/lib/protectionRoutine";
 import { countLoggedNightStreak, shouldStartNightLog } from "@/lib/nightHistory";
 import { mayRestartSetup } from "@/lib/restartProtectionPolicy";
 import { useAuth } from "./AuthContext";
@@ -26,6 +27,7 @@ import { useJournal } from "./JournalContext";
 
 const BEDTIME_KEY = "@dusk/bedtime";
 const WAKE_TIME_KEY = "@dusk/wake_time";
+const PROTECTION_ROUTINE_KEY = "@curfy/protection_routine";
 const BLOCK_MODE_KEY = "@dusk/block_mode";
 const USERNAME_KEY = "@dusk/username";
 const ONBOARDING_KEY = "@dusk/onboarding_complete";
@@ -46,6 +48,7 @@ const DEV_SKIP_LOCK_KEY = "@dusk/dev_skip_lock";
 const ALL_STORAGE_KEYS = [
   BEDTIME_KEY,
   WAKE_TIME_KEY,
+  PROTECTION_ROUTINE_KEY,
   BLOCK_MODE_KEY,
   USERNAME_KEY,
   ONBOARDING_KEY,
@@ -76,6 +79,8 @@ interface SleepContextType {
   // without needing anything from the Screen Time integration.
   wakeTime: string;
   setWakeTime: (time: string) => Promise<void>;
+  protectionRoutine: ProtectionRoutine;
+  setProtectionRoutine: (routine: ProtectionRoutine) => Promise<void>;
   // Which preset ("social" / "most" / "custom") the user picked during
   // onboarding — null until they've been through that step at least once.
   // The actual selected-apps token lives natively (see lib/screenTime.ts's
@@ -272,6 +277,7 @@ function dedupeSleepLog(log: SleepEntry[]): SleepEntry[] {
 export function SleepProvider({ children }: { children: React.ReactNode }) {
   const [bedtime, setBedtimeState] = useState("23:00");
   const [wakeTime, setWakeTimeState] = useState("06:00");
+  const [protectionRoutine, setProtectionRoutineState] = useState<ProtectionRoutine>("evening");
   const [blockMode, setBlockModeState] = useState<string | null>(null);
   const [userName, setUserNameState] = useState("Sleeper");
   const [motivation, setMotivationState] = useState("");
@@ -299,7 +305,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     (async () => {
-      const [bt, wt, bm, un, oc, sl, cd, tu, mo, ls, dsl] = await Promise.all([
+      const [bt, wt, bm, un, oc, sl, cd, tu, mo, ls, dsl, pr] = await Promise.all([
         AsyncStorage.getItem(BEDTIME_KEY),
         AsyncStorage.getItem(WAKE_TIME_KEY),
         AsyncStorage.getItem(BLOCK_MODE_KEY),
@@ -311,9 +317,11 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
         AsyncStorage.getItem(MOTIVATION_KEY),
         AsyncStorage.getItem(LONGEST_STREAK_KEY),
         AsyncStorage.getItem(DEV_SKIP_LOCK_KEY),
+        AsyncStorage.getItem(PROTECTION_ROUTINE_KEY),
       ]);
       if (bt) setBedtimeState(bt);
       if (wt) setWakeTimeState(wt);
+      setProtectionRoutineState(parseProtectionRoutine(pr));
       if (bm) setBlockModeState(bm);
       if (un) setUserNameState(un);
       if (mo) setMotivationState(mo);
@@ -472,6 +480,11 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(WAKE_TIME_KEY, time);
   };
 
+  const setProtectionRoutine = async (routine: ProtectionRoutine) => {
+    await AsyncStorage.setItem(PROTECTION_ROUTINE_KEY, routine);
+    setProtectionRoutineState(routine);
+  };
+
   const setBlockMode = async (mode: string) => {
     setBlockModeState(mode);
     await AsyncStorage.setItem(BLOCK_MODE_KEY, mode);
@@ -604,6 +617,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     cooldownUntil.current = 0;
     setBedtimeState("23:00");
     setWakeTimeState("06:00");
+    setProtectionRoutineState("evening");
     setBlockModeState(null);
     setUserNameState("Sleeper");
     setMotivationState("");
@@ -648,6 +662,8 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
         setBedtime,
         wakeTime,
         setWakeTime,
+        protectionRoutine,
+        setProtectionRoutine,
         blockMode,
         setBlockMode,
         userName,
