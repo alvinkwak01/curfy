@@ -775,3 +775,36 @@ test("failure while clearing native callbacks restores both actions instead of o
   }
   assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
 });
+
+test("account deletion clears Curfy picker tokens but preserves unrelated shared selections", () => {
+  const f = fixture();
+  f.storage.set("familyActivitySelectionIds", {
+    "curfy-block-custom": "old-private-app",
+    "curfy-block-social": "old-social",
+    "curfy-draft-custom": "old-unsaved-choice",
+    "unrelated-app-choice": "keep-this",
+  });
+  f.screenTime.clearCurfyOnboardingSelectionsAfterAccountDeletion();
+  assert.deepEqual(f.storage.get("familyActivitySelectionIds"), {
+    "unrelated-app-choice": "keep-this",
+  });
+});
+
+test("account deletion refuses to claim a wiped native picker if iOS ignores the write", () => {
+  const f = fixture();
+  f.storage.set("familyActivitySelectionIds", {
+    "curfy-block-custom": "old-private-app",
+  });
+  f.native.userDefaultsSet = () => {};
+  assert.throws(() =>
+    f.screenTime.clearCurfyOnboardingSelectionsAfterAccountDeletion(),
+    /did not confirm/
+  );
+});
+
+test("a deleted Curfy account with no saved native picker selections is safe to reset", () => {
+  const f = fixture();
+  assert.doesNotThrow(() =>
+    f.screenTime.clearCurfyOnboardingSelectionsAfterAccountDeletion()
+  );
+});
