@@ -1,3 +1,8 @@
+## Critical picker Done → Continue race (2026-11-02)
+
+In react-native-device-activity 0.6.1 the persisted native picker writes after a 100ms Combine debounce. Curfy now keeps the native picker mounted through save and waits for its settlement before Continue reads metadata. Test on iPhone: in Apple's app picker select just one app and press Done, then **IMMEDIATELY** tap Continue. Expected: advance to the final preview without an erroneous "choose one app" warning, and native metadata reports exactly one individual app/no categories/websites. Repeat with a second selection change immediately before Done, after deleting everything (no inherited checkmarks), with no selection, two apps and an entire category. Record any error counts. Source tests and simulated adapter checks do NOT replace this acceptance.
+
+---
 ## Current ten-screen onboarding device QA — authoritative (2026-11-02)
 
 **Test next EAS preview only, after CI on this commit passes.** There is a branded Welcome and nine numbered setup steps. Verify: original dramatic Wake-Up Call → up-to-three distraction cards → start/end clock wheels (page does not scroll when wheel swipes) → personalized reveal without sleep claims → combined Why Curfy with the uninterrupted 120-second hold, up-to-15-minute exception, and iOS shielding → existing Screen Time permission state → Apple private picker → shield preview and optional name → Finish. Verify no routine page, no sleep/wake recommendations and correct progress 1/9 … 9/9. On smaller iPhone, all text/cards must be scrollable and CTA reachable; keyboard must not hide Finish. Check actual wheel value during a swipe and after release, both AM/PM and midnight next-day cutoff.
