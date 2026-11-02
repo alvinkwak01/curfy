@@ -75,10 +75,13 @@ private func loadCurfyProtectedSnapshot(_ selectionId: String) throws -> CurfyPr
     throw CurfyAppChoiceError.invalidSelection
   }
 
-  // Set order is not stable; ordering must remain deterministic across
-  // native view rendering and a later per-app exception request.
+  // Set order is not stable. Canonical JSON key order ensures the same
+  // token retains the same row across separate native rendering/preparation
+  // calls; otherwise the displayed app and prepared app could differ.
+  let canonicalEncoder = JSONEncoder()
+  canonicalEncoder.outputFormatting = [.sortedKeys]
   let encoded = try selection.applicationTokens.map { token in
-    (try JSONEncoder().encode(token).base64EncodedString(), token)
+    (try canonicalEncoder.encode(token).base64EncodedString(), token)
   }
   let sorted = encoded.sorted { $0.0 < $1.0 }.map { $0.1 }
   let revision = SHA256.hash(data: Data(saved.utf8))
