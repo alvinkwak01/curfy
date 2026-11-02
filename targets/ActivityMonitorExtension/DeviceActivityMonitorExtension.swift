@@ -35,6 +35,73 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     return current >= start || current < end
   }
 
+  // Future Premium exceptions use an independent shared dictionary keyed by
+  // native DeviceActivity name. The existing Free single-exception key stays
+  // untouched. Each entry must point to one app still in its committed set.
+  // An invalid record can NEVER cause an unshield.
+  private let premiumExceptionLedgerKey = "curfy-premium-active-exceptions"
+  private let premiumActivityPrefix = "curfy-premium-exception-"
+  private let premiumSelectionPrefix = "curfy-single-app-"
+
+  private func validPremiumScopedSelection(
+    for activityName: String, record: [String: Any]
+  ) -> FamilyActivitySelection? {
+    guard activityName.hasPrefix(premiumActivityPrefix),
+      let selectionId = record["selectionId"] as? String,
+      let committedId = record["committedSelectionId"] as? String,
+      let recordedActivity = record["activityName"] as? String,
+      recordedActivity == activityName,
+      selectionId.hasPrefix(premiumSelectionPrefix),
+      committedId == "curfy-block-social" || committedId == "curfy-block-most" ||
+        committedId == "curfy-block-custom",
+      String(selectionId.dropFirst(premiumSelectionPrefix.count)).lowercased() ==
+        String(activityName.dropFirst(premiumActivityPrefix.count)).lowercased(),
+      let single = getFamilyActivitySelectionById(id: selectionId),
+      let committed = getFamilyActivitySelectionById(id: committedId),
+      single.applicationTokens.count == 1,
+      single.categoryTokens.isEmpty, single.webDomainTokens.isEmpty,
+      !single.includeEntireCategory,
+      committed.categoryTokens.isEmpty, committed.webDomainTokens.isEmpty,
+      !committed.includeEntireCategory,
+      single.applicationTokens.isSubset(of: committed.applicationTokens)
+    else { return nil }
+    return single
+  }
+
+  private func activePremiumScopedSelections(at nowMs: Double)
+    -> [FamilyActivitySelection] {
+    guard let ledger = userDefaults?.dictionary(forKey: premiumExceptionLedgerKey)
+    else { return [] }
+    var active: [FamilyActivitySelection] = []
+    for (activityName, raw) in ledger {
+      guard let entry = raw as? [String: Any],
+        let startMs = (entry["startedAt"] as? NSNumber)?.doubleValue,
+        let expiresMs = (entry["expiresAt"] as? NSNumber)?.doubleValue,
+        let windowEndMs = (entry["bedtimeEndAt"] as? NSNumber)?.doubleValue,
+        startMs <= nowMs, nowMs < expiresMs, nowMs < windowEndMs,
+        let singleton = validPremiumScopedSelection(for: activityName, record: entry)
+      else { continue }
+      active.append(singleton)
+    }
+    return active
+  }
+
+  private func premiumReblockIsDue(activityName: String, nowMs: Double) -> Bool {
+    // stopMonitoring may invoke intervalDidEnd early; a delayed callback
+    // must not re-shield after the daily cutoff or in a new window.
+    guard isWithinConfiguredCurfyWindow() == true,
+      let ledger = userDefaults?.dictionary(forKey: premiumExceptionLedgerKey),
+      let entry = ledger[activityName] as? [String: Any],
+      let startMs = (entry["startedAt"] as? NSNumber)?.doubleValue,
+      let expiresMs = (entry["expiresAt"] as? NSNumber)?.doubleValue,
+      let windowEndMs = (entry["bedtimeEndAt"] as? NSNumber)?.doubleValue,
+      startMs < expiresMs, expiresMs <= windowEndMs,
+      nowMs >= expiresMs, nowMs < windowEndMs,
+      validPremiumScopedSelection(for: activityName, record: entry) != nil
+    else { return false }
+    return true
+  }
+
   override func intervalDidStart(for activity: DeviceActivityName) {
     super.intervalDidStart(for: activity)
     logger.log("intervalDidStart")
@@ -59,6 +126,17 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
         callbackName: "intervalDidStart",
         eventName: nil
       )
+      // A late daily start may reapply the full group while some individual
+      // Premium holds are still valid. Undo only those verified singleton
+      // tokens; all other chosen apps stay restricted.
+      if activity.rawValue == "curfy-bedtime" {
+        for selection in activePremiumScopedSelections(at: nowMs) {
+          unblockSelection(
+            removeSelection: selection,
+            triggeredBy: "curfy-premium-active-hold-window-start"
+          )
+        }
+      }
     }
 
     persistToUserDefaults(
@@ -97,6 +175,14 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       let nowMs = Date().timeIntervalSince1970 * 1000
       guard nowMs >= expiryMs && nowMs < bedtimeEndMs else {
         logger.log("Ignoring Curfy exception end outside active bedtime restriction")
+        return
+      }
+    }
+
+    if activity.rawValue.hasPrefix(premiumActivityPrefix) {
+      let nowMs = Date().timeIntervalSince1970 * 1000
+      guard premiumReblockIsDue(activityName: activity.rawValue, nowMs: nowMs) else {
+        logger.log("Ignoring early, late, or invalid Curfy Premium exception end")
         return
       }
     }
