@@ -23,6 +23,25 @@ export interface BedtimeWindow {
   start: Date;
   end: Date;
 }
+export const MINIMUM_MONITOR_WINDOW_MINUTES = 15;
+
+/**
+ * Apple DeviceActivityCenter rejects schedules shorter than 15 minutes.
+ * Use wall-clock minutes because recurring schedules follow local times;
+ * elapsed durations can vary by an hour across DST changes.
+ */
+export function assertMonitorableBedtimeSchedule(bedtime: string, wakeTime: string): void {
+  const start = parseTime(bedtime).minuteOfDay;
+  const end = parseTime(wakeTime).minuteOfDay;
+  const duration = (end - start + 1440) % 1440;
+  if (duration === 0) {
+    throw new Error("Bedtime and morning end time must be different.");
+  }
+  if (duration < MINIMUM_MONITOR_WINDOW_MINUTES) {
+    throw new Error("Choose a protection window of at least 15 minutes. iOS cannot monitor shorter schedules.");
+  }
+}
+
 
 /** Returns the current bedtime window, or null when selected apps should be unshielded. */
 export function currentBedtimeWindow(
