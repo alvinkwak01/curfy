@@ -159,6 +159,7 @@ test("Swift prepared choice cannot unblock without a later 120-second hold coord
     "../modules/curfy-protected-apps/ios/CurfyProtectedAppsModule.swift"), "utf8");
   assert.match(swift, /selection\.applicationTokens/);
   assert.match(swift, /single\.applicationTokens = Set\(\[token\]\)/);
+  assert.match(swift, /canonicalEncoder\.outputFormatting = \[\.sortedKeys\]/);
   assert.match(swift, /snapshot\.revision == revision/);
   assert.match(swift, /current\.revision == ticket\.revision/);
   assert.match(swift, /scoped\.applicationTokens == Set\(\[current\.applications\[ticket\.index\]\]\)/);
