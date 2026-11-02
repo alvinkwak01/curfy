@@ -14,7 +14,7 @@
       "backgroundColor": "#080810"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.alvinkwak.curfy",
       "appleTeamId": "H735Q3WW8K",
       "infoPlist": {
