@@ -388,28 +388,35 @@ export function refreshBedtimeShieldAppearance(): void {
 }
 
 export function stopBedtimeBlocking(): void {
+  // Keep the committed selection until BOTH native monitoring and shields
+  // have stopped. Stopping can synchronously invoke intervalDidEnd, so its
+  // actions must first be cleared, but a FAILED stop must restore them.
+  const previousSelectionId = previousScheduledSelectionId();
   cancelExceptionForScheduleChange();
-  // Stop may cause intervalDidEnd, so clear its native action first.
-  DeviceActivity.configureActions({
-    activityName: BEDTIME_ACTIVITY_NAME,
-    callbackName: "intervalDidStart",
-    actions: [],
-  });
-  DeviceActivity.configureActions({
-    activityName: BEDTIME_ACTIVITY_NAME,
-    callbackName: "intervalDidEnd",
-    actions: [],
-  });
-  DeviceActivity.stopMonitoring([BEDTIME_ACTIVITY_NAME]);
-  // Third-party wrappers can swallow native stop/reset failures. Confirm
-  // the OS no longer has Curfy's recurring activity before removing the
-  // only metadata needed to recover a stranded restriction.
-  if (DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
-    throw new Error("iOS still has Curfy's protection schedule. Try stopping protection again.");
-  }
-  DeviceActivity.resetBlocks("curfy-stop-blocking");
-  if (DeviceActivity.isShieldActive()) {
-    throw new Error("iOS still reports protected apps after stopping Curfy. Retry before deleting local setup.");
+  clearBedtimeActions();
+  try {
+    DeviceActivity.stopMonitoring([BEDTIME_ACTIVITY_NAME]);
+    if (DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
+      throw new Error("iOS still has Curfy's protection schedule. Try stopping protection again.");
+    }
+    DeviceActivity.resetBlocks("curfy-stop-blocking");
+    if (DeviceActivity.isShieldActive()) {
+      throw new Error("iOS still reports protected apps after stopping Curfy. Retry before deleting local setup.");
+    }
+  } catch (error) {
+    // If the recurring monitor survived, it must KEEP its start/end actions;
+    // otherwise a later device-use callback cannot release the blocked app
+    // even after the scheduled cutoff. Never replace a missing monitor here.
+    try {
+      if (previousSelectionId &&
+          DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME)) {
+        configureBedtimeActions(previousSelectionId);
+      }
+    } catch (restoreError) {
+      console.warn("[Curfy] Failed restoring actions after unsuccessful native stop", restoreError);
+      throw new Error("Curfy couldn't stop protection or confirm the original native callbacks were restored. Open Curfy Settings and retry.");
+    }
+    throw error;
   }
   DeviceActivity.userDefaultsRemove(SCHEDULED_SELECTION_ID_KEY);
   DeviceActivity.userDefaultsRemove(BEDTIME_CLOCK_KEY);
