@@ -61,7 +61,7 @@ function getMoodMessage(streak: number, unlocks: number): string {
 }
 
 export default function Home() {
-  const { userName, streak, todayUnlocks, bedtime, wakeTime, protectionRoutine, blockMode, sleepLog } = useSleep();
+  const { userName, streak, todayUnlocks, bedtime, wakeTime, blockMode, sleepLog } = useSleep();
   const [minsLeft, setMinsLeft] = useState(minutesUntil(bedtime));
 
   useEffect(() => {
@@ -82,7 +82,7 @@ export default function Home() {
     (blockMode === "social" || blockMode === "most" || blockMode === "custom")
     ? getBedtimeProtectionStatus(blockMode as BlockModeId)
     : null;
-  const routineName = protectionRoutine === "morning" ? "Morning" : protectionRoutine === "both" ? "Night + morning" : "Evening";
+  // The start/end clocks define the protection window; no routine classification is shown.
   const needsSetup = protectionStatus === "permission-required" ||
     protectionStatus === "selection-required";
 
@@ -123,7 +123,7 @@ export default function Home() {
                     ? `Temporary access until ${clockLabel(new Date(exceptionExpiresAt).getHours().toString().padStart(2, "0") + ":" + new Date(exceptionExpiresAt).getMinutes().toString().padStart(2, "0"))}`
                     : `Protection scheduled until ${clockLabel(wakeTime)}`)
                 : isImminent
-                ? `${routineName} protection starts soon`
+                ? "App protection starts soon"
                 : isUrgent
                 ? `${minsLeft}m until app protection starts`
                 : `${hours}h ${mins}m until app protection starts`}
@@ -195,7 +195,7 @@ export default function Home() {
           <View style={styles.divider} />
           <View style={styles.statsRight}>
             <View>
-              <Text style={styles.quickStatLabel}>{routineName.toLowerCase()} protection starts</Text>
+              <Text style={styles.quickStatLabel}>app protection starts</Text>
               <Text style={styles.quickStatValue}>{bedtime}</Text>
             </View>
             <View>

@@ -1,6 +1,6 @@
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
-import { PROTECTION_ROUTINES, ProtectionRoutine, cutoffDayLabel, clockLabel } from "@/lib/protectionRoutine";
+import { ProtectionRoutine, cutoffDayLabel, clockLabel, inferRoutineFromStart } from "@/lib/protectionRoutine";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import {
@@ -63,10 +63,6 @@ export default function Settings() {
   const [localBedtime, setLocalBedtime] = useState(bedtime);
   const [localWakeTime, setLocalWakeTime] = useState(wakeTime);
   const [localRoutine, setLocalRoutine] = useState<ProtectionRoutine>(protectionRoutine);
-  const chooseRoutine = (selected: ProtectionRoutine) => {
-    // Routine is a description, not permission to overwrite user-set hours.
-    setLocalRoutine(selected);
-  };
   const [localBlockMode, setLocalBlockMode] = useState<BlockModeId | null>(
     (blockMode as BlockModeId) || null
   );
@@ -263,37 +259,10 @@ export default function Settings() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>WHEN DO YOU WANT FEWER DISTRACTIONS?</Text>
-          <Text style={styles.hint}>Pick the part of your day. Changing this never resets your selected hours.</Text>
-          <View style={{ gap: 8, marginTop: 12 }}>
-            {PROTECTION_ROUTINES.map((option) => {
-              const selected = localRoutine === option.id;
-              return (
-                <TouchableOpacity
-                  key={option.id}
-                  accessibilityRole="radio"
-                  accessibilityState={{ checked: selected }}
-                  onPress={() => chooseRoutine(option.id)}
-                  style={[styles.presetCard, selected && styles.presetCardSelected]}
-                >
-                  <Ionicons name={option.icon} size={20}
-                    color={selected ? Colors.primaryCyan : Colors.textMuted} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.presetTitle}>{option.title}</Text>
-                    <Text style={styles.presetDesc}>{option.description}</Text>
-                  </View>
-                  {selected && <Ionicons name="checkmark-circle" size={19} color={Colors.primaryCyan} />}
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        <View style={styles.section}>
           <Text style={styles.label}>PROTECTION START</Text>
           <Text style={styles.hint}>Curfy starts shielding your selected app at this time every day.</Text>
           <View style={{ marginTop: 12 }}>
-            <TimePicker value={localBedtime} onChange={setLocalBedtime} digitSize={48} />
+            <TimePicker value={localBedtime} onChange={value => { setLocalBedtime(value); setLocalRoutine(inferRoutineFromStart(value)); }} digitSize={48} />
           </View>
         </View>
 

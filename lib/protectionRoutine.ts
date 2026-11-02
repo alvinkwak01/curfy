@@ -1,7 +1,6 @@
-/**
- * Curfy's three user-facing reasons share ONE selected-app restriction window.
- * These defaults are suggestions; the user can customize both endpoints.
- * No sleep/wake time or app use is inferred or measured.
+/** Legacy routine identifiers are retained for existing installations.
+ * New onboarding defines the only native restriction window directly from
+ * user-selected start and end clocks; no routine question is needed.
  */
 export type ProtectionRoutine = "evening" | "morning" | "both";
 
@@ -63,4 +62,17 @@ export function cutoffDayLabel(start: string, end: string): "same day" | "next d
 
 export function protectionWindowLabel(start: string, end: string): string {
   return `${clockLabel(start)} → ${clockLabel(end)} (${cutoffDayLabel(start, end)})`;
+}
+
+/**
+ * Legacy compatibility only: treat morning/afternoon starts as non-bedtime.
+ * This prevents scheduling bedtime-style reminder notifications at 5:50 AM.
+ * It does NOT determine the protection window or infer sleep.
+ */
+export function inferRoutineFromStart(start: string): ProtectionRoutine {
+  const hour = Number(start.split(":")[0]);
+  if (!Number.isInteger(hour) || hour < 0 || hour > 23) {
+    throw new Error("Invalid protection start time.");
+  }
+  return hour >= 18 || hour < 4 ? "evening" : "morning";
 }

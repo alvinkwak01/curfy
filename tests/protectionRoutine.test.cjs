@@ -73,3 +73,11 @@ test("users can see whether the app unlocks today or tomorrow", () => {
   assert.equal(routine.protectionWindowLabel("23:00", "09:00"), "11:00 PM → 9:00 AM (next day)");
   assert.equal(routine.cutoffDayLabel("08:00", "09:00"), "same day");
 });
+
+test("new onboarding infers reminder behavior from the start clock, never a routine question", () => {
+  assert.equal(routine.inferRoutineFromStart("23:00"), "evening");
+  assert.equal(routine.inferRoutineFromStart("02:00"), "evening");
+  assert.equal(routine.inferRoutineFromStart("06:00"), "morning");
+  assert.equal(routine.inferRoutineFromStart("14:00"), "morning");
+  assert.throws(() => routine.inferRoutineFromStart("25:00"), /Invalid/);
+});
