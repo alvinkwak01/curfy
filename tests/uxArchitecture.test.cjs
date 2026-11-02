@@ -48,9 +48,33 @@ test("nightly records are described as Curfy logs, not proven sleep", () => {
   const home = source("app/(tabs)/index.tsx");
   const leaderboard = source("app/(tabs)/leaderboard.tsx");
   const journal = source("app/(tabs)/journal.tsx");
-  assert.match(home, /Curfy nights logged/);
+  assert.match(home, /Curfy windows logged/);
   assert.match(leaderboard, /not measured sleep/);
-  assert.match(home, /No-unlock nights/);
+  assert.match(home, /No-exception windows/);
   assert.doesNotMatch(journal, /signals to your brain/);
   assert.doesNotMatch(journal, /let you actually fall asleep/);
+});
+
+test("onboarding lets users choose Morning, Evening or Both in only five steps", () => {
+  const onboarding = source("app/onboarding.tsx");
+  const settings = source("app/settings.tsx");
+  const context = source("context/SleepContext.tsx");
+  assert.match(onboarding, /STEP_COUNT = 5/);
+  assert.match(onboarding, /PROTECTION_ROUTINES\.map/);
+  assert.match(onboarding, /When should your app be available again\?/);
+  assert.doesNotMatch(onboarding, /What time do.*you wake up/);
+  assert.match(settings, /PROTECTION_ROUTINES\.map/);
+  assert.match(settings, /APPS AVAILABLE AGAIN/);
+  assert.match(context, /PROTECTION_ROUTINE_KEY/);
+  assert.match(context, /routineIsEveningBased\(routine\)/);
+});
+test("Home always tells users when a current protection window ends", () => {
+  const home = source("app/(tabs)/index.tsx");
+  assert.match(home, /Protection scheduled until/);
+  assert.match(home, /clockLabel\(wakeTime\)/);
+  assert.doesNotMatch(home, /It's bedtime — protect your evening/);
+});
+test("community stats cannot falsely average mixed morning and bedtime clock starts", () => {
+  const screen = source("app/(tabs)/leaderboard.tsx");
+  assert.doesNotMatch(screen, /<CommunityStats\s*\/>/);
 });
