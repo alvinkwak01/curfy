@@ -2,6 +2,7 @@ import { StarBackground } from "@/components/StarBackground";
 import { Colors, Fonts } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import { isBedtimeWindowActive } from "@/lib/bedtimeWindow";
+import { clockLabel } from "@/lib/protectionRoutine";
 import { activeExceptionExpiresAt, getBedtimeProtectionStatus, BlockModeId } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -46,21 +47,21 @@ function getStreakEmoji(streak: number): string {
 
 function getMilestoneBadge(streak: number): { label: string; color: string } | null {
   if (streak >= 100) return { label: "🌟 Century", color: Colors.gold };
-  if (streak >= 60) return { label: "✨ 60 Nights", color: Colors.successGreen };
-  if (streak >= 30) return { label: "🔥 30 Nights", color: Colors.orange };
+  if (streak >= 60) return { label: "✨ 60 Windows", color: Colors.successGreen };
+  if (streak >= 30) return { label: "🔥 30 Windows", color: Colors.orange };
   if (streak >= 14) return { label: "⚡ Two Weeks", color: Colors.accentViolet };
   if (streak >= 7) return { label: "🌙 One Week", color: Colors.primaryCyan };
   return null;
 }
 
 function getMoodMessage(streak: number, unlocks: number): string {
-  if (unlocks > 0) return `You've unlocked ${unlocks}x tonight. No judgment. Well — some judgment.`;
-  if (streak > 3) return `${streak}-night streak. Don't ruin it now.`;
-  return "Tonight's the night. Assuming you're serious this time.";
+  if (unlocks > 0) return `You've requested ${unlocks} temporary app exception${unlocks === 1 ? "" : "s"} in this window.`;
+  if (streak > 3) return `${streak} protection windows logged in a row. Keep your boundary.`;
+  return "Make the next tap intentional.";
 }
 
 export default function Home() {
-  const { userName, streak, todayUnlocks, bedtime, wakeTime, blockMode, sleepLog } = useSleep();
+  const { userName, streak, todayUnlocks, bedtime, wakeTime, protectionRoutine, blockMode, sleepLog } = useSleep();
   const [minsLeft, setMinsLeft] = useState(minutesUntil(bedtime));
 
   useEffect(() => {
@@ -81,6 +82,7 @@ export default function Home() {
     (blockMode === "social" || blockMode === "most" || blockMode === "custom")
     ? getBedtimeProtectionStatus(blockMode as BlockModeId)
     : null;
+  const routineName = protectionRoutine === "morning" ? "Morning" : protectionRoutine === "both" ? "Night + morning" : "Evening";
   const needsSetup = protectionStatus === "permission-required" ||
     protectionStatus === "selection-required";
 
@@ -117,12 +119,14 @@ export default function Home() {
           >
             <Text style={[styles.countdownText, isUrgent && styles.countdownUrgentText]}>
               {inBedtimeWindow
-                ? (exceptionExpiresAt ? "Your temporary exception is active" : "It's bedtime — protect your evening")
+                ? (exceptionExpiresAt
+                    ? `Temporary access until ${clockLabel(new Date(exceptionExpiresAt).getHours().toString().padStart(2, "0") + ":" + new Date(exceptionExpiresAt).getMinutes().toString().padStart(2, "0"))}`
+                    : `Protection scheduled until ${clockLabel(wakeTime)}`)
                 : isImminent
-                ? "Bedtime protection starts soon"
+                ? `${routineName} protection starts soon`
                 : isUrgent
-                ? `${minsLeft}m until bedtime`
-                : `${hours}h ${mins}m until bedtime`}
+                ? `${minsLeft}m until app protection starts`
+                : `${hours}h ${mins}m until app protection starts`}
             </Text>
           </View>
         </Animated.View>
@@ -179,7 +183,7 @@ export default function Home() {
           <View style={styles.statsLeft}>
             <Text style={styles.streakEmoji}>{getStreakEmoji(streak)}</Text>
             <Text style={styles.streakNum}>{streak}</Text>
-            <Text style={styles.streakLabel}>Curfy nights logged</Text>
+            <Text style={styles.streakLabel}>Curfy windows logged</Text>
             {milestone && (
               <View style={[styles.milestonePill, { borderColor: milestone.color }]}>
                 <Text style={[styles.milestoneText, { color: milestone.color }]}>
@@ -191,11 +195,11 @@ export default function Home() {
           <View style={styles.divider} />
           <View style={styles.statsRight}>
             <View>
-              <Text style={styles.quickStatLabel}>bedtime</Text>
+              <Text style={styles.quickStatLabel}>{routineName.toLowerCase()} protection starts</Text>
               <Text style={styles.quickStatValue}>{bedtime}</Text>
             </View>
             <View>
-              <Text style={styles.quickStatLabel}>unlocks tonight</Text>
+              <Text style={styles.quickStatLabel}>exceptions this window</Text>
               <Text
                 style={[
                   styles.quickStatValue,
@@ -217,11 +221,11 @@ export default function Home() {
               </TouchableOpacity>
             </View>
             <View style={styles.recordRow}>
-              <Text style={styles.recordLabel}>Nights logged</Text>
+              <Text style={styles.recordLabel}>Windows logged</Text>
               <Text style={styles.recordValue}>{totalNights}</Text>
             </View>
             <View style={styles.recordRow}>
-              <Text style={styles.recordLabel}>No-unlock nights</Text>
+              <Text style={styles.recordLabel}>No-exception windows</Text>
               <Text style={styles.recordValue}>{cleanNights}</Text>
             </View>
             <View style={styles.recordRow}>
