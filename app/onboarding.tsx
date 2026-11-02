@@ -470,12 +470,12 @@ function StepWhyStayUp({
 function StepCurrentBedtime({ bedtime, onChange }: { bedtime: string; onChange: (v: string) => void }) {
   return (
     <View style={[styles.stepInner, { alignItems: "center" }]}>
-      <Badge>BE HONEST</Badge>
+      <Badge>YOUR CURRENT HABIT</Badge>
       <Text style={[styles.hero, { textAlign: "center" }]}>
-        What time do{"\n"}you actually{"\n"}fall asleep?
+        When do you usually{"\n"}reach for your apps?
       </Text>
       <Text style={[styles.bodyText, { textAlign: "center" }]}>
-        Not the time you plan to. The time it really happens.
+        Just your estimate, not tracked usage. This doesn't set your schedule.
       </Text>
       <View style={{ marginVertical: 16 }}>
         <TimePicker value={bedtime} onChange={onChange} digitSize={56} />
@@ -487,19 +487,18 @@ function StepCurrentBedtime({ bedtime, onChange }: { bedtime: string; onChange: 
 function StepSetBedtime({ bedtime, onChange }: { bedtime: string; onChange: (v: string) => void }) {
   return (
     <View style={[styles.stepInner, { alignItems: "center" }]}>
-      <Badge>SET YOUR BEDTIME</Badge>
+      <Badge>START PROTECTING</Badge>
       <Text style={[styles.hero, { textAlign: "center" }]}>
-        And what time{"\n"}would you like{"\n"}to fall asleep{"\n"}instead?
+        When should{"\n"}app protection start?
       </Text>
       <Text style={[styles.bodyText, { textAlign: "center" }]}>
-        This is when the lock kicks in. Pick a time you know you should
-        actually be asleep.
+        You decide. Curfy doesn't choose your bedtime.
       </Text>
       <View style={{ marginVertical: 16 }}>
         <TimePicker value={bedtime} onChange={onChange} digitSize={56} />
       </View>
       <Text style={[styles.bodyText, { textAlign: "center" }]}>
-        You'll get a heads-up 10 and 2 minutes before.
+        Starts at {clockLabel(bedtime)}. You can change this later.
       </Text>
     </View>
   );
@@ -508,17 +507,17 @@ function StepSetBedtime({ bedtime, onChange }: { bedtime: string; onChange: (v: 
 function StepWakeTime({ wakeTime, onChange }: { wakeTime: string; onChange: (v: string) => void }) {
   return (
     <View style={[styles.stepInner, { alignItems: "center" }]}>
-      <Badge>ALMOST THERE</Badge>
+      <Badge>AVAILABLE AGAIN</Badge>
       <Text style={[styles.hero, { textAlign: "center" }]}>
-        What time do{"\n"}you wake up?
+        When should the app{"\n"}be available again?
       </Text>
       <Text style={[styles.bodyText, { textAlign: "center" }]}>
-        This is what we use to work out how much sleep you're actually
-        getting.
+        Choose the cutoff. Curfy doesn't need to know when you wake up.
       </Text>
       <View style={{ marginVertical: 16 }}>
         <TimePicker value={wakeTime} onChange={onChange} digitSize={56} />
       </View>
+      <Text style={styles.timeConfirmation}>Available at {clockLabel(wakeTime)}</Text>
     </View>
   );
 }
