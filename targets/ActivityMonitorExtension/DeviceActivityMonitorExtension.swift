@@ -13,6 +13,28 @@ import NotificationCenter
 import os
 
 class DeviceActivityMonitorExtension: DeviceActivityMonitor {
+  // Device Activity callbacks can arrive only when the device is next used.
+  // Don't let yesterday's delayed start re-shield in daytime, or a delayed
+  // end unshield during tonight's NEW protection interval.
+  // A missing legacy setting is nil so an upgraded app retains its existing
+  // callbacks until the next successful schedule configuration.
+  private func isWithinConfiguredCurfyWindow() -> Bool? {
+    guard
+      let window = userDefaults?.dictionary(forKey: "curfy-bedtime-clock-window"),
+      let start = (window["startMinute"] as? NSNumber)?.intValue,
+      let end = (window["endMinute"] as? NSNumber)?.intValue,
+      (0..<1440).contains(start), (0..<1440).contains(end), start != end
+    else { return nil }
+
+    let components = Calendar.current.dateComponents([.hour, .minute], from: Date())
+    guard let hour = components.hour, let minute = components.minute else { return nil }
+    let current = hour * 60 + minute
+    if start < end {
+      return current >= start && current < end
+    }
+    return current >= start || current < end
+  }
+
   override func intervalDidStart(for activity: DeviceActivityName) {
     super.intervalDidStart(for: activity)
     logger.log("intervalDidStart")
@@ -27,7 +49,9 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     let bedtimeEnd = (exception?["bedtimeEndAt"] as? NSNumber)?.doubleValue ?? 0
     let exceptionStillActive = nowMs < exceptionExpiry && nowMs < bedtimeEnd
 
-    if activity.rawValue == "curfy-bedtime" && exceptionStillActive {
+    if activity.rawValue == "curfy-bedtime" && isWithinConfiguredCurfyWindow() == false {
+      logger.log("Ignoring delayed bedtime start outside the current clock window")
+    } else if activity.rawValue == "curfy-bedtime" && exceptionStillActive {
       logger.log("Ignoring delayed bedtime start during active Curfy exception")
     } else {
       self.executeActionsForEvent(
@@ -48,6 +72,13 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
   override func intervalDidEnd(for activity: DeviceActivityName) {
     super.intervalDidEnd(for: activity)
     logger.log("intervalDidEnd")
+
+    // Do not let a delayed end from an earlier nightly interval clear
+    // tonight's currently active ManagedSettings shield.
+    if activity.rawValue == "curfy-bedtime" && isWithinConfiguredCurfyWindow() == true {
+      logger.log("Ignoring delayed bedtime end inside the new active clock window")
+      return
+    }
 
     // Curfy's 15-minute exception uses its own one-shot monitor.
     // stopMonitoring can also trigger intervalDidEnd; ignored until expiry.
