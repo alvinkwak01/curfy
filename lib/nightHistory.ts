@@ -30,3 +30,12 @@ export function countLoggedNightStreak(
   }
   return count;
 }
+
+/** Return true once per distinct local bedtime night, irrespective of whether
+ * the previous morning ever ran in JS or an exception is still ongoing. */
+export function shouldStartNightLog(
+  entries: ReadonlyArray<{ date: string }>,
+  nightKey: string
+): boolean {
+  return !entries.some((entry) => entry.date === nightKey);
+}
