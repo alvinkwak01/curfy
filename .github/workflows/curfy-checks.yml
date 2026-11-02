@@ -24,6 +24,21 @@ jobs:
         env:
           TZ: America/Los_Angeles
       - run: npx tsc --noEmit
+      - name: Verify Curfy StoreKit local native autolinking
+        run: |
+          npx expo-modules-autolinking resolve --platform apple > /tmp/curfy-modules.json
+          node -e '
+            const fs = require("fs");
+            const result = JSON.parse(fs.readFileSync("/tmp/curfy-modules.json", "utf8"));
+            const native = result.modules?.find(x => x.packageName === "curfy-storekit");
+            if (!native ||
+                !native.pods?.some(p => p.podName === "CurfyStoreKit") ||
+                !native.modules?.includes("CurfyStoreKitModule")) {
+              console.error("CurfyStoreKit local native module was not discovered: failing before a paid build.");
+              process.exit(1);
+            }
+            console.log("CurfyStoreKit pod and module are autolinked.");
+          '
       # Check configuration and native dependencies without consuming an EAS build.
       - run: npx expo-doctor
       # npm install may silently rewrite a stale lockfile. Catch that drift
