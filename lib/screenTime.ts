@@ -72,6 +72,11 @@ export function selectionIdForMode(mode: BlockModeId): string {
  * clear the old selection, show an error rather than presenting a stale picker.
  */
 export function beginFreshOnboardingAppSelection(mode: BlockModeId): void {
+  // A fresh chooser must never mutate the selection of a still-monitored
+  // schedule. Restart/Delete must stop real iOS protection first.
+  if (DeviceActivity.getActivities().includes("curfy-bedtime")) {
+    throw new Error("An existing Curfy protection schedule is still active. Stop it before restarting setup.");
+  }
   const id = selectionIdForMode(mode);
   const selections = DeviceActivity.userDefaultsGet<unknown>("familyActivitySelectionIds");
   if (selections == null) return;
