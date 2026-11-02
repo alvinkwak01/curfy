@@ -109,7 +109,7 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
           <View style={styles.eyebrow}>
             <View style={styles.eyebrowDot} />
             <Text style={styles.eyebrowText}>
-              {isPreview ? "ESCAPE SCREEN PREVIEW" : "YOUR BEDTIME BOUNDARY"}
+              {isPreview ? "ESCAPE SCREEN PREVIEW" : "YOUR CURFY BOUNDARY"}
             </Text>
           </View>
           <Text style={styles.heading}>
