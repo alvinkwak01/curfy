@@ -190,10 +190,17 @@ export async function requestScreenTimeAccess(): Promise<ScreenTimeAuthStatus> {
   try {
     await DeviceActivity.requestAuthorization("individual");
   } catch (_) {
-    // Rejects when the user declines the system prompt — the real outcome
-    // either way is read back below via getAuthorizationStatus().
+    // A denied iOS system prompt may reject; read the authoritative status.
   }
-  return mapAuthStatus(DeviceActivity.getAuthorizationStatus());
+  // Upstream react-native-device-activity documents a short native status
+  // propagation lag after the user grants permission. Without retry, Curfy
+  // could falsely insist that an approved user is still unauthorized.
+  let status = mapAuthStatus(DeviceActivity.getAuthorizationStatus());
+  for (let attempt = 0; attempt < 4 && status === "notDetermined"; attempt++) {
+    await new Promise<void>(resolve => setTimeout(resolve, 200));
+    status = mapAuthStatus(DeviceActivity.getAuthorizationStatus());
+  }
+  return status;
 }
 
 export function getScreenTimeAccessStatus(): ScreenTimeAuthStatus {
