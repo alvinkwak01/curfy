@@ -60,6 +60,8 @@ test("onboarding lets users choose Morning, Evening or Both in only five steps",
   const settings = source("app/settings.tsx");
   const context = source("context/SleepContext.tsx");
   assert.match(onboarding, /STEP_COUNT = 5/);
+  assert.doesNotMatch(onboarding, /if \(showWelcome\)/);
+  assert.doesNotMatch(onboarding, /Get Started/);
   assert.match(onboarding, /PROTECTION_ROUTINES\.map/);
   assert.match(onboarding, /When should your app be available again\?/);
   assert.doesNotMatch(onboarding, /What time do.*you wake up/);
