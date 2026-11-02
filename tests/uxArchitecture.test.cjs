@@ -80,3 +80,18 @@ test("community stats cannot falsely average mixed morning and bedtime clock sta
   const screen = source("app/(tabs)/leaderboard.tsx");
   assert.doesNotMatch(screen, /<CommunityStats\s*\/>/);
 });
+
+test("account deletion stops native protection before wiping local recovery data", () => {
+  const ctx = source("context/SleepContext.tsx");
+  const start = ctx.indexOf("const deleteAccount = async () => {");
+  const end = ctx.indexOf("const streak = computeStreak", start);
+  assert.ok(start >= 0 && end > start);
+  const deletion = ctx.slice(start, end);
+  const remote = deletion.indexOf("await deleteRemoteAccount()");
+  const stop = deletion.indexOf("stopBedtimeBlocking()");
+  const wipe = deletion.indexOf("AsyncStorage.multiRemove(ALL_STORAGE_KEYS)");
+  assert.ok(remote >= 0 && stop > remote && wipe > stop,
+    "Remote deletion must precede verified iOS stop, which must precede local wipe");
+  assert.doesNotMatch(deletion, /try\s*\{\s*stopBedtimeBlocking\(\);\s*\}\s*catch/,
+    "Stop failures must never be silently swallowed during deletion");
+});
