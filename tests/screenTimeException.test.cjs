@@ -20,11 +20,14 @@ function fixture({
   overlapUnavailable = false, authorization = 2, selectionCount = 1, categoryCount = 0,
   webDomainCount = 0, includeEntireCategory = false, initiallyBlocked = true,
   silentMonitorFailure = false,
+  failOnStartCalls = [], failAfterOverwriteStartCalls = [],
+  ignoreBlockOnCalls = [],
 } = {}) {
   const storage = new Map();
   const selections = new Map();
   const calls = [];
   const monitoredActivities = new Set();
+  const monitorSchedules = new Map();
   let blocked = initiallyBlocked;
   const native = {
     AuthorizationStatus: { notDetermined: 0, denied: 1, approved: 2 },
@@ -45,18 +48,38 @@ function fixture({
     configureActions: config => { calls.push(["action", config]); },
     startMonitoring: async (name, schedule) => {
       calls.push(["start", name, schedule]);
-      if (failStart) throw Error("Native scheduling failed");
-      if (!silentMonitorFailure) monitoredActivities.add(name);
+      const count = calls.filter(call => call[0] === "start").length;
+      if (failAfterOverwriteStartCalls.includes(count)) {
+        monitoredActivities.add(name);
+        monitorSchedules.set(name, schedule);
+        throw Error("Native scheduling failed after overwriting previous monitor");
+      }
+      if (failStart || failOnStartCalls.includes(count)) {
+        throw Error("Native scheduling failed");
+      }
+      if (!silentMonitorFailure) {
+        monitoredActivities.add(name);
+        monitorSchedules.set(name, schedule);
+      }
     },
     getActivities: () => [...monitoredActivities],
     stopMonitoring: names => {
       calls.push(["stop", names]);
-      if (names) names.forEach(name => monitoredActivities.delete(name));
-      else monitoredActivities.clear();
+      if (names) names.forEach(name => {
+        monitoredActivities.delete(name);
+        monitorSchedules.delete(name);
+      });
+      else {
+        monitoredActivities.clear();
+        monitorSchedules.clear();
+      }
     },
     updateShield: (config, actions) => { calls.push(["shield", config, actions]); },
     isShieldActive: () => blocked,
-    blockSelection: input => { calls.push(["block", input]); blocked = true; },
+    blockSelection: input => {
+      calls.push(["block", input]);
+      if (!ignoreBlockOnCalls.includes(calls.filter(x => x[0] === "block").length)) blocked = true;
+    },
     unblockSelection: () => {
       calls.push(["unblock"]);
       if (!failUnblock) blocked = false;
@@ -68,7 +91,10 @@ function fixture({
     if (moduleName === "@/lib/bedtimeWindow") return time;
     throw Error("Unexpected import " + moduleName);
   });
-  return { native, screenTime, storage, selections, calls, isBlocked: () => blocked };
+  return {
+    native, screenTime, storage, selections, calls, monitorSchedules,
+    isBlocked: () => blocked,
+  };
 }
 
 test("completing the hold schedules native reblock before unshielding", async () => {
@@ -544,4 +570,67 @@ test("foreground reconciliation never cancels an active 15-minute exception", as
   );
   assert.equal(f.isBlocked(), false);
   assert.equal(f.calls.filter(x => x[0] === "block").length, 0);
+});
+
+test("a failed second Settings schedule restores previous native hours, not only UI metadata", async () => {
+  const f = fixture({ failAfterOverwriteStartCalls: [2] });
+  const now = new Date("2026-11-02T23:00:00");
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  const previousSchedule = f.monitorSchedules.get("curfy-bedtime");
+  const previousClock = f.storage.get("curfy-bedtime-clock-window");
+  await assert.rejects(
+    f.screenTime.configureBedtimeBlocking({
+      bedtime: "21:00", wakeTime: "09:00", mode: "custom", now,
+    }), /Native scheduling failed after overwriting/
+  );
+  assert.deepEqual(f.monitorSchedules.get("curfy-bedtime"), previousSchedule);
+  assert.deepEqual(f.storage.get("curfy-bedtime-clock-window"), previousClock);
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.calls.filter(x => x[0] === "reset").length, 1); // first setup only
+});
+
+test("failure after native schedule succeeds restores old hours and old shield", async () => {
+  const f = fixture({ ignoreBlockOnCalls: [2] });
+  const now = new Date("2026-11-02T23:00:00");
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "social", now,
+  });
+  const initialSchedule = f.monitorSchedules.get("curfy-bedtime");
+  await assert.rejects(f.screenTime.configureBedtimeBlocking({
+    bedtime: "21:00", wakeTime: "08:00", mode: "custom", now,
+  }), /did not apply the selected app restrictions/);
+  assert.deepEqual(f.monitorSchedules.get("curfy-bedtime"), initialSchedule);
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-social");
+  assert.deepEqual(f.storage.get("curfy-bedtime-clock-window"), {
+    startMinute: 22 * 60, endMinute: 6 * 60,
+  });
+  const lastBlock = f.calls.filter(x => x[0] === "block").at(-1);
+  assert.equal(lastBlock[1].activitySelectionId, "curfy-block-social");
+  assert.equal(f.isBlocked(), true);
+});
+
+test("if native schedule rollback fails, Settings gets an explicit danger message", async () => {
+  const f = fixture({ failAfterOverwriteStartCalls: [2], failOnStartCalls: [3] });
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-02T23:00:00"),
+  });
+  await assert.rejects(f.screenTime.configureBedtimeBlocking({
+    bedtime: "21:00", wakeTime: "09:00", mode: "custom",
+    now: new Date("2026-11-02T23:00:00"),
+  }), /couldn't confirm the previous native protection was restored/);
+});
+
+test("a first-run native monitor failure never leaves an orphan recurring schedule", async () => {
+  const f = fixture({ failAfterOverwriteStartCalls: [1] });
+  await assert.rejects(f.screenTime.configureBedtimeBlocking({
+    bedtime: "23:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-02T23:00:00"),
+  }), /Native scheduling failed/);
+  assert.equal(f.monitorSchedules.has("curfy-bedtime"), false);
+  assert.equal(f.storage.has("curfy-bedtime-clock-window"), false);
+  assert.equal(f.storage.has("curfy-scheduled-selection-id"), false);
 });
