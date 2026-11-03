@@ -17,6 +17,7 @@ function load(path, customRequire) {
   return module.exports;
 }
 const policy = load(policyFile, require);
+const premiumPolicy = load("lib/premiumPolicy.ts", require);
 const base = new Date("2026-11-02T23:00:00-08:00");
 const ms = base.getTime();
 const after20 = new Date(ms + 20 * 60_000);
@@ -56,7 +57,7 @@ function fixture({
     userDefaultsSet: (key, value) => { calls.push(["persist", key]); storage.set(key, value); },
     activitySelectionMetadata: ({ activitySelectionId }) => ({
       applicationCount: tokens(activitySelectionId).length,
-      categoryCount: targetCategoryCount, webDomainCount: 0,
+      categoryCount: targetCategoryCount, webdomainCount: 0,
       includeEntireCategory: false,
     }),
     intersection: ({ activitySelectionId }, second) => ({
@@ -64,7 +65,7 @@ function fixture({
         second.currentBlocklist ? apps.has(token) :
           tokens(second.activitySelectionId).includes(token) && targetInParent
       ).length,
-      categoryCount: 0, webDomainCount: 0,
+      categoryCount: 0, webdomainCount: 0,
     }),
     blockSelection: ({ activitySelectionId }) => {
       calls.push(["block", activitySelectionId]);
@@ -83,6 +84,7 @@ function fixture({
   const mod = load("lib/premiumExceptionRecovery.ts", name => {
     if (name === "react-native-device-activity") return native;
     if (name === "@/lib/premiumExceptionPolicy") return policy;
+    if (name === "@/lib/premiumPolicy") return premiumPolicy;
     throw Error("Unexpected import " + name);
   });
   return { mod, apps, calls, storage, monitors };
