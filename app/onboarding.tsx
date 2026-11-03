@@ -375,8 +375,8 @@ function StepWhyStayUp({
   return (
     <View style={styles.stepInner}>
       <Badge>SO, TELL US</Badge>
-      <Text style={styles.hero}>What pulls{"\n"}you back in?</Text>
-      <Text style={styles.bodyText}>Choose up to three. Your answer helps personalize your plan, not your app selection.</Text>
+      <Text style={styles.hero}>What keeps you{"\n"}up at night?</Text>
+      <Text style={styles.bodyText}>Pick up to 3 things you find yourself doing on your phone when you meant to put it down.</Text>
 
       <View style={{ gap: 10, marginTop: 4 }}>
         {REASON_OPTIONS.map((opt) => {
