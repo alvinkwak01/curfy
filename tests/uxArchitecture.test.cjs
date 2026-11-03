@@ -198,7 +198,7 @@ test("personal reveal uses the person's distraction reasons and not sleep estima
   const src = source("app/onboarding.tsx");
   assert.match(src, /reasonSummary\(reasons\)/);
   assert.match(src, /initialClockWindow\(\)/);
-  assert.match(src, /protectionWindowLabel\(bedtime, wakeTime\)/);
+  assert.match(src, /protectionWindowLabel\(start, end\)/);
   assert.doesNotMatch(src, /lost sleep a year|getting roughly|extra full nights of sleep/);
   assert.doesNotMatch(src, /PROTECTION_ROUTINES\.map/);
   assert.doesNotMatch(src, /suggested/);
