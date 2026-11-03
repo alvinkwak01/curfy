@@ -15,12 +15,39 @@ import Svg, { Circle } from "react-native-svg";
 import { Colors, Fonts } from "@/constants/theme";
 
 const HOLD_DURATION_MS = 120000;
-const RADIUS = 91;
-const STROKE_WIDTH = 7;
+const RADIUS = 80;
+const STROKE_WIDTH = 6;
 const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const SVG_SIZE = RADIUS * 2 + STROKE_WIDTH * 2;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+// The original Curfy control is deliberately minimal: one thin progress
+// ring around a quiet circular button. Reuse this same track/center for the
+// noninteractive onboarding preview; DO NOT use a different phone shield.
+function RingTrack() {
+  return (
+    <Circle cx={SVG_SIZE / 2} cy={SVG_SIZE / 2} r={RADIUS}
+      stroke={Colors.border} strokeWidth={STROKE_WIDTH} fill="none" />
+  );
+}
+function IdleCenter() {
+  return <Ionicons name="lock-closed" size={24} color={Colors.textMuted} />;
+}
+
+/** Source-matched visual-only example. This never grants access or starts a timer. */
+export function HoldRingPreview() {
+  return (
+    <View pointerEvents="none" style={styles.buttonWrap}>
+      <Svg width={SVG_SIZE} height={SVG_SIZE} style={StyleSheet.absoluteFill}>
+        <RingTrack />
+      </Svg>
+      <View style={styles.innerButton}>
+        <IdleCenter />
+      </View>
+    </View>
+  );
+}
 
 // 28 rotating guilt messages, 4 escalating stages of 7, per the DUSK blueprint.
 const GUILT_MESSAGES: string[][] = [
@@ -228,20 +255,12 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
 
       <GestureDetector gesture={holdGesture}>
       <Animated.View style={[styles.buttonWrap, animatedButtonStyle]}>
-        <View pointerEvents="none" style={styles.halo} />
         <Svg
           width={SVG_SIZE}
           height={SVG_SIZE}
           style={StyleSheet.absoluteFill}
         >
-          <Circle
-            cx={SVG_SIZE / 2}
-            cy={SVG_SIZE / 2}
-            r={RADIUS}
-            stroke="#303352"
-            strokeWidth={STROKE_WIDTH}
-            fill="none"
-          />
+          <RingTrack />
           <AnimatedCircle
             cx={SVG_SIZE / 2}
             cy={SVG_SIZE / 2}
@@ -269,12 +288,10 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
           ) : isHolding ? (
             <>
               <Text style={styles.countdown}>{displaySeconds}</Text>
-              <Text style={styles.centerLabel}>SECONDS LEFT</Text>
             </>
           ) : (
             <>
-              <Ionicons name="hand-left-outline" size={29} color={Colors.primaryCyan} />
-              <Text style={styles.centerLabel}>PRESS & HOLD</Text>
+              <IdleCenter />
             </>
           )}
         </View>
@@ -313,37 +330,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  halo: {
-    position: "absolute",
-    width: 170,
-    height: 170,
-    borderRadius: 85,
-    backgroundColor: "rgba(0,229,255,0.035)",
-    borderWidth: 1,
-    borderColor: "rgba(0,229,255,0.10)",
-  },
   innerButton: {
-    width: 144,
-    height: 144,
-    borderRadius: 72,
-    backgroundColor: "#111629",
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: Colors.surface,
     borderWidth: 1,
-    borderColor: "#2E5062",
+    borderColor: Colors.border,
     alignItems: "center",
     justifyContent: "center",
-    gap: 8,
     shadowColor: Colors.primaryCyan,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.21,
-    shadowRadius: 22,
-    elevation: 5,
-  },
-  centerLabel: {
-    color: "#91BACC",
-    fontFamily: Fonts.semiBold,
-    fontSize: 10,
-    letterSpacing: 1.2,
-    textAlign: "center",
+    shadowOpacity: 0.15,
+    shadowRadius: 13,
+    elevation: 2,
   },
   countdown: {
     color: Colors.primaryCyan,
