@@ -404,6 +404,9 @@ function StepWhyStayUp({
               onPress={() => toggle(opt.id)}
               activeOpacity={0.85}
               disabled={isMaxed}
+              accessibilityRole="checkbox"
+              accessibilityState={{ checked: isSelected, disabled: isMaxed }}
+              accessibilityLabel={opt.label}
               style={[
                 styles.presetCard,
                 isSelected && styles.presetCardSelected,
@@ -528,6 +531,19 @@ function StepFinish({ bedtime, wakeTime, name, onNameChange }: {
       <Text style={styles.finishSchedule}>
         {protectionWindowLabel(bedtime, wakeTime)} · every day
       </Text>
+      <View style={styles.finishName}>
+        <Text style={styles.finishNameLabel}>What should we call you? (optional)</Text>
+        <TextInput
+          style={styles.nameInput}
+          value={name}
+          onChangeText={onNameChange}
+          placeholder="Your name"
+          placeholderTextColor={Colors.textGhost}
+          autoCapitalize="words"
+          returnKeyType="done"
+          accessibilityLabel="Your name, optional"
+        />
+      </View>
       <View style={styles.finishPreview}>
         <View style={styles.phoneFrame}>
           <View style={styles.phoneNotch} />
@@ -544,19 +560,6 @@ function StepFinish({ bedtime, wakeTime, name, onNameChange }: {
           Preview only. Open Curfy separately for the continuous 120-second hold.
           Protection ends at {clockLabel(wakeTime)}.
         </Text>
-      </View>
-      <View style={styles.finishName}>
-        <Text style={styles.finishNameLabel}>What should we call you? (optional)</Text>
-        <TextInput
-          style={styles.nameInput}
-          value={name}
-          onChangeText={onNameChange}
-          placeholder="Your name"
-          placeholderTextColor={Colors.textGhost}
-          autoCapitalize="words"
-          returnKeyType="done"
-          accessibilityLabel="Your name, optional"
-        />
       </View>
     </View>
   );
@@ -706,6 +709,8 @@ function StepChooseApps({
 
       <TouchableOpacity
         accessibilityRole="button"
+        accessibilityState={{ disabled: false }}
+        accessibilityHint="Opens Apple's private app picker. Free protection accepts one app."
         accessibilityLabel={selectionIssue === null && selectedCount === 1 ? "Change selected app" : "Choose one app"}
         onPress={() => handlePick("custom")}
         activeOpacity={0.85}
@@ -907,8 +912,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
     lineHeight: 23,
   },
-  // A short, forceful closing line (Wake Up Call step) — deliberately
-  // brighter/heavier than bodyText, this is a statement, not a caption.
   featureTitle: { color: Colors.textPrimary, fontSize: 16, fontFamily: Fonts.semiBold, marginBottom: 2 },
   trustCard: {
     backgroundColor: Colors.surface,
