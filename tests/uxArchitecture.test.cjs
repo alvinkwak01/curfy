@@ -216,3 +216,30 @@ test("a native picker read failure shows an actionable error instead of trapping
   assert.match(src, /Native picker save\/metadata unavailable/);
   assert.match(src, /finally \{[\s\S]*setPickerMode\(null\)/);
 });
+
+test("saved Screen Time metadata is normalized in onboarding, Settings and native restriction checks", () => {
+  const policy = source("lib/premiumPolicy.ts");
+  const onboarding = source("app/onboarding.tsx");
+  const settings = source("app/settings.tsx");
+  const screenTime = source("lib/screenTime.ts");
+  assert.match(policy, /raw\\.webDomainCount \\?\\? raw\\.webdomainCount/);
+  assert.match(onboarding, /normalizeActivitySelectionMetadata\\(metadata\\)/);
+  assert.match(onboarding, /selectionCountsText\\(counts\\)/);
+  assert.match(settings, /normalizeActivitySelectionMetadata\\(metadata\\)/);
+  assert.match(screenTime, /normalizeActivitySelectionMetadata\\(selectionMetadata\\(mode\\)\\)/);
+  assert.match(screenTime, /normalizeActivitySelectionMetadata\\(overlap\\)/);
+  assert.doesNotMatch(onboarding, /metadata\\.webDomainCount/);
+  assert.doesNotMatch(settings, /metadata\\.webDomainCount/);
+});
+
+test("Settings and onboarding wait for native picker persistence and validate Free app limits", () => {
+  const onboarding = source("app/onboarding.tsx");
+  const settings = source("app/settings.tsx");
+  assert.match(onboarding, /waitForPersistedPickerCommit/);
+  assert.match(onboarding, /freeSelectionIssueForMetadata\\(metadata\\)/);
+  assert.match(onboarding, /Free protects one app/);
+  assert.match(settings, /waitForPersistedPickerCommit/);
+  assert.match(settings, /pendingPickerCommit\\.current/);
+  assert.match(settings, /freeSelectionIssue\\(draftSelectionIdForMode\\(localBlockMode\\)\\)/);
+  assert.match(settings, /includeEntireCategory=\\{false\\}/);
+});
