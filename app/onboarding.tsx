@@ -1001,12 +1001,6 @@ const styles = StyleSheet.create({
   heroDanger: {
     color: Colors.dangerRed,
   },
-  statement: {
-    color: Colors.textPrimary,
-    fontFamily: Fonts.semiBold,
-    fontSize: 17,
-    marginTop: 8,
-  },
   revealDivider: {
     height: 1,
     backgroundColor: Colors.border,
