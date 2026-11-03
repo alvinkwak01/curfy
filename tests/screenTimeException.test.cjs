@@ -35,10 +35,12 @@ function fixture({
     AuthorizationStatus: { notDetermined: 0, denied: 1, approved: 2 },
     getAuthorizationStatus: () => authorization,
     activitySelectionMetadata: () => ({
-      applicationCount: selectionCount, categoryCount, webDomainCount, includeEntireCategory,
+      // Exact Swift ActivitySelectionMetadata record in RNDA 0.6.1: lower-case d.
+      applicationCount: selectionCount, categoryCount, webdomainCount: webDomainCount, includeEntireCategory,
     }),
     intersection: () => overlapUnavailable ? undefined : ({
-      applicationCount: blocked && !overlapReportsZero ? 1 : 0, categoryCount: 0, webDomainCount: 0,
+      // Swift ActivitySelectionWithMetadata uses the SAME lower-case d.
+      applicationCount: blocked && !overlapReportsZero ? 1 : 0, categoryCount: 0, webdomainCount: 0,
     }),
     getFamilyActivitySelectionId: id => selections.get(id),
     setFamilyActivitySelectionId: ({ id, familyActivitySelection }) => {
@@ -382,6 +384,31 @@ test("silent native bedtime monitor registration failure never clears existing s
   );
   assert.equal(f.isBlocked(), true);
   assert.equal(f.calls.filter(x => x[0] === "reset").length, 0);
+});
+
+test("real iOS 0.6.1 saved-selection metadata admits one app without undefined website count", async () => {
+  const f = fixture({ selectionCount: 1 });
+  assert.equal(f.screenTime.freeSelectionIssue("custom"), null);
+  assert.equal(f.screenTime.getSelectionCount("custom"), 1);
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-10-31T23:00:00"),
+  });
+  assert.equal(f.monitorSchedules.has("curfy-bedtime"), true);
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
+});
+
+test("real iOS 0.6.1 saved-selection metadata still rejects two Free apps before monitoring", async () => {
+  const f = fixture({ selectionCount: 2 });
+  assert.equal(f.screenTime.freeSelectionIssue("custom"), "too-many-apps-or-categories");
+  assert.equal(f.screenTime.getSelectionCount("custom"), 2);
+  await assert.rejects(
+    f.screenTime.configureBedtimeBlocking({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-10-31T23:00:00"),
+    }), /one individual app/
+  );
+  assert.equal(f.monitorSchedules.has("curfy-bedtime"), false);
 });
 
 test("MVP free tier requires exactly one individually selected app", async () => {
