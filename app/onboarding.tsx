@@ -492,7 +492,7 @@ function StepReveal({
         {clockLabel(goalBedtime)}{" → "}{clockLabel(wakeTime)}
       </Text>
       <Text style={styles.bodyText}>
-        Your selected app will be shielded during this continuous daily window.
+        The app you select will be shielded during this continuous daily window.
         If the end time is earlier, protection ends the next day.
       </Text>
     </View>
@@ -596,19 +596,18 @@ function StepScreenTimeAccess({
       <Badge>SCREEN TIME ACCESS</Badge>
       <Text style={styles.hero}>Allow Screen Time access</Text>
       <Text style={styles.bodyText}>
-        This lets Curfy use Apple's own Screen Time system to lock the apps
-        you choose — enforced by iOS itself, not just something inside
-        this app.
+        This lets Curfy use Apple's Screen Time system to shield the app
+        you choose — enforced by iOS, even when Curfy isn't open.
       </Text>
 
       <View style={styles.trustCard}>
         <View style={styles.trustRow}>
           <Ionicons name="checkmark-circle" size={18} color={Colors.successGreen} />
-          <Text style={styles.trustText}>Applies a real, iOS-level lock to apps you pick</Text>
+          <Text style={styles.trustText}>Shields the one app you choose through iOS</Text>
         </View>
         <View style={styles.trustRow}>
           <Ionicons name="checkmark-circle" size={18} color={Colors.successGreen} />
-          <Text style={styles.trustText}>Can protect your app even when Curfy isn't open</Text>
+          <Text style={styles.trustText}>Keeps protection scheduled even when Curfy is closed</Text>
         </View>
         <View style={[styles.trustRow, { marginTop: 4 }]}>
           <Ionicons name="close-circle" size={18} color={Colors.textMuted} />
