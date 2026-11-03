@@ -10,7 +10,7 @@
 // the JS side, but nothing here functions in Expo Go or the iOS Simulator
 // (Apple's Screen Time frameworks don't run in Simulator at all).
 import * as DeviceActivity from "react-native-device-activity";
-import { selectionIssueForEntitlement } from "@/lib/premiumPolicy";
+import { normalizeActivitySelectionMetadata, selectionIssueForEntitlement } from "@/lib/premiumPolicy";
 import { assertMonitorableBedtimeSchedule, currentBedtimeWindow, nativeDateComponents } from "@/lib/bedtimeWindow";
 
 export type ScreenTimeAuthStatus = "notDetermined" | "authorized" | "denied";
@@ -501,7 +501,7 @@ export function clearCurfyOnboardingSelectionsAfterAccountDeletion(): void {
 // "N apps blocked" for the current mode. Returns null if nothing's been
 // selected for that preset yet (e.g. it was never picked during onboarding).
 export function getSelectionCount(mode: BlockModeId): number | null {
-  const metadata = selectionMetadata(mode);
+  const metadata = normalizeActivitySelectionMetadata(selectionMetadata(mode));
   if (!metadata) return null;
   return metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount;
 }
@@ -617,8 +617,9 @@ function selectedAppShieldCount(selectionId: string): number {
     { currentBlocklist: true },
     { stripToken: true }
   );
-  if (!overlap) throw new Error("iOS couldn't confirm the current app restrictions.");
-  return overlap.applicationCount + overlap.categoryCount + overlap.webDomainCount;
+  const verified = normalizeActivitySelectionMetadata(overlap);
+  if (!verified) throw new Error("iOS couldn't confirm the current app restrictions.");
+  return verified.applicationCount + verified.categoryCount + verified.webDomainCount;
 }
 
 /** Native token introspection may be unavailable even when a real OS shield
