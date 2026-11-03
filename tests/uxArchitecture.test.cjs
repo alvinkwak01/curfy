@@ -64,6 +64,10 @@ test("nine-screen onboarding keeps the branded welcome without the redundant wak
   assert.match(onboarding, /<StepWelcome onStart=/);
   assert.match(onboarding, /<Btn label="Get Started"/);
   assert.match(onboarding, /step === 0 && <StepWhyStayUp/);
+  assert.match(onboarding, /What keeps you/);
+  assert.match(onboarding, /up at night\\?/);
+  assert.match(onboarding, /things you find yourself doing on your phone/);
+  assert.doesNotMatch(onboarding, /What pulls/);
   assert.match(onboarding, /step === 1 && <StepSetBedtime/);
   assert.match(onboarding, /step === 2 && <StepWakeTime/);
   assert.match(onboarding, /step === 3 && <StepReveal/);
