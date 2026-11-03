@@ -10,7 +10,10 @@ const js = ts.transpileModule(source, {
 }).outputText;
 const mod = { exports: {} };
 new Function("module", "exports", js)(mod, mod.exports);
-const { CURFY_PREMIUM_PRODUCT_ID, selectionIssueForEntitlement } = mod.exports;
+const {
+  CURFY_PREMIUM_PRODUCT_ID, selectionIssueForEntitlement,
+  normalizeActivitySelectionMetadata,
+} = mod.exports;
 
 const selection = (applicationCount, overrides = {}) => ({
   applicationCount, categoryCount: 0, webDomainCount: 0,
@@ -73,5 +76,45 @@ test("corrupt native selection metadata is denied before scheduling", () => {
       selectionIssueForEntitlement(selection(invalid), "owned"),
       "categories-and-websites-not-supported"
     );
+  }
+});
+
+test("iOS 0.6.1 event and readback website count spellings normalize to exactly the same one-app selection", () => {
+  // Actual package source: ReactNativeDeviceActivityViewPersisted.swift emits
+  // webDomainCount, but ActivitySelectionMetadata's Swift @Field record emits
+  // webdomainCount (lower-case d) despite the TypeScript declaration.
+  const eventPayload = { applicationCount: 1, categoryCount: 0,
+    webDomainCount: 0, includeEntireCategory: false };
+  const savedPayload = { applicationCount: 1, categoryCount: 0,
+    webdomainCount: 0, includeEntireCategory: false };
+  assert.deepEqual(normalizeActivitySelectionMetadata(eventPayload),
+    normalizeActivitySelectionMetadata(savedPayload));
+  assert.equal(selectionIssueForEntitlement(eventPayload, "free"), null);
+  assert.equal(selectionIssueForEntitlement(savedPayload, "free"), null);
+  assert.deepEqual(normalizeActivitySelectionMetadata(savedPayload),
+    { ...eventPayload });
+});
+
+test("native Swift readback rejects extra apps and categories instead of silently allowing Premium", () => {
+  for (const raw of [
+    { applicationCount: 2, categoryCount: 0, webdomainCount: 0 },
+    { applicationCount: 0, categoryCount: 1, webdomainCount: 0 },
+    { applicationCount: 1, categoryCount: 0, webdomainCount: 1 },
+  ]) {
+    assert.notEqual(selectionIssueForEntitlement(raw, "free"), null);
+  }
+});
+
+test("missing, contradictory or corrupt native website count fails safely, never assumed zero", () => {
+  const valid = { applicationCount: 1, categoryCount: 0, includeEntireCategory: false };
+  for (const raw of [
+    valid,
+    { ...valid, webDomainCount: 0, webdomainCount: 1 },
+    { ...valid, webdomainCount: "0" },
+    { ...valid, webdomainCount: NaN },
+    { ...valid, categoryCount: -1, webdomainCount: 0 },
+  ]) {
+    assert.equal(normalizeActivitySelectionMetadata(raw), null);
+    assert.notEqual(selectionIssueForEntitlement(raw, "free"), null);
   }
 });
