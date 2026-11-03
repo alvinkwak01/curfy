@@ -159,6 +159,14 @@ test("onboarding validates native permission, one app and final native schedule 
   assert.match(src, /finally \{\s*setIsRequesting\(false\)/);
 });
 
+test("reason choices expose checked state and prevent selecting a fourth option", () => {
+  const src = source("app/onboarding.tsx");
+  assert.match(src, /accessibilityRole="checkbox"/);
+  assert.match(src, /accessibilityState=\{\{ checked: isSelected, disabled: isMaxed \}\}/);
+  assert.match(src, /if \(reasons\.length >= 3\) return/);
+  assert.match(src, /disabled=\{isMaxed\}/);
+});
+
 test("time wheel pages never share a parent scrolling container", () => {
   const src = source("app/onboarding.tsx");
   assert.match(src, /\[1, 2\]\.includes\(step\)/);
@@ -190,6 +198,11 @@ test("final preview includes optional name, and never pretends the hold lives on
   assert.match(src, /<View style=\{styles\.finishInner\}>/);
   assert.match(src, /<Text style=\{styles\.finishHero\}>/);
   assert.match(src, /<View style=\{styles\.finishName\}>/);
+  const finalStep = src.slice(src.indexOf("function StepFinish("),
+    src.indexOf("function StepScreenTimeAccess("));
+  assert.ok(finalStep.indexOf("<View style={styles.finishName}>") <
+    finalStep.indexOf("<View style={styles.finishPreview}>"),
+    "The optional name must appear before the large mock shield on small iPhones");
   assert.match(src, /finishScrollContent: \{ flexGrow: 1, paddingTop: 16, paddingBottom: 12 \}/);
   assert.match(src, /minHeight: 207/);
   assert.doesNotMatch(src, /minHeight: 268/);
