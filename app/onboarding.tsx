@@ -6,7 +6,7 @@ import { TimePicker } from "@/components/TimePicker";
 import { clockLabel, protectionWindowLabel, inferRoutineFromStart } from "@/lib/protectionRoutine";
 import { assertMonitorableBedtimeSchedule } from "@/lib/bedtimeWindow";
 import { waitForPersistedPickerCommit } from "@/lib/pickerSettlement";
-import { normalizeActivitySelectionMetadata } from "@/lib/premiumPolicy";
+import { normalizeActivitySelectionMetadata, type IndividualAppSelectionMetadata } from "@/lib/premiumPolicy";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import {
@@ -71,6 +71,14 @@ function reasonSummary(ids: string[]): string {
 }
 
 
+
+/** Counts from Apple\'s opaque app tokens, never names or app identities. */
+function selectionCountsText(counts: IndividualAppSelectionMetadata): string {
+  const apps = `${counts.applicationCount} ${counts.applicationCount === 1 ? "app" : "apps"}`;
+  const categories = `${counts.categoryCount} ${counts.categoryCount === 1 ? "category" : "categories"}`;
+  const websites = `${counts.webDomainCount} ${counts.webDomainCount === 1 ? "website" : "websites"}`;
+  return `${apps}, ${categories} and ${websites}`;
+}
 
 function ProgressBar({ step }: { step: number }) {
   const progress = ((step + 1) / STEP_COUNT) * 100;
@@ -189,7 +197,7 @@ export default function Onboarding() {
         : null);
       if (!blockMode || issue) {
         const details = counts
-          ? `${counts.applicationCount} apps, ${counts.categoryCount} categories and ${counts.webDomainCount} websites selected.`
+          ? `${selectionCountsText(counts)} selected.`
           : metadata
             ? "Curfy couldn't verify the saved selection counts from iOS."
             : "Apple's picker hasn't saved a selection yet.";
@@ -760,7 +768,7 @@ function StepChooseApps({
                   const counts = normalizeActivitySelectionMetadata(metadata);
                   Alert.alert("Free protects one app",
                     counts
-                      ? `Apple's picker saved ${counts.applicationCount} apps, ${counts.categoryCount} categories and ${counts.webDomainCount} websites. Reopen it and leave exactly one individual app checked.`
+                      ? `Apple's picker saved ${selectionCountsText(counts)}. Reopen it and leave exactly one individual app checked.`
                       : "iOS didn't return valid selection counts. Reopen Apple's picker and choose one individual app.");
                 }
               }
