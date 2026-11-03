@@ -159,6 +159,16 @@ test("onboarding validates native permission, one app and final native schedule 
   assert.match(src, /finally \{\s*setIsRequesting\(false\)/);
 });
 
+test("the personalized plan reflects all three chosen phone habits", () => {
+  const src = source("app/onboarding.tsx");
+  const start = src.indexOf("function reasonSummary(");
+  const end = src.indexOf("function selectionCountsText(", start);
+  const summary = src.slice(start, end);
+  assert.match(summary, /slice\(0, 3\)/);
+  assert.match(summary, /labels\[0\], \$\{labels\[1\]\}, and \$\{labels\[2\]\}/);
+  assert.doesNotMatch(summary, /slice\(0, 2\)/);
+});
+
 test("reason choices expose checked state and prevent selecting a fourth option", () => {
   const src = source("app/onboarding.tsx");
   assert.match(src, /accessibilityRole="checkbox"/);
