@@ -109,9 +109,17 @@ export default function Settings() {
         return;
       }
     }
-    const confirmedPickerIssue = stagedMode === localBlockMode
-      ? freeSelectionIssue(draftSelectionIdForMode(localBlockMode))
-      : null;
+    let confirmedPickerIssue: FreeSelectionIssue | null = null;
+    try {
+      confirmedPickerIssue = stagedMode === localBlockMode
+        ? freeSelectionIssue(draftSelectionIdForMode(localBlockMode))
+        : null;
+    } catch (error) {
+      console.warn("[Curfy] Couldn't verify saved Settings app choice", error);
+      Alert.alert("Can't verify selected app",
+        "iOS couldn't confirm the saved app selection. Reopen Apple's picker and try again.");
+      return;
+    }
     setPickerIssue(confirmedPickerIssue);
     if (confirmedPickerIssue) {
       Alert.alert("Start with one app",
