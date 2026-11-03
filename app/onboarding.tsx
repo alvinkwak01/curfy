@@ -1,4 +1,5 @@
 import Btn from "@/components/Btn";
+import { HoldRingPreview } from "@/components/HoldButton";
 import { MoonGlyph } from "@/components/MoonGlyph";
 
 import { StarBackground } from "@/components/StarBackground";
@@ -43,8 +44,9 @@ import {
 } from "react-native-device-activity";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Welcome is separate. Eight setup pages make nine screens total.
-const STEP_COUNT = 8;
+// Welcome is separate. Nine setup pages make ten screens total.
+// Step 8 = original Curfy hold-ring preview; Step 9 = optional name and Finish.
+const STEP_COUNT = 9;
 
 function initialClockWindow(now = new Date()): { start: string; end: string } {
   const nextHour = ((now.getHours() + 1) % 24) * 60;
@@ -140,7 +142,7 @@ export default function Onboarding() {
   const [finishing, setFinishing] = useState(false);
   const finishingRef = useRef(false);
 
-  const next = async () => {
+  const next = async (skipName = false) => {
     if (step === 0 && reasons.length === 0) {
       Alert.alert("Choose a distraction", "Choose at least one reason to continue.");
       return;
@@ -234,7 +236,7 @@ export default function Onboarding() {
       await setWakeTime(localWakeTime);
       await persistBlockMode(blockMode);
       await setProtectionRoutine(routine);
-      if (name.trim()) await setUserName(name.trim());
+      if (!skipName && name.trim()) await setUserName(name.trim());
       await completeOnboarding();
     } catch (error) {
       console.warn("[Curfy] Failed to finish onboarding", error);
@@ -265,7 +267,7 @@ export default function Onboarding() {
   // Leave Continue tappable so invalid selections get an explanation.
   const buttonDisabled = finishing;
 
-  // Preserve Curfy's original branded welcome and remaining eight setup steps.
+  // Preserve the branded Welcome and nine approved setup steps.
   // The 120-second exception is explained, never falsely shown inside iOS's shield.
   const stepNode = (
     <>
@@ -299,8 +301,10 @@ export default function Onboarding() {
           }}
         />
       )}
-      {step === 7 && (
-        <StepFinish bedtime={localBedtime} wakeTime={localWakeTime} name={name} onNameChange={setName} />
+      {step === 7 && <StepHoldPreview />}
+      {step === 8 && (
+        <StepName name={name} onNameChange={setName}
+          onSkip={() => { void next(true); }} disabled={finishing} />
       )}
     </>
   );
@@ -337,8 +341,7 @@ export default function Onboarding() {
           <ScrollView
             key={step}
             style={styles.stepScroll}
-            contentContainerStyle={step === STEP_COUNT - 1
-              ? styles.finishScrollContent : styles.stepScrollContent}
+            contentContainerStyle={styles.stepScrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
@@ -348,7 +351,7 @@ export default function Onboarding() {
         <View style={styles.btnWrap}>
           <Btn
             label={isLastStep ? (finishing ? "Setting up..." : "Finish setup") : "Continue"}
-            onPress={next}
+            onPress={() => { void next(); }}
             disabled={buttonDisabled}
           />
         </View>
@@ -525,46 +528,66 @@ function StepWhyCurfy() {
   );
 }
 
-function StepFinish({ bedtime, wakeTime, name, onNameChange }: {
-  bedtime: string; wakeTime: string; name: string; onNameChange: (v: string) => void;
+/** Curfy's signature gesture, NOT Apple's separate app-blocking shield. */
+function StepHoldPreview() {
+  return (
+    <View style={styles.holdIntro}>
+      <Badge>THE CURFY HOLD</Badge>
+      <Text style={styles.holdIntroHero}>
+        Don't be pathetic.{"\n"}<Text style={styles.heroCyan}>Go to sleep.</Text>
+      </Text>
+      <Text style={styles.holdIntroBody}>
+        If you insist on opening your protected app, you must hold this ring
+        for 120 uninterrupted seconds.
+      </Text>
+      <View accessible accessibilityRole="image"
+        accessibilityLabel="Preview of Curfy's minimalist circular 120-second hold button"
+        style={styles.holdPreviewWrap}>
+        <HoldRingPreview />
+      </View>
+      <Text style={styles.holdIntroHint}>
+        Lift your finger early and the timer resets. This is a preview only;
+        nothing unlocks here.
+      </Text>
+    </View>
+  );
+}
+
+/** Separate, genuinely optional final setup page, without a shield preview. */
+function StepName({ name, onNameChange, onSkip, disabled }: {
+  name: string;
+  onNameChange: (value: string) => void;
+  onSkip: () => void;
+  disabled: boolean;
 }) {
   return (
-    <View style={styles.finishInner}>
-      <Badge>READY WHEN YOU ARE</Badge>
-      <Text style={styles.finishHero}>Here's what protection looks like.</Text>
-      <Text style={styles.finishSchedule}>
-        {protectionWindowLabel(bedtime, wakeTime)} · every day
+    <View style={styles.nameStep}>
+      <Badge>ONE LAST THING</Badge>
+      <Text style={styles.hero}>What should we{"\n"}call you?</Text>
+      <Text style={styles.bodyText}>
+        Optional. Make Curfy a little more personal, or skip this for now.
       </Text>
-      <View style={styles.finishName}>
-        <Text style={styles.finishNameLabel}>What should we call you? (optional)</Text>
-        <TextInput
-          style={styles.nameInput}
-          value={name}
-          onChangeText={onNameChange}
-          placeholder="Your name"
-          placeholderTextColor={Colors.textGhost}
-          autoCapitalize="words"
-          returnKeyType="done"
-          accessibilityLabel="Your name, optional"
-        />
-      </View>
-      <View style={styles.finishPreview}>
-        <View style={styles.phoneFrame}>
-          <View style={styles.phoneNotch} />
-          <View style={styles.phoneShieldIcon}>
-            <Ionicons name="shield-checkmark" size={25} color={Colors.textMuted} />
-          </View>
-          <Text style={styles.phoneShieldTitle}>Blocked by Curfy</Text>
-          <Text style={styles.phoneShieldSub}>For a 2-minute hold to unlock, open Curfy from your Home Screen.</Text>
-          <View style={styles.phoneHoldBtn}>
-            <Text style={styles.phoneHoldBtnText}>Not now</Text>
-          </View>
-        </View>
-        <Text style={styles.finishHint}>
-          Preview only. Open Curfy separately for the continuous 120-second hold.
-          Protection ends at {clockLabel(wakeTime)}.
-        </Text>
-      </View>
+      <TextInput
+        style={styles.nameInput}
+        value={name}
+        onChangeText={onNameChange}
+        placeholder="Your name"
+        placeholderTextColor={Colors.textGhost}
+        autoCapitalize="words"
+        returnKeyType="done"
+        accessibilityLabel="Your name, optional"
+      />
+      <TouchableOpacity accessibilityRole="button"
+        accessibilityLabel="Skip name and finish setup"
+        disabled={disabled}
+        onPress={onSkip}
+        style={styles.nameSkip}>
+        <Text style={styles.nameSkipText}>Skip for now</Text>
+      </TouchableOpacity>
+      <Text style={styles.nameNote}>
+        Finish setup activates protection for your selected app.
+        You can add or change your name later.
+      </Text>
     </View>
   );
 }
@@ -852,7 +875,6 @@ const styles = StyleSheet.create({
   // Keep the progress header pinned above all onboarding content.
   // A scrollable page owns its height; it must never overlap the header.
   stepScrollContent: { flexGrow: 1, paddingTop: 30, paddingBottom: 32 },
-  finishScrollContent: { flexGrow: 1, paddingTop: 16, paddingBottom: 12 },
   stepInner: { gap: 14 },
   welcomeWrap: {
     flex: 1,
@@ -1060,104 +1082,43 @@ const styles = StyleSheet.create({
   },
   benefitTitle: { color: Colors.textPrimary, fontSize: 15, fontFamily: Fonts.semiBold, marginBottom: 4, lineHeight: 20 },
   benefitBody: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular, lineHeight: 18, marginBottom: 6 },
-  finishInner: { gap: 10 },
-  // Final setup must show the optional name without a second full-screen scroll
-  // on common iPhone sizes. Keep the outer ScrollView for Dynamic Type.
-  finishHero: {
-    color: Colors.textPrimary,
-    fontFamily: Fonts.bold,
-    fontSize: 27,
-    lineHeight: 33,
+  // Preview uses HoldButton's exact minimalist geometry/center.
+  // No halo, decorative moon or fake Apple shield.
+  holdIntro: { gap: 18, alignItems: "center" },
+  holdIntroHero: {
+    color: Colors.textPrimary, fontFamily: Fonts.bold,
+    fontSize: 32, lineHeight: 39, textAlign: "center",
   },
-  finishSchedule: {
-    color: "#B0B0D2",
-    fontFamily: Fonts.regular,
-    fontSize: 14,
-    lineHeight: 20,
+  holdIntroBody: {
+    color: "#B0B0D2", fontFamily: Fonts.regular,
+    fontSize: 15, lineHeight: 23, textAlign: "center",
   },
-  finishPreview: { gap: 8, alignItems: "center" },
-  phoneFrame: {
-    alignSelf: "center",
-    width: 164,
-    minHeight: 207,
-    borderRadius: 27,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: "center",
-    paddingTop: 23,
-    paddingBottom: 12,
-    paddingHorizontal: 12,
+  holdPreviewWrap: {
+    alignItems: "center", justifyContent: "center",
+    marginTop: 7, marginBottom: 3,
   },
-  phoneNotch: {
-    position: "absolute",
-    top: 9,
-    width: 46,
-    height: 6,
-    borderRadius: 4,
-    backgroundColor: Colors.background,
+  holdIntroHint: {
+    color: Colors.textMuted, fontFamily: Fonts.regular,
+    fontSize: 13, lineHeight: 20, textAlign: "center",
   },
-  phoneShieldIcon: {
-    width: 37,
-    height: 37,
-    borderRadius: 19,
-    backgroundColor: Colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 6,
-  },
-  phoneShieldTitle: {
-    color: Colors.textPrimary,
-    fontFamily: Fonts.semiBold,
-    fontSize: 13,
-    textAlign: "center",
-  },
-  phoneShieldSub: {
-    color: Colors.textMuted,
-    fontFamily: Fonts.regular,
-    fontSize: 10,
-    marginTop: 5,
-    marginBottom: 8,
-    lineHeight: 13,
-    textAlign: "center",
-  },
-  phoneHoldBtn: {
-    borderWidth: 1,
-    borderColor: Colors.primaryCyan,
-    borderRadius: 999,
-    paddingHorizontal: 11,
-    paddingVertical: 6,
-  },
-  phoneHoldBtnText: {
-    color: Colors.primaryCyan,
-    fontFamily: Fonts.semiBold,
-    fontSize: 11,
-  },
-  finishHint: {
-    color: "#A6A6C5",
-    fontFamily: Fonts.regular,
-    fontSize: 11,
-    lineHeight: 15,
-    alignSelf: "stretch",
-  },
-  finishName: { gap: 7 },
-  finishNameLabel: {
-    color: Colors.textPrimary,
-    fontFamily: Fonts.semiBold,
-    fontSize: 14,
-  },
+  nameStep: { gap: 22 },
   nameInput: {
     backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    fontSize: 17,
-    fontFamily: Fonts.medium,
-    color: Colors.textPrimary,
-    width: "100%",
-    minHeight: 47,
+    borderWidth: 1, borderColor: Colors.border, borderRadius: 14,
+    paddingHorizontal: 18, paddingVertical: 16,
+    fontSize: 20, fontFamily: Fonts.medium,
+    color: Colors.textPrimary, width: "100%", minHeight: 56,
+  },
+  nameSkip: {
+    alignSelf: "center", paddingHorizontal: 20, paddingVertical: 10,
+    minHeight: 44, justifyContent: "center",
+  },
+  nameSkipText: {
+    color: Colors.primaryCyan, fontFamily: Fonts.semiBold, fontSize: 14,
+  },
+  nameNote: {
+    color: Colors.textMuted, fontFamily: Fonts.regular,
+    fontSize: 12, lineHeight: 19, textAlign: "center",
   },
   timeStepContent: { flex: 1, paddingTop: 22, paddingBottom: 12, justifyContent: "center" },
 
