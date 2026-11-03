@@ -55,11 +55,11 @@ test("nightly records are described as Curfy logs, not proven sleep", () => {
   assert.doesNotMatch(journal, /let you actually fall asleep/);
 });
 
-test("nine-screen onboarding keeps the branded welcome without the redundant wake-up call", () => {
+test("ten-screen onboarding keeps Welcome, step 8 hold and step 9 optional name", () => {
   const onboarding = source("app/onboarding.tsx");
   const settings = source("app/settings.tsx");
   const context = source("context/SleepContext.tsx");
-  assert.match(onboarding, /STEP_COUNT = 8/);
+  assert.match(onboarding, /STEP_COUNT = 9/);
   assert.match(onboarding, /const \[showWelcome, setShowWelcome\] = useState\(true\)/);
   assert.match(onboarding, /<StepWelcome onStart=/);
   assert.match(onboarding, /<Btn label="Get Started"/);
@@ -74,11 +74,12 @@ test("nine-screen onboarding keeps the branded welcome without the redundant wak
   assert.match(onboarding, /step === 4 && <StepWhyCurfy/);
   assert.match(onboarding, /step === 5 && <StepScreenTimeAccess/);
   assert.match(onboarding, /step === 6 && [\s\S]*<StepChooseApps/);
-  assert.match(onboarding, /step === 7 && [\s\S]*<StepFinish/);
+  assert.match(onboarding, /step === 7 && <StepHoldPreview/);
+  assert.match(onboarding, /step === 8 && [\s\S]*<StepName/);
   assert.doesNotMatch(onboarding, /StepWakeUpCall|One more tap/);
   assert.match(onboarding, /if \(step === 0 && reasons\.length === 0\)/);
   assert.match(onboarding, /setStep\(6\);/);
-  assert.doesNotMatch(onboarding, /<StepRoutine|<StepCurrentBedtime|<StepName/);
+  assert.doesNotMatch(onboarding, /<StepRoutine|<StepCurrentBedtime|<StepFinish/);
   assert.doesNotMatch(settings, /PROTECTION_ROUTINES\.map/);
   assert.match(settings, /APPS AVAILABLE AGAIN/);
   assert.match(context, /PROTECTION_ROUTINE_KEY/);
@@ -141,7 +142,7 @@ test("fresh and deleted-account onboarding returns to original Curfy welcome fir
   assert.match(onboarding, /Bedtime\. For real\./);
 });
 
-test("all eight setup screens preserve header, back action and scroll-safe fixed CTA", () => {
+test("all nine setup screens preserve header, back action and scroll-safe fixed CTA", () => {
   const src = source("app/onboarding.tsx");
   assert.match(src, /<View style=\{styles\.header\}>/);
   assert.match(src, /<ScrollView[\s\S]*style=\{styles\.stepScroll\}/);
@@ -203,26 +204,42 @@ test("personal reveal uses the person's distraction reasons and not sleep estima
   assert.doesNotMatch(src, /suggested/);
 });
 
-test("final preview includes optional name, and never pretends the hold lives on the Apple shield", () => {
+test("Step 8/9 is the exact approved Curfy hold preview, not Apple's shield", () => {
   const src = source("app/onboarding.tsx");
-  assert.match(src, /function StepFinish/);
-  assert.match(src, /if \(name\.trim\(\)\) await setUserName\(name\.trim\(\)\)/);
-  assert.doesNotMatch(src, /isLastStep && !name\.trim\(\)/);
-  assert.match(src, /<Text style=\{styles\.phoneHoldBtnText\}>Not now<\/Text>/);
-  assert.match(src, /Open Curfy separately for the continuous 120-second hold/);
-  // Screenshot QA: previous final-page hero/268pt preview pushed the optional
-  // name entirely below the fold on a regular iPhone. Keep a compact layout.
-  assert.match(src, /<View style=\{styles\.finishInner\}>/);
-  assert.match(src, /<Text style=\{styles\.finishHero\}>/);
-  assert.match(src, /<View style=\{styles\.finishName\}>/);
-  const finalStep = src.slice(src.indexOf("function StepFinish("),
-    src.indexOf("function StepScreenTimeAccess("));
-  assert.ok(finalStep.indexOf("<View style={styles.finishName}>") <
-    finalStep.indexOf("<View style={styles.finishPreview}>"),
-    "The optional name must appear before the large mock shield on small iPhones");
-  assert.match(src, /finishScrollContent: \{ flexGrow: 1, paddingTop: 16, paddingBottom: 12 \}/);
-  assert.match(src, /minHeight: 207/);
-  assert.doesNotMatch(src, /minHeight: 268/);
+  const hold = source("components/HoldButton.tsx");
+  const section = src.slice(src.indexOf("function StepHoldPreview("),
+    src.indexOf("function StepName(", src.indexOf("function StepHoldPreview(")));
+  assert.match(section, /Don't be pathetic\./);
+  assert.match(section, /Go to sleep\./);
+  assert.match(section, /<HoldRingPreview \/>/);
+  assert.match(section, /120 uninterrupted seconds/);
+  assert.match(section, /timer resets/);
+  assert.doesNotMatch(section, /Blocked by Curfy|phoneFrame|phoneShield|StepName|TextInput/);
+  assert.match(hold, /export function HoldRingPreview\(/);
+  assert.match(hold, /function RingTrack\(/);
+  assert.match(hold, /function IdleCenter\(/);
+  assert.match(hold, /const RADIUS = 80/);
+  assert.match(hold, /const STROKE_WIDTH = 6/);
+  assert.doesNotMatch(hold, /styles\.halo|hand-left-outline|styles\.centerLabel/);
+  assert.match(hold, /Gesture\.LongPress\(\)/);
+});
+
+test("Step 9/9 is a separate optional-name final page with real skip behavior", () => {
+  const src = source("app/onboarding.tsx");
+  const section = src.slice(src.indexOf("function StepName("),
+    src.indexOf("function StepScreenTimeAccess(", src.indexOf("function StepName(")));
+  assert.match(section, /What should we/);
+  assert.match(section, /call you\?/);
+  assert.match(section, /<TextInput/);
+  assert.match(section, /Skip for now/);
+  assert.match(section, /onPress=\{onSkip\}/);
+  assert.doesNotMatch(section, /HoldRingPreview|phoneFrame|phoneShield|Blocked by Curfy/);
+  assert.match(src, /onSkip=\{\(\) => \{ void next\(true\); \}\}/);
+  assert.match(src, /if \(!skipName && name\.trim\(\)\) await setUserName\(name\.trim\(\)\)/);
+  assert.match(src, /isLastStep \? \(finishing \? "Setting up\.\.\." : "Finish setup"\)/);
+  assert.match(src, /await configureBedtimeBlocking\(\{/);
+  assert.match(src, /await completeOnboarding\(\)/);
+  assert.doesNotMatch(src, /function StepFinish\(/);
 });
 
 test("Delete Everything erases the previous protected app picker after stopping native restrictions", () => {
