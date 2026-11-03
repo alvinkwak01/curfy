@@ -64,10 +64,14 @@ const REASON_OPTIONS: { id: string; label: string; icon: keyof typeof Ionicons.g
 ];
 
 function reasonSummary(ids: string[]): string {
-  const labels = ids.map(id => REASON_OPTIONS.find(option => option.id === id)?.label).filter(Boolean);
+  const labels = ids
+    .map(id => REASON_OPTIONS.find(option => option.id === id)?.label?.toLowerCase())
+    .filter((label): label is string => Boolean(label))
+    .slice(0, 3);
   if (!labels.length) return "the distractions you want to limit";
-  if (labels.length === 1) return labels[0]!.toLowerCase();
-  return labels.slice(0, 2).map(label => label!.toLowerCase()).join(" and ");
+  if (labels.length === 1) return labels[0];
+  if (labels.length === 2) return labels.join(" and ");
+  return `${labels[0]}, ${labels[1]}, and ${labels[2]}`;
 }
 
 
