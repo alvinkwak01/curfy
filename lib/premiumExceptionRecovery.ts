@@ -6,6 +6,7 @@
  * re-shield owner.
  */
 import * as DeviceActivity from "react-native-device-activity";
+import { normalizeActivitySelectionMetadata } from "@/lib/premiumPolicy";
 import {
   PREMIUM_EXCEPTIONS_KEY,
   parsePremiumExceptionLedger,
@@ -20,11 +21,11 @@ function overlap(a: string, b: { currentBlocklist: true } | { activitySelectionI
   const result = DeviceActivity.intersection(
     { activitySelectionId: a }, b, { stripToken: true }
   );
-  if (!result || !Number.isSafeInteger(result.applicationCount) ||
-      result.categoryCount !== 0 || result.webDomainCount !== 0) {
+  const counts = normalizeActivitySelectionMetadata(result);
+  if (!counts || counts.categoryCount !== 0 || counts.webDomainCount !== 0) {
     throw new Error("iOS cannot confirm the protected app's native shield state.");
   }
-  return result.applicationCount;
+  return counts.applicationCount;
 }
 function isSameOriginalWindow(now: Date, entry: PremiumExceptionEntry): boolean {
   if (now.getTime() >= entry.bedtimeEndAt ||
@@ -45,9 +46,9 @@ function isSameOriginalWindow(now: Date, entry: PremiumExceptionEntry): boolean 
     : minute >= startMinute || minute < endMinute;
 }
 function assertNativeSingleton(entry: PremiumExceptionEntry): boolean {
-  const meta = DeviceActivity.activitySelectionMetadata({
-    activitySelectionId: entry.selectionId,
-  });
+  const meta = normalizeActivitySelectionMetadata(
+    DeviceActivity.activitySelectionMetadata({ activitySelectionId: entry.selectionId })
+  );
   if (!meta || meta.applicationCount !== 1 ||
       meta.categoryCount !== 0 || meta.webDomainCount !== 0 ||
       meta.includeEntireCategory === true) {
