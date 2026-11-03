@@ -83,6 +83,13 @@ test("nine-screen onboarding keeps the branded welcome without the redundant wak
   assert.match(settings, /APPS AVAILABLE AGAIN/);
   assert.match(context, /PROTECTION_ROUTINE_KEY/);
 });
+test("onboarding copy accurately describes a single selected app, not broad phone locking", () => {
+  const src = source("app/onboarding.tsx");
+  assert.match(src, /The app you select will be shielded/);
+  assert.match(src, /Shields the one app you choose through iOS/);
+  assert.doesNotMatch(src, /lock the apps|lock to apps you pick/);
+});
+
 test("Home always tells users when a current protection window ends", () => {
   const home = source("app/(tabs)/index.tsx");
   assert.match(home, /Protection scheduled until/);
