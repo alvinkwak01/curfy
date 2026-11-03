@@ -105,10 +105,10 @@ test("Home unlock action shows the real selected iOS app label, not a fake app n
   assert.doesNotMatch(home, /Start (your timer|120-second hold)/);
   assert.match(home, /<Text style=\{styles\.unlockVerb\}>Unlock<\/Text>/);
   assert.match(home, /<CurfyAppLabel/);
-  assert.match(home, /selectionId=\{selectionIdForMode\(blockMode\)\}/);
+  assert.match(home, /selectionId=\{selectionIdForMode\(selectedMode\)\}/);
   assert.match(home, /revision=\{protectedApp\.revision\}/);
   assert.match(home, /snapshot\.count === 1 \? snapshot : null/);
-  assert.match(home, /readProtectedAppChoices\(selectionIdForMode\(blockMode\)\)/);
+  assert.match(home, /readProtectedAppChoices\(selectionIdForMode\(selectedMode\)\)/);
   assert.match(home, /<Text style=\{styles\.unlockFallback\}>your app<\/Text>/);
   assert.match(home, /router\.push\("\/escape"\)/);
   assert.match(home, /120-second hold · up to 15 minutes of access/);
