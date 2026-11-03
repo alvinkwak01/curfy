@@ -55,23 +55,25 @@ test("nightly records are described as Curfy logs, not proven sleep", () => {
   assert.doesNotMatch(journal, /let you actually fall asleep/);
 });
 
-test("ten-screen onboarding keeps Curfy's original visual moments and skips routine labels", () => {
+test("nine-screen onboarding keeps the branded welcome without the redundant wake-up call", () => {
   const onboarding = source("app/onboarding.tsx");
   const settings = source("app/settings.tsx");
   const context = source("context/SleepContext.tsx");
-  assert.match(onboarding, /STEP_COUNT = 9/);
+  assert.match(onboarding, /STEP_COUNT = 8/);
   assert.match(onboarding, /const \[showWelcome, setShowWelcome\] = useState\(true\)/);
   assert.match(onboarding, /<StepWelcome onStart=/);
   assert.match(onboarding, /<Btn label="Get Started"/);
-  assert.match(onboarding, /step === 0 && <StepWakeUpCall/);
-  assert.match(onboarding, /step === 1 && <StepWhyStayUp/);
-  assert.match(onboarding, /step === 2 && <StepSetBedtime/);
-  assert.match(onboarding, /step === 3 && <StepWakeTime/);
-  assert.match(onboarding, /step === 4 && <StepReveal/);
-  assert.match(onboarding, /step === 5 && <StepWhyCurfy/);
-  assert.match(onboarding, /step === 6 && <StepScreenTimeAccess/);
-  assert.match(onboarding, /step === 7 && [\s\S]*<StepChooseApps/);
-  assert.match(onboarding, /step === 8 && [\s\S]*<StepFinish/);
+  assert.match(onboarding, /step === 0 && <StepWhyStayUp/);
+  assert.match(onboarding, /step === 1 && <StepSetBedtime/);
+  assert.match(onboarding, /step === 2 && <StepWakeTime/);
+  assert.match(onboarding, /step === 3 && <StepReveal/);
+  assert.match(onboarding, /step === 4 && <StepWhyCurfy/);
+  assert.match(onboarding, /step === 5 && <StepScreenTimeAccess/);
+  assert.match(onboarding, /step === 6 && [\s\S]*<StepChooseApps/);
+  assert.match(onboarding, /step === 7 && [\s\S]*<StepFinish/);
+  assert.doesNotMatch(onboarding, /StepWakeUpCall|One more tap/);
+  assert.match(onboarding, /if \(step === 0 && reasons\.length === 0\)/);
+  assert.match(onboarding, /setStep\(6\);/);
   assert.doesNotMatch(onboarding, /<StepRoutine|<StepCurrentBedtime|<StepName/);
   assert.doesNotMatch(settings, /PROTECTION_ROUTINES\.map/);
   assert.match(settings, /APPS AVAILABLE AGAIN/);
@@ -128,7 +130,7 @@ test("fresh and deleted-account onboarding returns to original Curfy welcome fir
   assert.match(onboarding, /Bedtime\. For real\./);
 });
 
-test("all nine setup screens preserve header, back action and scroll-safe fixed CTA", () => {
+test("all eight setup screens preserve header, back action and scroll-safe fixed CTA", () => {
   const src = source("app/onboarding.tsx");
   assert.match(src, /<View style=\{styles\.header\}>/);
   assert.match(src, /<ScrollView[\s\S]*style=\{styles\.stepScroll\}/);
@@ -140,8 +142,8 @@ test("all nine setup screens preserve header, back action and scroll-safe fixed 
 test("onboarding validates native permission, one app and final native schedule before completion", () => {
   const src = source("app/onboarding.tsx");
   assert.match(src, /getScreenTimeAccessStatus\(\)/);
-  assert.match(src, /if \(step !== 6\) return/);
-  assert.match(src, /if \(step === 7\)/);
+  assert.match(src, /if \(step !== 5\) return/);
+  assert.match(src, /if \(step === 6\)/);
   assert.match(src, /activitySelectionMetadata\(\{/);
   assert.match(src, /freeSelectionIssueForMetadata\(metadata\)/);
   assert.match(src, /await configureBedtimeBlocking\(\{/);
@@ -155,7 +157,7 @@ test("onboarding validates native permission, one app and final native schedule 
 
 test("time wheel pages never share a parent scrolling container", () => {
   const src = source("app/onboarding.tsx");
-  assert.match(src, /\[2, 3\]\.includes\(step\)/);
+  assert.match(src, /\[1, 2\]\.includes\(step\)/);
   assert.match(src, /<View key=\{step\} style=\{styles\.timeStepContent\}>/);
   assert.match(src, /<ScrollView[\s\S]*style=\{styles\.stepScroll\}/);
   assert.match(src, /Starts at \{clockLabel\(bedtime\)\}/);
