@@ -71,22 +71,25 @@ export default function Home() {
   // Apple's SwiftUI Label(ApplicationToken) shows the real chosen app icon
   // and name without handing its identifier to React Native.
   const [protectedApp, setProtectedApp] = useState<CurfyProtectedAppsSnapshot | null>(null);
-  const inBedtimeWindow = !!blockMode &&
+  const selectedMode: BlockModeId | null =
+    blockMode === "social" || blockMode === "most" || blockMode === "custom"
+      ? blockMode : null;
+  const inBedtimeWindow = !!selectedMode &&
     isBedtimeWindowActive(new Date(), bedtime, wakeTime);
   useFocusEffect(useCallback(() => {
-    if (!inBedtimeWindow || !blockMode) {
+    if (!inBedtimeWindow || !selectedMode) {
       setProtectedApp(null);
       return;
     }
     try {
-      const snapshot = readProtectedAppChoices(selectionIdForMode(blockMode));
+      const snapshot = readProtectedAppChoices(selectionIdForMode(selectedMode));
       // Free protects exactly one app, never the first of several.
       setProtectedApp(snapshot.count === 1 ? snapshot : null);
     } catch {
       // Missing/changed iOS selection or permission: never fabricate an app name.
       setProtectedApp(null);
     }
-  }, [blockMode, inBedtimeWindow]));
+  }, [selectedMode, inBedtimeWindow]));
 
   useEffect(() => {
     const id = setInterval(() => setMinsLeft(minutesUntil(bedtime)), 15000);
@@ -189,16 +192,16 @@ export default function Home() {
                     <View style={styles.unlockStatusDot} />
                     <Text style={styles.unlockEyebrow}>YOUR PROTECTED APP</Text>
                   </View>
-                  <Ionicons name="arrow-up-forward" size={23} color={Colors.primaryCyan} />
+                  <Ionicons name="arrow-forward" size={23} color={Colors.primaryCyan} />
                 </View>
                 <View style={styles.unlockTitleRow}>
                   <Text style={styles.unlockVerb}>Unlock</Text>
-                  {protectedApp && blockMode ? (
+                  {protectedApp && selectedMode ? (
                     // Native iOS renders the selected app's real name and icon;
                     // JavaScript never receives a title, token or bundle ID.
                     <CurfyAppLabel
                       key={protectedApp.revision}
-                      selectionId={selectionIdForMode(blockMode)}
+                      selectionId={selectionIdForMode(selectedMode)}
                       revision={protectedApp.revision}
                       index={0}
                       style={styles.unlockNativeAppLabel}
