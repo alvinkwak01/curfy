@@ -6,6 +6,7 @@ import { TimePicker } from "@/components/TimePicker";
 import { clockLabel, protectionWindowLabel, inferRoutineFromStart } from "@/lib/protectionRoutine";
 import { assertMonitorableBedtimeSchedule } from "@/lib/bedtimeWindow";
 import { waitForPersistedPickerCommit } from "@/lib/pickerSettlement";
+import { normalizeActivitySelectionMetadata } from "@/lib/premiumPolicy";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import {
@@ -181,16 +182,19 @@ export default function Onboarding() {
         return;
       }
       const issue = freeSelectionIssueForMetadata(metadata);
+      const counts = normalizeActivitySelectionMetadata(metadata);
       setSelectionIssue(issue);
-      setSelectedCount(metadata
-        ? metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount
+      setSelectedCount(counts
+        ? counts.applicationCount + counts.categoryCount + counts.webDomainCount
         : null);
       if (!blockMode || issue) {
-        const details = metadata
-          ? `${metadata.applicationCount} apps, ${metadata.categoryCount} categories and ${metadata.webDomainCount} websites saved.`
-          : "Apple's picker hasn't saved a selection yet.";
+        const details = counts
+          ? `${counts.applicationCount} apps, ${counts.categoryCount} categories and ${counts.webDomainCount} websites selected.`
+          : metadata
+            ? "Curfy couldn't verify the saved selection counts from iOS."
+            : "Apple's picker hasn't saved a selection yet.";
         Alert.alert("Select one individual app",
-          `${details}\nReopen the picker and leave exactly one app checked. If the counts look wrong, share them with us.`);
+          `${details}\nReopen Apple's picker and leave exactly one individual app checked. Categories and websites aren't supported.`);
         return;
       }
     }
@@ -275,7 +279,10 @@ export default function Onboarding() {
           }}
           selectionIssue={selectionIssue}
           onSelectionChange={(metadata) => {
-            setSelectedCount(metadata.applicationCount + metadata.categoryCount + metadata.webDomainCount);
+            const counts = normalizeActivitySelectionMetadata(metadata);
+            setSelectedCount(counts
+              ? counts.applicationCount + counts.categoryCount + counts.webDomainCount
+              : null);
             setSelectionIssue(freeSelectionIssueForMetadata(metadata));
           }}
         />
@@ -671,8 +678,8 @@ function StepChooseApps({
       <Badge>CHOOSE WHAT TO BLOCK</Badge>
       <Text style={styles.hero}>Choose one app to protect</Text>
       <Text style={styles.bodyText}>
-        Free protects one app. Choose it with Apple's private app picker.
-        You can change it later in Settings.
+        Free protects one app. Apple's picker may let you select several, but
+        Curfy only accepts one individual app. You can change it in Settings.
       </Text>
       <View style={styles.trustCard}>
         <Text style={styles.featureTitle}>
@@ -729,7 +736,7 @@ function StepChooseApps({
           familyActivitySelectionId={selectionIdForMode(pickerMode)}
           includeEntireCategory={false}
           headerText="Choose exactly one app to protect"
-          footerText="Choose one individual app, not a category."
+          footerText="Free: one individual app. Multiple apps or categories can't be accepted."
           onSelectionChange={handleSelectionChange}
           onDismissRequest={() => {
             if (pickerIsClosing.current) return;
@@ -744,7 +751,19 @@ function StepChooseApps({
               const metadata = activitySelectionMetadata({
                 activitySelectionId: selectionIdForMode(closingMode),
               });
-              if (metadata) onSelectionChange(metadata);
+              if (metadata) {
+                onSelectionChange(metadata);
+                if (freeSelectionIssueForMetadata(metadata) === "too-many-apps-or-categories") {
+                  // Apple's native FamilyActivityPicker has no Free-tier max
+                  // selection control. Reject extras promptly on sheet close;
+                  // native scheduling independently validates the saved tokens.
+                  const counts = normalizeActivitySelectionMetadata(metadata);
+                  Alert.alert("Free protects one app",
+                    counts
+                      ? `Apple's picker saved ${counts.applicationCount} apps, ${counts.categoryCount} categories and ${counts.webDomainCount} websites. Reopen it and leave exactly one individual app checked.`
+                      : "iOS didn't return valid selection counts. Reopen Apple's picker and choose one individual app.");
+                }
+              }
             })();
             // If Continue is tapped immediately, it awaits the SAME commit.
             onPickerCommit(commit);
