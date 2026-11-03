@@ -184,7 +184,15 @@ test("final preview includes optional name, and never pretends the hold lives on
   assert.match(src, /if \(name\.trim\(\)\) await setUserName\(name\.trim\(\)\)/);
   assert.doesNotMatch(src, /isLastStep && !name\.trim\(\)/);
   assert.match(src, /<Text style=\{styles\.phoneHoldBtnText\}>Not now<\/Text>/);
-  assert.match(src, /open Curfy separately and complete the continuous hold/);
+  assert.match(src, /Open Curfy separately for the continuous 120-second hold/);
+  // Screenshot QA: previous final-page hero/268pt preview pushed the optional
+  // name entirely below the fold on a regular iPhone. Keep a compact layout.
+  assert.match(src, /<View style=\{styles\.finishInner\}>/);
+  assert.match(src, /<Text style=\{styles\.finishHero\}>/);
+  assert.match(src, /<View style=\{styles\.finishName\}>/);
+  assert.match(src, /finishScrollContent: \{ flexGrow: 1, paddingTop: 16, paddingBottom: 12 \}/);
+  assert.match(src, /minHeight: 207/);
+  assert.doesNotMatch(src, /minHeight: 268/);
 });
 
 test("Delete Everything erases the previous protected app picker after stopping native restrictions", () => {
