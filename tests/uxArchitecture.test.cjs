@@ -97,6 +97,32 @@ test("Home always tells users when a current protection window ends", () => {
   assert.match(home, /clockLabel\(wakeTime\)/);
   assert.doesNotMatch(home, /It's bedtime — protect your evening/);
 });
+test("Home unlock action shows the real selected iOS app label, not a fake app name", () => {
+  const home = source("app/(tabs)/index.tsx");
+  const nativeUI = source("modules/curfy-protected-apps/index.tsx");
+  const swift = source("modules/curfy-protected-apps/ios/CurfyProtectedAppsModule.swift");
+
+  assert.doesNotMatch(home, /Start (your timer|120-second hold)/);
+  assert.match(home, /<Text style=\{styles\.unlockVerb\}>Unlock<\/Text>/);
+  assert.match(home, /<CurfyAppLabel/);
+  assert.match(home, /selectionId=\{selectionIdForMode\(blockMode\)\}/);
+  assert.match(home, /revision=\{protectedApp\.revision\}/);
+  assert.match(home, /snapshot\.count === 1 \? snapshot : null/);
+  assert.match(home, /readProtectedAppChoices\(selectionIdForMode\(blockMode\)\)/);
+  assert.match(home, /<Text style=\{styles\.unlockFallback\}>your app<\/Text>/);
+  assert.match(home, /router\.push\("\/escape"\)/);
+  assert.match(home, /120-second hold · up to 15 minutes of access/);
+  assert.match(home, /protectionStatus !== "shield-active"/);
+
+  // A real app icon/title is rendered by Apple's SwiftUI on the iPhone,
+  // never copied as an identifier string into JS or persisted remotely.
+  assert.match(nativeUI, /getProtectedApps\(selectionId\)/);
+  assert.match(nativeUI, /requireNativeViewManager\("CurfyProtectedApps"\)/);
+  assert.match(swift, /Label\(token\)/);
+  assert.match(swift, /"count": snapshot\.applications\.count, "revision": snapshot\.revision/);
+  assert.doesNotMatch(swift, /"appName":|"bundleId":|"localizedDisplayName":/);
+});
+
 test("community stats cannot falsely average mixed morning and bedtime clock starts", () => {
   const screen = source("app/(tabs)/leaderboard.tsx");
   assert.doesNotMatch(screen, /<CommunityStats\s*\/>/);
