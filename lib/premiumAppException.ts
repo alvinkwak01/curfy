@@ -10,7 +10,7 @@ import * as DeviceActivity from "react-native-device-activity";
 import { validateProtectedAppChoice } from "@/modules/curfy-protected-apps";
 import { reconcilePremiumAppExceptions } from "@/lib/premiumExceptionRecovery";
 import { refreshPremiumEntitlement } from "@/lib/premiumStore";
-import { selectionIssueForEntitlement } from "@/lib/premiumPolicy";
+import { normalizeActivitySelectionMetadata, selectionIssueForEntitlement } from "@/lib/premiumPolicy";
 import { currentBedtimeWindow, nativeDateComponents } from "@/lib/bedtimeWindow";
 import { getScreenTimeAccessStatus, type BlockModeId, selectionIdForMode } from "@/lib/screenTime";
 import {
@@ -40,11 +40,11 @@ function exactOverlap(a: string, b: { activitySelectionId: string } | { currentB
   const value = DeviceActivity.intersection(
     { activitySelectionId: a }, b, { stripToken: true }
   );
-  if (!value || !Number.isSafeInteger(value.applicationCount) ||
-      value.categoryCount !== 0 || value.webDomainCount !== 0) {
+  const counts = normalizeActivitySelectionMetadata(value);
+  if (!counts || counts.categoryCount !== 0 || counts.webDomainCount !== 0) {
     throw new Error("iOS cannot verify the exact app shields. No unlock was granted.");
   }
-  return value.applicationCount;
+  return counts.applicationCount;
 }
 function nativeOneAppSelection(ticketId: string): void {
   // Native validates the ticket is still the same single app within the
@@ -52,7 +52,9 @@ function nativeOneAppSelection(ticketId: string): void {
   if (validateProtectedAppChoice(ticketId) !== true) {
     throw new Error("Choose the protected app again before unlocking.");
   }
-  const metadata = DeviceActivity.activitySelectionMetadata({ activitySelectionId: ticketId });
+  const metadata = normalizeActivitySelectionMetadata(
+    DeviceActivity.activitySelectionMetadata({ activitySelectionId: ticketId })
+  );
   if (!metadata || metadata.applicationCount !== 1 ||
       metadata.categoryCount !== 0 || metadata.webDomainCount !== 0 ||
       metadata.includeEntireCategory === true) {
