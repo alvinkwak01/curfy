@@ -19,6 +19,48 @@ export type IndividualAppSelectionMetadata = {
   includeEntireCategory?: boolean;
 };
 
+/**
+ * The installed react-native-device-activity@0.6.1 exposes two DIFFERENT
+ * website-count keys across its iOS bridge:
+ *
+ * - onSelectionChange event: "webDomainCount" (camelCase)
+ * - activitySelectionMetadata()/intersection() Swift record: "webdomainCount"
+ *
+ * The package's TypeScript declaration incorrectly promises webDomainCount
+ * for the latter. Rejecting a valid 1-app selection because this field reads
+ * as undefined trapped onboarding on an actual iPhone. Normalize both native
+ * shapes strictly: never quietly treat an absent/invalid count as zero.
+ */
+export type NativeActivitySelectionMetadata = {
+  applicationCount?: number;
+  categoryCount?: number;
+  webDomainCount?: number;
+  webdomainCount?: number;
+  includeEntireCategory?: boolean;
+};
+
+export function normalizeActivitySelectionMetadata(
+  raw: NativeActivitySelectionMetadata | null | undefined
+): IndividualAppSelectionMetadata | null {
+  if (!raw || typeof raw !== "object") return null;
+  if (raw.webDomainCount !== undefined && raw.webdomainCount !== undefined &&
+      raw.webDomainCount !== raw.webdomainCount) return null;
+
+  const websiteCount = raw.webDomainCount ?? raw.webdomainCount;
+  if (![raw.applicationCount, raw.categoryCount, websiteCount].every(
+    count => Number.isSafeInteger(count) && (count as number) >= 0
+  )) return null;
+  if (raw.includeEntireCategory !== undefined &&
+      typeof raw.includeEntireCategory !== "boolean") return null;
+
+  return {
+    applicationCount: raw.applicationCount!,
+    categoryCount: raw.categoryCount!,
+    webDomainCount: websiteCount!,
+    includeEntireCategory: raw.includeEntireCategory,
+  };
+}
+
 export type SelectionPolicyIssue =
   | "choose-one-app"
   | "categories-and-websites-not-supported"
@@ -35,14 +77,13 @@ export type SelectionPolicyIssue =
  * per-app native escape implementation are in place.
  */
 export function selectionIssueForEntitlement(
-  metadata: IndividualAppSelectionMetadata | null | undefined,
+  metadata: NativeActivitySelectionMetadata | null | undefined,
   entitlement: PremiumEntitlement
 ): SelectionPolicyIssue | null {
   if (!metadata) return "choose-one-app";
-  const { applicationCount, categoryCount, webDomainCount, includeEntireCategory } = metadata;
-  if (![applicationCount, categoryCount, webDomainCount].every(
-    (count) => Number.isSafeInteger(count) && count >= 0
-  )) return "categories-and-websites-not-supported";
+  const normalized = normalizeActivitySelectionMetadata(metadata);
+  if (!normalized) return "categories-and-websites-not-supported";
+  const { applicationCount, categoryCount, webDomainCount, includeEntireCategory } = normalized;
   if (categoryCount !== 0 || webDomainCount !== 0 || includeEntireCategory === true) {
     return "categories-and-websites-not-supported";
   }
