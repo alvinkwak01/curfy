@@ -123,11 +123,6 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
         </View>
 
         <View style={styles.holdCard}>
-          <View pointerEvents="none" style={styles.orbit} />
-          <View pointerEvents="none" style={styles.orbitInner} />
-          <View pointerEvents="none" style={styles.orbitMoon}>
-            <Ionicons name="moon" size={15} color={Colors.primaryCyan} />
-          </View>
           <HoldButton
             onUnlock={finishHold}
             unlockCount={todayUnlocks}
@@ -223,23 +218,8 @@ const styles = StyleSheet.create({
     fontSize: 14, lineHeight: 21,
   },
   holdCard: {
-    minHeight: 282, alignItems: "center", justifyContent: "center",
+    minHeight: 235, alignItems: "center", justifyContent: "center",
     alignSelf: "stretch",
-  },
-  orbit: {
-    position: "absolute", width: 273, height: 273, borderRadius: 137,
-    borderWidth: 1, borderColor: "rgba(0,229,255,0.075)",
-    backgroundColor: "rgba(0,229,255,0.018)",
-  },
-  orbitInner: {
-    position: "absolute", width: 235, height: 235, borderRadius: 118,
-    borderWidth: 1, borderColor: "rgba(123,47,255,0.10)",
-  },
-  orbitMoon: {
-    position: "absolute", top: 0, right: "17%",
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: "#171731", borderColor: "#34365D", borderWidth: 1,
-    justifyContent: "center", alignItems: "center",
   },
   bottom: { alignItems: "center", gap: 16 },
   resetHint: {
