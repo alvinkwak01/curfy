@@ -24,6 +24,12 @@ jobs:
         env:
           TZ: America/Los_Angeles
       - run: npx tsc --noEmit
+      # A successful typecheck / iOS prebuild doesn't prove Metro can produce
+      # the JavaScript bundle embedded in the signed EAS preview.
+      - name: Bundle release-mode iOS JavaScript and assets
+        run: npx expo export --platform ios --output-dir /tmp/curfy-ios-export
+        env:
+          CI: "1"
       - name: Verify Curfy local native module autolinking
         run: |
           npx expo-modules-autolinking resolve --platform apple --json > /tmp/curfy-modules.json
