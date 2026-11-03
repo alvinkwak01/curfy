@@ -165,7 +165,7 @@ test("the personalized plan reflects all three chosen phone habits", () => {
   const end = src.indexOf("function selectionCountsText(", start);
   const summary = src.slice(start, end);
   assert.match(summary, /slice\(0, 3\)/);
-  assert.match(summary, /labels\[0\], \$\{labels\[1\]\}, and \$\{labels\[2\]\}/);
+  assert.ok(summary.includes('${labels[0]}, ${labels[1]}, and ${labels[2]}'));
   assert.doesNotMatch(summary, /slice\(0, 2\)/);
 });
 
