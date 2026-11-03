@@ -333,7 +333,8 @@ export default function Onboarding() {
           <ScrollView
             key={step}
             style={styles.stepScroll}
-            contentContainerStyle={styles.stepScrollContent}
+            contentContainerStyle={step === STEP_COUNT - 1
+              ? styles.finishScrollContent : styles.stepScrollContent}
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
           >
@@ -521,38 +522,42 @@ function StepFinish({ bedtime, wakeTime, name, onNameChange }: {
   bedtime: string; wakeTime: string; name: string; onNameChange: (v: string) => void;
 }) {
   return (
-    <View style={styles.stepInner}>
+    <View style={styles.finishInner}>
       <Badge>READY WHEN YOU ARE</Badge>
-      <Text style={styles.hero}>Here's what{"\n"}protection looks like.</Text>
-      <Text style={styles.bodyText}>
-        {protectionWindowLabel(bedtime, wakeTime)} · every day. Tap Finish setup
-        to activate protection for the selected app.
+      <Text style={styles.finishHero}>Here's what protection looks like.</Text>
+      <Text style={styles.finishSchedule}>
+        {protectionWindowLabel(bedtime, wakeTime)} · every day
       </Text>
-      <View style={styles.phoneFrame}>
-        <View style={styles.phoneNotch} />
-        <View style={styles.phoneShieldIcon}>
-          <Ionicons name="shield-checkmark" size={34} color={Colors.textMuted} />
+      <View style={styles.finishPreview}>
+        <View style={styles.phoneFrame}>
+          <View style={styles.phoneNotch} />
+          <View style={styles.phoneShieldIcon}>
+            <Ionicons name="shield-checkmark" size={25} color={Colors.textMuted} />
+          </View>
+          <Text style={styles.phoneShieldTitle}>Blocked by Curfy</Text>
+          <Text style={styles.phoneShieldSub}>For a 2-minute hold to unlock, open Curfy from your Home Screen.</Text>
+          <View style={styles.phoneHoldBtn}>
+            <Text style={styles.phoneHoldBtnText}>Not now</Text>
+          </View>
         </View>
-        <Text style={styles.phoneShieldTitle}>Blocked by Curfy</Text>
-        <Text style={styles.phoneShieldSub}>For a 2-minute hold to unlock, open Curfy from your Home Screen.</Text>
-        <View style={styles.phoneHoldBtn}>
-          <Text style={styles.phoneHoldBtnText}>Not now</Text>
-        </View>
+        <Text style={styles.finishHint}>
+          Preview only. Open Curfy separately for the continuous 120-second hold.
+          Protection ends at {clockLabel(wakeTime)}.
+        </Text>
       </View>
-      <Text style={styles.fineprint}>
-        Preview only. To get temporary access, open Curfy separately and complete the continuous hold.
-        Protection ends at {clockLabel(wakeTime)}.
-      </Text>
-      <Text style={styles.featureTitle}>What should we call you? (optional)</Text>
-      <TextInput
-        style={styles.nameInput}
-        value={name}
-        onChangeText={onNameChange}
-        placeholder="Your name"
-        placeholderTextColor={Colors.textGhost}
-        autoCapitalize="words"
-        returnKeyType="done"
-      />
+      <View style={styles.finishName}>
+        <Text style={styles.finishNameLabel}>What should we call you? (optional)</Text>
+        <TextInput
+          style={styles.nameInput}
+          value={name}
+          onChangeText={onNameChange}
+          placeholder="Your name"
+          placeholderTextColor={Colors.textGhost}
+          autoCapitalize="words"
+          returnKeyType="done"
+          accessibilityLabel="Your name, optional"
+        />
+      </View>
     </View>
   );
 }
@@ -839,6 +844,7 @@ const styles = StyleSheet.create({
   // Keep the progress header pinned above all onboarding content.
   // A scrollable page owns its height; it must never overlap the header.
   stepScrollContent: { flexGrow: 1, paddingTop: 30, paddingBottom: 32 },
+  finishScrollContent: { flexGrow: 1, paddingTop: 16, paddingBottom: 12 },
   stepInner: { gap: 14 },
   welcomeWrap: {
     flex: 1,
@@ -1048,74 +1054,104 @@ const styles = StyleSheet.create({
   },
   benefitTitle: { color: Colors.textPrimary, fontSize: 15, fontFamily: Fonts.semiBold, marginBottom: 4, lineHeight: 20 },
   benefitBody: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular, lineHeight: 18, marginBottom: 6 },
+  finishInner: { gap: 10 },
+  // Final setup must show the optional name without a second full-screen scroll
+  // on common iPhone sizes. Keep the outer ScrollView for Dynamic Type.
+  finishHero: {
+    color: Colors.textPrimary,
+    fontFamily: Fonts.bold,
+    fontSize: 27,
+    lineHeight: 33,
+  },
+  finishSchedule: {
+    color: "#B0B0D2",
+    fontFamily: Fonts.regular,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+  finishPreview: { gap: 8, alignItems: "center" },
   phoneFrame: {
     alignSelf: "center",
-    width: 200,
-    minHeight: 268,
-    borderRadius: 32,
+    width: 164,
+    minHeight: 207,
+    borderRadius: 27,
     borderWidth: 2,
     borderColor: Colors.border,
     backgroundColor: Colors.surface,
     alignItems: "center",
-    paddingTop: 25,
-    paddingHorizontal: 18,
-    marginTop: 8,
+    paddingTop: 23,
+    paddingBottom: 12,
+    paddingHorizontal: 12,
   },
   phoneNotch: {
     position: "absolute",
-    top: 10,
-    width: 60,
-    height: 8,
+    top: 9,
+    width: 46,
+    height: 6,
     borderRadius: 4,
     backgroundColor: Colors.background,
   },
   phoneShieldIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 37,
+    height: 37,
+    borderRadius: 19,
     backgroundColor: Colors.background,
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 9,
+    marginBottom: 6,
   },
   phoneShieldTitle: {
     color: Colors.textPrimary,
     fontFamily: Fonts.semiBold,
-    fontSize: 15,
+    fontSize: 13,
     textAlign: "center",
   },
   phoneShieldSub: {
     color: Colors.textMuted,
     fontFamily: Fonts.regular,
-    fontSize: 12,
-    marginTop: 6,
-    marginBottom: 12,
-    lineHeight: 16,
+    fontSize: 10,
+    marginTop: 5,
+    marginBottom: 8,
+    lineHeight: 13,
     textAlign: "center",
   },
   phoneHoldBtn: {
     borderWidth: 1,
     borderColor: Colors.primaryCyan,
     borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 6,
   },
   phoneHoldBtnText: {
     color: Colors.primaryCyan,
     fontFamily: Fonts.semiBold,
-    fontSize: 12,
+    fontSize: 11,
+  },
+  finishHint: {
+    color: "#A6A6C5",
+    fontFamily: Fonts.regular,
+    fontSize: 11,
+    lineHeight: 15,
+    alignSelf: "stretch",
+  },
+  finishName: { gap: 7 },
+  finishNameLabel: {
+    color: Colors.textPrimary,
+    fontFamily: Fonts.semiBold,
+    fontSize: 14,
   },
   nameInput: {
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 14,
-    padding: 18,
-    fontSize: 22,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 17,
     fontFamily: Fonts.medium,
     color: Colors.textPrimary,
-    textAlign: "center",
     width: "100%",
+    minHeight: 47,
   },
   timeStepContent: { flex: 1, paddingTop: 22, paddingBottom: 12, justifyContent: "center" },
 
