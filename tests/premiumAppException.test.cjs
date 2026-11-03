@@ -95,6 +95,7 @@ function fixture({
       const recover = loadTS("lib/premiumExceptionRecovery.ts", recoverName => {
         if (recoverName === "react-native-device-activity") return native;
         if (recoverName === "@/lib/premiumExceptionPolicy") return policy;
+        if (recoverName === "@/lib/premiumPolicy") return premiumPolicy;
         throw Error("Unexpected recovery import " + recoverName);
       });
       return recover;
