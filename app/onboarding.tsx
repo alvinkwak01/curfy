@@ -1,4 +1,5 @@
 import Btn from "@/components/Btn";
+import { HoldButtonPreview } from "@/components/HoldButtonPreview";
 import { MoonGlyph } from "@/components/MoonGlyph";
 
 import { StarBackground } from "@/components/StarBackground";
@@ -43,8 +44,8 @@ import {
 } from "react-native-device-activity";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Welcome is separate. Eight setup pages make nine screens total.
-const STEP_COUNT = 8;
+// Welcome is separate. Nine setup pages make ten screens total.
+const STEP_COUNT = 9;
 
 function initialClockWindow(now = new Date()): { start: string; end: string } {
   const nextHour = ((now.getHours() + 1) % 24) * 60;
@@ -136,7 +137,7 @@ export default function Onboarding() {
   const [finishing, setFinishing] = useState(false);
   const finishingRef = useRef(false);
 
-  const next = async () => {
+  const next = async (skipName = false) => {
     if (step === 0 && reasons.length === 0) {
       Alert.alert("Choose a distraction", "Choose at least one reason to continue.");
       return;
@@ -230,7 +231,7 @@ export default function Onboarding() {
       await setWakeTime(localWakeTime);
       await persistBlockMode(blockMode);
       await setProtectionRoutine(routine);
-      if (name.trim()) await setUserName(name.trim());
+      if (!skipName && name.trim()) await setUserName(name.trim());
       await completeOnboarding();
     } catch (error) {
       console.warn("[Curfy] Failed to finish onboarding", error);
@@ -261,8 +262,8 @@ export default function Onboarding() {
   // Leave Continue tappable so invalid selections get an explanation.
   const buttonDisabled = finishing;
 
-  // Preserve Curfy's original branded welcome and remaining eight setup steps.
-  // The 120-second exception is explained, never falsely shown inside iOS's shield.
+  // Preserve Curfy's branded welcome and existing setup flow.
+  // The 120-second hold is previewed inside Curfy, never inside the iOS shield.
   const stepNode = (
     <>
       {step === 0 && <StepWhyStayUp reasons={reasons} onChange={setReasons} />}
@@ -295,8 +296,14 @@ export default function Onboarding() {
           }}
         />
       )}
-      {step === 7 && (
-        <StepFinish bedtime={localBedtime} wakeTime={localWakeTime} name={name} onNameChange={setName} />
+      {step === 7 && <StepHoldPreview bedtime={localBedtime} wakeTime={localWakeTime} />}
+      {step === 8 && (
+        <StepName
+          name={name}
+          onNameChange={setName}
+          onSkip={() => { void next(true); }}
+          disabled={finishing}
+        />
       )}
     </>
   );
@@ -342,8 +349,8 @@ export default function Onboarding() {
         )}
         <View style={styles.btnWrap}>
           <Btn
-            label={isLastStep ? (finishing ? "Setting up..." : "Finish setup") : "Continue"}
-            onPress={next}
+            label={isLastStep ? (finishing ? "Setting up..." : "Enter Curfy") : "Continue"}
+            onPress={() => { void next(); }}
             disabled={buttonDisabled}
           />
         </View>
@@ -517,33 +524,38 @@ function StepWhyCurfy() {
   );
 }
 
-function StepFinish({ bedtime, wakeTime, name, onNameChange }: {
-  bedtime: string; wakeTime: string; name: string; onNameChange: (v: string) => void;
-}) {
+function StepHoldPreview({ bedtime, wakeTime }: { bedtime: string; wakeTime: string }) {
   return (
     <View style={styles.stepInner}>
-      <Badge>READY WHEN YOU ARE</Badge>
-      <Text style={styles.hero}>Here's what{"\n"}protection looks like.</Text>
+      <Badge>THE 120-SECOND HOLD</Badge>
+      <Text style={styles.hero}>Here's what it takes to unlock.</Text>
       <Text style={styles.bodyText}>
-        {protectionWindowLabel(bedtime, wakeTime)} · every day. Tap Finish setup
-        to activate protection for the selected app.
+        When your selected app is blocked, open Curfy and hold this button for
+        120 seconds. Let go early, and it resets.
       </Text>
-      <View style={styles.phoneFrame}>
-        <View style={styles.phoneNotch} />
-        <View style={styles.phoneShieldIcon}>
-          <Ionicons name="shield-checkmark" size={34} color={Colors.textMuted} />
-        </View>
-        <Text style={styles.phoneShieldTitle}>Blocked by Curfy</Text>
-        <Text style={styles.phoneShieldSub}>For a 2-minute hold to unlock, open Curfy from your Home Screen.</Text>
-        <View style={styles.phoneHoldBtn}>
-          <Text style={styles.phoneHoldBtnText}>Not now</Text>
-        </View>
-      </View>
+      <HoldButtonPreview />
+      <Text style={styles.judgment}>Don't be pathetic. Go to sleep.</Text>
       <Text style={styles.fineprint}>
-        Preview only. To get temporary access, open Curfy separately and complete the continuous hold.
-        Protection ends at {clockLabel(wakeTime)}.
+        Preview only. Protection: {protectionWindowLabel(bedtime, wakeTime)} · every day.
+        You'll activate it after the next step.
       </Text>
-      <Text style={styles.featureTitle}>What should we call you? (optional)</Text>
+    </View>
+  );
+}
+
+function StepName({ name, onNameChange, onSkip, disabled }: {
+  name: string;
+  onNameChange: (value: string) => void;
+  onSkip: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <View style={[styles.stepInner, styles.nameStep]}>
+      <Badge>ONE LAST THING</Badge>
+      <Text style={styles.hero}>What should{"\n"}we call you?</Text>
+      <Text style={styles.bodyText}>
+        Your name is optional. We'll use it to make Curfy feel a little more yours.
+      </Text>
       <TextInput
         style={styles.nameInput}
         value={name}
@@ -551,8 +563,20 @@ function StepFinish({ bedtime, wakeTime, name, onNameChange }: {
         placeholder="Your name"
         placeholderTextColor={Colors.textGhost}
         autoCapitalize="words"
+        autoCorrect={false}
         returnKeyType="done"
+        maxLength={40}
+        accessibilityLabel="Your name (optional)"
       />
+      <TouchableOpacity
+        onPress={onSkip}
+        disabled={disabled}
+        accessibilityRole="button"
+        accessibilityLabel="Skip name and enter Curfy"
+        style={styles.skipNameButton}
+      >
+        <Text style={styles.skipNameText}>Skip for now</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -1048,62 +1072,28 @@ const styles = StyleSheet.create({
   },
   benefitTitle: { color: Colors.textPrimary, fontSize: 15, fontFamily: Fonts.semiBold, marginBottom: 4, lineHeight: 20 },
   benefitBody: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular, lineHeight: 18, marginBottom: 6 },
-  phoneFrame: {
-    alignSelf: "center",
-    width: 200,
-    minHeight: 268,
-    borderRadius: 32,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    alignItems: "center",
-    paddingTop: 25,
-    paddingHorizontal: 18,
-    marginTop: 8,
-  },
-  phoneNotch: {
-    position: "absolute",
-    top: 10,
-    width: 60,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: Colors.background,
-  },
-  phoneShieldIcon: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    backgroundColor: Colors.background,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 9,
-  },
-  phoneShieldTitle: {
+  judgment: {
     color: Colors.textPrimary,
     fontFamily: Fonts.semiBold,
-    fontSize: 15,
+    fontSize: 19,
+    lineHeight: 26,
     textAlign: "center",
-  },
-  phoneShieldSub: {
-    color: Colors.textMuted,
-    fontFamily: Fonts.regular,
-    fontSize: 12,
     marginTop: 6,
-    marginBottom: 12,
-    lineHeight: 16,
-    textAlign: "center",
   },
-  phoneHoldBtn: {
-    borderWidth: 1,
-    borderColor: Colors.primaryCyan,
-    borderRadius: 999,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
+  nameStep: {
+    paddingTop: 46,
+    alignItems: "stretch",
   },
-  phoneHoldBtnText: {
-    color: Colors.primaryCyan,
-    fontFamily: Fonts.semiBold,
-    fontSize: 12,
+  skipNameButton: {
+    alignSelf: "center",
+    marginTop: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 18,
+  },
+  skipNameText: {
+    color: "#B0B0D2",
+    fontFamily: Fonts.medium,
+    fontSize: 14,
   },
   nameInput: {
     backgroundColor: Colors.surface,
