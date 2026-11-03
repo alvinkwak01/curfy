@@ -110,7 +110,7 @@ test("Swift only returns a whole-selection revision and count, never app names o
 test("Home may display one private native app label but cannot activate Premium or grant access", () => {
   const home = readFileSync(join(__dirname, "../app/(tabs)/index.tsx"), "utf8");
   const main = readFileSync(join(__dirname, "../lib/screenTime.ts"), "utf8");
-  assert.match(home, /readProtectedAppChoices\(selectionIdForMode\(blockMode\)\)/);
+  assert.match(home, /readProtectedAppChoices\(selectionIdForMode\(selectedMode\)\)/);
   assert.match(home, /snapshot\.count === 1 \? snapshot : null/);
   assert.match(home, /<CurfyAppLabel/);
   assert.doesNotMatch(home, /prepareProtectedAppChoice\(|grantPremiumAppException\(|refreshPremiumEntitlement\(/);
