@@ -42,8 +42,8 @@ import {
 } from "react-native-device-activity";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-// Welcome is separate. These nine setup pages make ten screens total.
-const STEP_COUNT = 9;
+// Welcome is separate. Eight setup pages make nine screens total.
+const STEP_COUNT = 8;
 
 function initialClockWindow(now = new Date()): { start: string; end: string } {
   const nextHour = ((now.getHours() + 1) % 24) * 60;
@@ -116,7 +116,7 @@ export default function Onboarding() {
   // iOS Screen Time authorization survives deleting a Curfy account.
   // Check the actual device permission when the step becomes visible.
   useEffect(() => {
-    if (step !== 6) return;
+    if (step !== 5) return;
     try {
       setScreenTimeStatus(getScreenTimeAccessStatus());
     } catch (error) {
@@ -128,11 +128,11 @@ export default function Onboarding() {
   const finishingRef = useRef(false);
 
   const next = async () => {
-    if (step === 1 && reasons.length === 0) {
+    if (step === 0 && reasons.length === 0) {
       Alert.alert("Choose a distraction", "Choose at least one reason to continue.");
       return;
     }
-    if (step === 3) {
+    if (step === 2) {
       try {
         assertMonitorableBedtimeSchedule(localBedtime, localWakeTime);
       } catch (error) {
@@ -141,7 +141,7 @@ export default function Onboarding() {
         return;
       }
     }
-    if (step === 6) {
+    if (step === 5) {
       let currentStatus: ScreenTimeAuthStatus;
       try {
         currentStatus = getScreenTimeAccessStatus();
@@ -155,7 +155,7 @@ export default function Onboarding() {
         return;
       }
     }
-    if (step === 7) {
+    if (step === 6) {
       // The native picker uses a 100ms debounced save. Never read/unmount
       // before its final selection has reached shared iOS storage.
       if (pendingPickerCommit.current) {
@@ -200,7 +200,7 @@ export default function Onboarding() {
     }
     if (!blockMode) {
       Alert.alert("Choose your app", "Select exactly one individual app first.");
-      setStep(7);
+      setStep(6);
       return;
     }
     if (finishingRef.current) return;
@@ -249,18 +249,17 @@ export default function Onboarding() {
   // Leave Continue tappable so invalid selections get an explanation.
   const buttonDisabled = finishing;
 
-  // Preserve the original visual storytelling, in the agreed ten screens.
+  // Preserve Curfy's original branded welcome and remaining eight setup steps.
   // The 120-second exception is explained, never falsely shown inside iOS's shield.
   const stepNode = (
     <>
-      {step === 0 && <StepWakeUpCall />}
-      {step === 1 && <StepWhyStayUp reasons={reasons} onChange={setReasons} />}
-      {step === 2 && <StepSetBedtime bedtime={localBedtime} onChange={setLocalBedtime} />}
-      {step === 3 && <StepWakeTime wakeTime={localWakeTime} onChange={setLocalWakeTime} />}
-      {step === 4 && <StepReveal reasons={reasons} goalBedtime={localBedtime} wakeTime={localWakeTime} />}
-      {step === 5 && <StepWhyCurfy />}
-      {step === 6 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
-      {step === 7 && (
+      {step === 0 && <StepWhyStayUp reasons={reasons} onChange={setReasons} />}
+      {step === 1 && <StepSetBedtime bedtime={localBedtime} onChange={setLocalBedtime} />}
+      {step === 2 && <StepWakeTime wakeTime={localWakeTime} onChange={setLocalWakeTime} />}
+      {step === 3 && <StepReveal reasons={reasons} goalBedtime={localBedtime} wakeTime={localWakeTime} />}
+      {step === 4 && <StepWhyCurfy />}
+      {step === 5 && <StepScreenTimeAccess status={screenTimeStatus} onStatusChange={setScreenTimeStatus} />}
+      {step === 6 && (
         <StepChooseApps
           start={localBedtime}
           end={localWakeTime}
@@ -281,7 +280,7 @@ export default function Onboarding() {
           }}
         />
       )}
-      {step === 8 && (
+      {step === 7 && (
         <StepFinish bedtime={localBedtime} wakeTime={localWakeTime} name={name} onNameChange={setName} />
       )}
     </>
@@ -311,7 +310,7 @@ export default function Onboarding() {
         style={styles.stepFlow}
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
-        {([2, 3].includes(step)) ? (
+        {([1, 2].includes(step)) ? (
           <View key={step} style={styles.timeStepContent}>
             {stepNode}
           </View>
@@ -353,19 +352,6 @@ function StepWelcome({ onStart }: { onStart: () => void }) {
       <View style={styles.welcomeFooter}>
         <Btn label="Get Started" onPress={onStart} />
       </View>
-    </View>
-  );
-}
-
-function StepWakeUpCall() {
-  return (
-    <View style={styles.stepInner}>
-      <Badge>WAKE UP CALL</Badge>
-      <Text style={styles.hero}>
-        One more tap.{"\n"}One more{"\n"}
-        <Text style={styles.heroCyan}>hour.</Text>
-      </Text>
-      <Text style={styles.statement}>Take your time back, on your terms.</Text>
     </View>
   );
 }
