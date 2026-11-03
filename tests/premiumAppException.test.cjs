@@ -42,14 +42,14 @@ function fixture({
     userDefaultsSet: (key, value) => { calls.push(["persist", key]); storage.set(key, value); },
     activitySelectionMetadata: ({ activitySelectionId: id }) => ({
       applicationCount: tokensFor(id).length, categoryCount: 0,
-      webDomainCount: 0, includeEntireCategory: false,
+      webdomainCount: 0, includeEntireCategory: false,
     }),
     intersection: ({ activitySelectionId: id }, second) => ({
       applicationCount: tokensFor(id).filter(token =>
         second.currentBlocklist ? blocked.has(token) :
           tokensFor(second.activitySelectionId).includes(token)
       ).length,
-      categoryCount: 0, webDomainCount: 0,
+      categoryCount: 0, webdomainCount: 0,
     }),
     configureActions: action => calls.push(["action", action]),
     startMonitoring: async name => {
