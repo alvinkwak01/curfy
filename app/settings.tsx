@@ -18,6 +18,8 @@ import {
   getScreenTimeAccessStatus,
 } from "@/lib/screenTime";
 import { isBedtimeWindowActive } from "@/lib/bedtimeWindow";
+import { normalizeActivitySelectionMetadata } from "@/lib/premiumPolicy";
+import { waitForPersistedPickerCommit } from "@/lib/pickerSettlement";
 import { allowProtectionReconfiguration, protectionSettingsChanged } from "@/lib/protectionSettingsPolicy";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
@@ -73,6 +75,9 @@ export default function Settings() {
   const saveInFlight = useRef(false);
   const [deleting, setDeleting] = useState(false);
   const [pickerMode, setPickerMode] = useState<BlockModeId | null>(null);
+  const pendingPickerCommit = useRef<Promise<void> | null>(null);
+  const sawNativeSelectionEvent = useRef(false);
+  const pickerIsClosing = useRef(false);
   const [stagedMode, setStagedMode] = useState<BlockModeId | null>(null);
   const [pickerIssue, setPickerIssue] = useState<FreeSelectionIssue | null>(null);
   // Read once on mount from the native side (not persisted app state) —
@@ -93,9 +98,24 @@ export default function Settings() {
       Alert.alert("Choose an app", "Select an app to protect before saving.");
       return;
     }
-    if (stagedMode === localBlockMode && pickerIssue) {
+    // The native picker persists with a 100ms debounce; wait before reading
+    // its opaque draft and never trust potentially stale React state.
+    if (pendingPickerCommit.current) {
+      try {
+        await pendingPickerCommit.current;
+      } catch {
+        Alert.alert("Selection wasn't confirmed",
+          "Curfy couldn't verify Apple's saved app choice. Reopen the picker and try again.");
+        return;
+      }
+    }
+    const confirmedPickerIssue = stagedMode === localBlockMode
+      ? freeSelectionIssue(draftSelectionIdForMode(localBlockMode))
+      : null;
+    setPickerIssue(confirmedPickerIssue);
+    if (confirmedPickerIssue) {
       Alert.alert("Start with one app",
-        pickerIssue === "too-many-apps-or-categories"
+        confirmedPickerIssue === "too-many-apps-or-categories"
           ? "Free protection covers one individual app. Return to the picker and remove extra apps, categories and websites. Premium purchases aren't available yet."
           : "Choose one individual app before saving.");
       return;
@@ -161,6 +181,9 @@ export default function Settings() {
       // The picker edits a distinct opaque selection. Leaving Settings
       // without Save cannot change tokens used by the active iOS monitor.
       if (stagedMode !== mode) prepareSelectionDraft(mode);
+      pendingPickerCommit.current = null;
+      sawNativeSelectionEvent.current = false;
+      pickerIsClosing.current = false;
       setPickerIssue(freeSelectionIssue(draftSelectionIdForMode(mode)));
       setStagedMode(mode);
       setLocalBlockMode(mode);
@@ -172,15 +195,23 @@ export default function Settings() {
   };
 
   const applySelectionMetadata = (mode: BlockModeId, metadata: ActivitySelectionMetadata) => {
-    const { applicationCount, categoryCount, webDomainCount } = metadata;
-    setAppCounts((prev) => ({
-      ...prev, [mode]: applicationCount + categoryCount + webDomainCount,
-    }));
+    const counts = normalizeActivitySelectionMetadata(metadata);
+    setAppCounts((prev) => {
+      const next = { ...prev };
+      if (counts) {
+        next[mode] = counts.applicationCount + counts.categoryCount + counts.webDomainCount;
+      } else {
+        delete next[mode]; // Never display NaN as "number of apps".
+      }
+      return next;
+    });
     setPickerIssue(freeSelectionIssueForMetadata(metadata));
   };
 
   const handleSelectionChange = (event: NativeSyntheticEvent<ActivitySelectionMetadata>) => {
-    if (pickerMode) applySelectionMetadata(pickerMode, event.nativeEvent);
+    if (!pickerMode) return;
+    sawNativeSelectionEvent.current = true;
+    applySelectionMetadata(pickerMode, event.nativeEvent);
   };
 
   const activePreset = BLOCK_MODE_PRESETS.find((p) => p.id === pickerMode);
@@ -326,16 +357,37 @@ export default function Settings() {
             <DeviceActivitySelectionSheetViewPersisted
               style={{ width: 1, height: 1, position: "absolute" }}
               familyActivitySelectionId={draftSelectionIdForMode(pickerMode)}
+              includeEntireCategory={false}
               headerText={activePreset?.pickerHint}
               onSelectionChange={handleSelectionChange}
               onDismissRequest={() => {
-                // Take one final snapshot from native persisted picker state,
-                // even when no last onSelectionChange event was delivered.
-                const metadata = activitySelectionMetadata({
-                  activitySelectionId: draftSelectionIdForMode(pickerMode),
+                if (pickerIsClosing.current) return;
+                pickerIsClosing.current = true;
+                const closingMode = pickerMode;
+                const commit = (async () => {
+                  await waitForPersistedPickerCommit(() => sawNativeSelectionEvent.current);
+                  const metadata = activitySelectionMetadata({
+                    activitySelectionId: draftSelectionIdForMode(closingMode),
+                  });
+                  if (!metadata) {
+                    throw new Error("iOS did not provide a saved app selection.");
+                  }
+                  applySelectionMetadata(closingMode, metadata);
+                  if (freeSelectionIssueForMetadata(metadata) === "too-many-apps-or-categories") {
+                    Alert.alert("Free protects one app",
+                      "Apple's picker allows multiple selections. Remove extra apps, categories or websites before saving Curfy protection.");
+                  }
+                })();
+                pendingPickerCommit.current = commit;
+                void commit.catch(error => {
+                  console.warn("[Curfy] Settings picker save/metadata unavailable", error);
+                  Alert.alert("Selection wasn't confirmed",
+                    "Curfy couldn't verify Apple's saved app choice. Reopen the picker and try again.");
+                }).finally(() => {
+                  if (pendingPickerCommit.current === commit) pendingPickerCommit.current = null;
+                  setPickerMode(null);
+                  pickerIsClosing.current = false;
                 });
-                if (metadata) applySelectionMetadata(pickerMode, metadata);
-                setPickerMode(null);
               }}
             />
           )}
