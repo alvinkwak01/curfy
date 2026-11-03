@@ -1,13 +1,18 @@
 import { StarBackground } from "@/components/StarBackground";
 import { Colors, Fonts } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
+import {
+  CurfyAppLabel,
+  readProtectedAppChoices,
+  type CurfyProtectedAppsSnapshot,
+} from "@/modules/curfy-protected-apps";
 import { isBedtimeWindowActive } from "@/lib/bedtimeWindow";
 import { clockLabel } from "@/lib/protectionRoutine";
-import { activeExceptionExpiresAt, getBedtimeProtectionStatus, BlockModeId } from "@/lib/screenTime";
+import { activeExceptionExpiresAt, getBedtimeProtectionStatus, BlockModeId, selectionIdForMode } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ScrollView,
   StyleSheet,
@@ -63,6 +68,25 @@ function getMoodMessage(streak: number, unlocks: number): string {
 export default function Home() {
   const { userName, streak, todayUnlocks, bedtime, wakeTime, blockMode, sleepLog } = useSleep();
   const [minsLeft, setMinsLeft] = useState(minutesUntil(bedtime));
+  // Apple's SwiftUI Label(ApplicationToken) shows the real chosen app icon
+  // and name without handing its identifier to React Native.
+  const [protectedApp, setProtectedApp] = useState<CurfyProtectedAppsSnapshot | null>(null);
+  const inBedtimeWindow = !!blockMode &&
+    isBedtimeWindowActive(new Date(), bedtime, wakeTime);
+  useFocusEffect(useCallback(() => {
+    if (!inBedtimeWindow || !blockMode) {
+      setProtectedApp(null);
+      return;
+    }
+    try {
+      const snapshot = readProtectedAppChoices(selectionIdForMode(blockMode));
+      // Free protects exactly one app, never the first of several.
+      setProtectedApp(snapshot.count === 1 ? snapshot : null);
+    } catch {
+      // Missing/changed iOS selection or permission: never fabricate an app name.
+      setProtectedApp(null);
+    }
+  }, [blockMode, inBedtimeWindow]));
 
   useEffect(() => {
     const id = setInterval(() => setMinsLeft(minutesUntil(bedtime)), 15000);
@@ -75,8 +99,6 @@ export default function Home() {
   const isImminent = minsLeft <= 2;
 
   const milestone = getMilestoneBadge(streak);
-  const inBedtimeWindow = !!blockMode &&
-    isBedtimeWindowActive(new Date(), bedtime, wakeTime);
   const exceptionExpiresAt = inBedtimeWindow ? activeExceptionExpiresAt() : null;
   const protectionStatus = inBedtimeWindow && blockMode &&
     (blockMode === "social" || blockMode === "most" || blockMode === "custom")
@@ -156,20 +178,48 @@ export default function Home() {
             ) : (
               <TouchableOpacity
                 accessibilityRole="button"
-                accessibilityLabel="Begin uninterrupted 120-second hold to unlock selected apps"
+                accessibilityLabel="Unlock your chosen protected app with a continuous 120-second hold"
+                accessibilityHint="Opens Curfy's hold screen. Lifting your finger resets the hold."
                 onPress={() => router.push("/escape")}
-                style={styles.escapeAction}
+                activeOpacity={0.83}
+                style={styles.unlockCard}
               >
-                <View style={styles.escapeActionTitle}>
-                  <Ionicons name="lock-open-outline" size={22} color={Colors.primaryCyan} />
-                  <Text style={[styles.escapeLabel, { flex: 1 }]}>Start 120-second hold</Text>
-                  <Ionicons name="chevron-forward" size={19} color={Colors.primaryCyan} />
+                <View style={styles.unlockTopRow}>
+                  <View style={styles.unlockStatus}>
+                    <View style={styles.unlockStatusDot} />
+                    <Text style={styles.unlockEyebrow}>YOUR PROTECTED APP</Text>
+                  </View>
+                  <Ionicons name="arrow-up-forward" size={23} color={Colors.primaryCyan} />
                 </View>
-                <Text style={styles.escapeHint}>
-                  {protectionStatus === "shield-active"
-                    ? "Hold the circular button in Curfy for two uninterrupted minutes to request up to 15 minutes of access."
-                    : "iOS hasn't confirmed the shield state here. Check a selected app first; an unlock only succeeds if iOS reports protection."}
-                </Text>
+                <View style={styles.unlockTitleRow}>
+                  <Text style={styles.unlockVerb}>Unlock</Text>
+                  {protectedApp && blockMode ? (
+                    // Native iOS renders the selected app's real name and icon;
+                    // JavaScript never receives a title, token or bundle ID.
+                    <CurfyAppLabel
+                      key={protectedApp.revision}
+                      selectionId={selectionIdForMode(blockMode)}
+                      revision={protectedApp.revision}
+                      index={0}
+                      style={styles.unlockNativeAppLabel}
+                    />
+                  ) : (
+                    <Text style={styles.unlockFallback}>your app</Text>
+                  )}
+                </View>
+                <View style={styles.unlockSeparator} />
+                <View style={styles.unlockBottomRow}>
+                  <Ionicons name="finger-print-outline" size={17} color={Colors.primaryCyan} />
+                  <Text style={styles.unlockDetail}>
+                    120-second hold · up to 15 minutes of access
+                  </Text>
+                </View>
+                {protectionStatus !== "shield-active" && (
+                  <Text style={styles.unlockCaution}>
+                    iOS hasn't confirmed the shield here. Check the selected app;
+                    access is only granted after native protection is verified.
+                  </Text>
+                )}
               </TouchableOpacity>
             )}
           </View>
@@ -278,8 +328,50 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
   },
-  escapeAction: { paddingVertical: 4 },
-  escapeActionTitle: { flexDirection: "row", alignItems: "center", gap: 10 },
+  unlockCard: {
+    backgroundColor: "#151C2E",
+    borderWidth: 1,
+    borderColor: "#36536A",
+    borderRadius: 18,
+    paddingHorizontal: 17,
+    paddingTop: 17,
+    paddingBottom: 15,
+    margin: -16,
+  },
+  unlockTopRow: {
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+  },
+  unlockStatus: { flexDirection: "row", gap: 8, alignItems: "center" },
+  unlockStatusDot: {
+    width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primaryCyan,
+  },
+  unlockEyebrow: {
+    color: "#A4B9C9", fontFamily: Fonts.semiBold, fontSize: 10, letterSpacing: 1.6,
+  },
+  unlockTitleRow: {
+    flexDirection: "row", alignItems: "center", gap: 9,
+    minHeight: 45, marginTop: 13,
+  },
+  unlockVerb: {
+    color: Colors.textPrimary, fontFamily: Fonts.bold, fontSize: 25, letterSpacing: -0.6,
+  },
+  unlockNativeAppLabel: { flex: 1, minWidth: 0, height: 35 },
+  unlockFallback: {
+    color: Colors.primaryCyan, fontFamily: Fonts.semiBold,
+    fontSize: 21, flexShrink: 1,
+  },
+  unlockSeparator: {
+    height: 1, backgroundColor: "#294154", marginTop: 12, marginBottom: 13,
+  },
+  unlockBottomRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  unlockDetail: {
+    color: "#B5C3D1", fontFamily: Fonts.medium, fontSize: 12, lineHeight: 18,
+    flexShrink: 1,
+  },
+  unlockCaution: {
+    color: Colors.textMuted, fontFamily: Fonts.regular,
+    fontSize: 11, lineHeight: 17, marginTop: 10,
+  },
   escapeLabel: { color: Colors.primaryCyan, fontSize: 16, fontFamily: Fonts.semiBold },
   escapeHint: { color: Colors.textMuted, fontSize: 13, fontFamily: Fonts.regular, marginTop: 6 },
   messageSection: { alignItems: "center", gap: 10 },
