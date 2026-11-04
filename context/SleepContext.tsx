@@ -297,7 +297,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   // AuthProvider must be an ancestor of SleepProvider (see app/_layout.tsx)
   // so signOut()/deleteAccount() here can also touch the real Supabase
   // session/account, not just reset local state.
-  const { deleteRemoteAccount } = useAuth();
+  const { deleteRemoteAccount, finishAccountDeletion } = useAuth();
   // JournalProvider must also be an ancestor (see app/_layout.tsx) so
   // deleteAccount() below can wipe diary entries too — they're stored
   // separately from ALL_STORAGE_KEYS since they're a different context,
@@ -654,6 +654,11 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
         await Notifications.cancelAllScheduledNotificationsAsync();
       } catch (_) {}
     }
+    // Release the remote-deletion receipt only AFTER native shields,
+    // private tokens, journal, and every local preference have been cleared.
+    // Until this succeeds the AuthProvider suppresses creation of a new
+    // anonymous leaderboard profile (including after an interrupted retry).
+    await finishAccountDeletion();
   };
 
   const streak = computeStreak(sleepLog);
