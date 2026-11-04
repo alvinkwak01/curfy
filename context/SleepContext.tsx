@@ -629,6 +629,12 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     // A successful Delete Everything must not carry the previous native
     // app picker tokens into a fresh account's onboarding.
     clearCurfyOnboardingSelectionsAfterAccountDeletion();
+    // Personal journal entries are deliberately LOCAL. A failed wipe must
+    // never report "account deleted" while leaving private thoughts behind.
+    // Preserve the loaded settings screen until storage confirms both wipes.
+    // If either operation fails, Settings can display the failure for retry.
+    await clearJournal();
+    await AsyncStorage.multiRemove(ALL_STORAGE_KEYS);
     setIsLocked(false);
     lockedToday.current = false;
     cooldownUntil.current = 0;
@@ -643,10 +649,6 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     setTodayUnlocks(0);
     setLongestStreak(0);
     setDevSkipLockState(false);
-    await AsyncStorage.multiRemove(ALL_STORAGE_KEYS);
-    try {
-      await clearJournal();
-    } catch (_) {}
     if (Platform.OS !== "web") {
       try {
         await Notifications.cancelAllScheduledNotificationsAsync();
