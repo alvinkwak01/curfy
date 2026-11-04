@@ -103,9 +103,20 @@ interface HoldButtonProps {
   onUnlock: () => void | Promise<void>;
   unlockCount: number;
   onHoldingChange?: (holding: boolean) => void;
+  /** A single compact instruction beneath the ring; hold duration stays 120 seconds. */
+  idleHint?: string;
+  /** Preview/escape pages can omit the nonessential exception counter. */
+  showUnlockCount?: boolean;
+  /** Suppress only the idle phrase; keep live hold messages and errors visible. */
+  showIdleMessage?: boolean;
 }
 
-export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButtonProps) {
+export function HoldButton({
+  onUnlock, unlockCount, onHoldingChange,
+  idleHint = "Hold for the full 120 seconds",
+  showUnlockCount = true,
+  showIdleMessage = true,
+}: HoldButtonProps) {
   const [isHolding, setIsHolding] = useState(false);
   const [isUnlocking, setIsUnlocking] = useState(false);
   const [displaySeconds, setDisplaySeconds] = useState(120);
@@ -248,10 +259,12 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
 
   return (
     <View style={styles.wrap}>
-      {unlockCount > 0 && (
+      {showUnlockCount && unlockCount > 0 && (
         <Text style={styles.unlockBadge}>Temporary exceptions this window: {unlockCount}</Text>
       )}
-      <Text style={styles.message}>{message}</Text>
+      <Text style={styles.message}>
+        {showIdleMessage || message !== "Hold to unlock" ? message : ""}
+      </Text>
 
       <GestureDetector gesture={holdGesture}>
       <Animated.View style={[styles.buttonWrap, animatedButtonStyle]}>
@@ -299,7 +312,7 @@ export function HoldButton({ onUnlock, unlockCount, onHoldingChange }: HoldButto
       </GestureDetector>
 
       <Text style={styles.hint}>
-        {isUnlocking ? "Checking with iOS..." : isHolding ? "Don't lift your finger" : "Hold for the full 120 seconds"}
+        {isUnlocking ? "Checking with iOS..." : isHolding ? "Don't lift your finger" : idleHint}
       </Text>
     </View>
   );
