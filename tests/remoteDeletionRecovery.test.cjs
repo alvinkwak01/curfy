@@ -22,6 +22,7 @@ const KEY = "@curfy/remote_deletion_confirmed_user";
 async function fixture({
   receipt = null, initialSession = true, failSignOut = false,
   signOutReturnsError = false, failRemote = false, failRead = false,
+  restoreError = false,
 } = {}) {
   const storage = new Map(receipt ? [[KEY, receipt]] : []);
   const stats = { invokes: 0, signOuts: 0, signIns: 0, writes: 0, removes: 0 };
@@ -34,7 +35,10 @@ async function fixture({
 
   const supabase = {
     auth: {
-      getSession: async () => ({ data: { session: currentSession }, error: null }),
+      getSession: async () => ({
+        data: { session: restoreError ? null : currentSession },
+        error: restoreError ? Error("Auth session could not be restored") : null,
+      }),
       onAuthStateChange: callback => {
         listeners.add(callback);
         return { data: { subscription: { unsubscribe: () => listeners.delete(callback) } } };
@@ -177,6 +181,17 @@ test("unreadable authentication/deletion state cannot silently bypass remote del
   });
   assert.equal(f.stats.invokes, 0);
   assert.equal(f.stats.signOuts, 0);
+  await f.unmount();
+});
+
+test("a resolved Supabase session error also forbids an unconfirmed remote wipe", async () => {
+  const f = await fixture({ restoreError: true });
+  assert.equal(f.api.isAuthLoading, false);
+  assert.equal(f.api.isDeletingAccount, true);
+  await act(async () => {
+    await assert.rejects(f.api.deleteRemoteAccount(), /couldn't verify your online account/);
+  });
+  assert.equal(f.stats.invokes, 0);
   await f.unmount();
 });
 
