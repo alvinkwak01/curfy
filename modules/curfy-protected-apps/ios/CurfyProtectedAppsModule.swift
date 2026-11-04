@@ -258,7 +258,9 @@ final class CurfyProtectedAppLabelView: ExpoView {
       // and name on device. Neither is returned to React Native.
       host.rootView = AnyView(
         Label(token)
-          .font(.system(size: 16))
+          .font(.system(size: 14))
+          .imageScale(.small)
+          .lineLimit(1)
           .foregroundColor(.white)
           .frame(maxWidth: .infinity, alignment: .leading)
       )
