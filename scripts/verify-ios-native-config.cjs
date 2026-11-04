@@ -66,18 +66,25 @@ function verifyAppJson(root) {
 function verifyGeneratedIOS(root) {
   const ios = path.join(root,"ios");
   assert(fs.existsSync(ios),"Missing ios/ project. Run Expo prebuild first.");
-  const files = findEntitlements(ios);
-  assert(files.length >= 4,"Expected at least four generated .entitlements files; got "+ files.length);
+  // @kingstinct/expo-apple-targets keeps extension entitlements in
+  // targets/<extension>/generated.entitlements, outside the generated ios/.
+  // The app's own entitlement plist lives under ios/Curfy/.
+  const generated = findEntitlements(ios);
+  const main = generated.filter(f => path.basename(f) === "Curfy.entitlements");
+  assert(main.length === 1,
+    "Expected the app's ios/Curfy/Curfy.entitlements, got " + generated.join(", "));
+  const files = [main[0]];
   const pbx = path.join(ios,"Curfy.xcodeproj","project.pbxproj");
   assert(fs.existsSync(pbx),"Missing generated Xcode project");
   const xcode = fs.readFileSync(pbx,"utf8");
-  const targets = ["Curfy","ShieldConfiguration","ShieldAction","ActivityMonitorExtension"];
-  for (const target of targets) {
-    assert(xcode.includes(target),target + ": Xcode target not present");
-    const matches = files.filter(f => path.basename(f) === target + ".entitlements");
-    assert(matches.length === 1, target + ": expected one entitlement plist, found "+
-      matches.length + " (" + files.join(", ") + ")");
-    assertEntitlements(matches[0],target);
+  assert(xcode.includes("Curfy"),"Missing main app Xcode target");
+  assertEntitlements(main[0],"Curfy");
+  for (const [target] of EXTENSIONS) {
+    const file = path.join(root,"targets",target,"generated.entitlements");
+    assert(fs.existsSync(file),target + ": missing source extension entitlement plist");
+    assert(xcode.includes(target),target + ": missing Xcode target");
+    assertEntitlements(file,target);
+    files.push(file);
   }
   for (const [name,bundleId] of EXTENSIONS) {
     assert(xcode.includes(bundleId),name + ": Xcode project missing bundle ID "+ bundleId);
