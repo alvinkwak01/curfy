@@ -37,7 +37,7 @@ function validEntry(value: unknown, activityName: string): value is PremiumExcep
     /^curfy-block-(social|most|custom)$/.test(v.committedSelectionId) &&
     validTime(v.expiresAt) && validTime(v.bedtimeEndAt) && validTime(v.startedAt) &&
     v.startedAt < v.expiresAt && v.expiresAt <= v.bedtimeEndAt &&
-    v.expiresAt - v.startedAt <= MAX_EXCEPTION_DURATION_MS + 2 * NATIVE_MONITOR_SLACK_MS;
+    v.expiresAt - v.startedAt <= MAX_EXCEPTION_DURATION_MS;
 }
 
 /** Malformed shared state is an error, never silently treated as an empty ledger. */
@@ -91,7 +91,7 @@ export function planPremiumAppException({
   bedtimeEndAt: number;
   nowMs: number;
   currentLedger: unknown;
-}): PremiumExceptionEntry & { needsMonitor: boolean } {
+}): PremiumExceptionEntry & { needsMonitor: boolean; monitorEndAt: number } {
   const activityName = activityForTicket(ticketId);
   if (!activityName || !/^curfy-block-(social|most|custom)$/.test(committedSelectionId)) {
     throw new Error("Choose a valid protected app before holding to unlock.");
@@ -111,16 +111,24 @@ export function planPremiumAppException({
   if (Object.keys(ledger).length >= 50) {
     throw new Error("Too many app exceptions are scheduled.");
   }
+  // Distinguish logical entitlement expiry from DeviceActivity's
+  // minimum 15-minute native monitoring window and second precision.
+  // The native callback may arrive slightly later; this record never grants
+  // more than 15m of *planned* access or extends past the chosen cutoff.
   const roundedStart = Math.floor(nowMs / 1000) * 1000;
   const nativeEnd = roundedStart + MAX_EXCEPTION_DURATION_MS + NATIVE_MONITOR_SLACK_MS;
+  const logicalExpiry = Math.min(nowMs + MAX_EXCEPTION_DURATION_MS, bedtimeEndAt);
   const needsMonitor = nativeEnd < bedtimeEndAt;
   return {
     activityName,
     selectionId: ticketId,
     committedSelectionId,
     startedAt: nowMs,
-    expiresAt: needsMonitor ? nativeEnd : bedtimeEndAt,
+    expiresAt: logicalExpiry,
     bedtimeEndAt,
     needsMonitor,
+    // Transient scheduling value: intentionally NOT persisted in the shared
+    // recovery ledger. Native Swift compares logical expiresAt only.
+    monitorEndAt: nativeEnd,
   };
 }
