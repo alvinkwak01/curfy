@@ -79,14 +79,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsAuthLoading(false);
       return;
     }
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setIsAuthLoading(false);
-    });
+    let active = true;
+    void supabase.auth.getSession()
+      .then(({ data, error }) => {
+        if (error) console.warn("[Curfy] Could not restore leaderboard session", error);
+        if (active) setSession(data.session ?? null);
+      })
+      .catch((error) => {
+        // Account restoration is optional; a network failure cannot leave
+        // onboarding or the protection screens stuck in "loading".
+        console.warn("[Curfy] Leaderboard session restoration failed", error);
+      })
+      .finally(() => {
+        if (active) setIsAuthLoading(false);
+      });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      setSession(newSession);
+      if (active) setSession(newSession);
     });
-    return () => sub.subscription.unsubscribe();
+    return () => {
+      active = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
   const ensureAnonymousProfile = async (displayName: string) => {
