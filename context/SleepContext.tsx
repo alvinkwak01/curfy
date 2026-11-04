@@ -108,6 +108,8 @@ interface SleepContextType {
   // including when the current streak breaks.
   longestStreak: number;
   isLoading: boolean;
+  storageError: string | null;
+  retryLoadSavedSettings: () => Promise<void>;
   // Restart Setup returns to onboarding while retaining local history
   // and anonymous Supabase session; stops native restrictions first.
   signOut: () => Promise<void>;
@@ -285,6 +287,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   const [todayUnlocks, setTodayUnlocks] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [storageError, setStorageError] = useState<string | null>(null);
   const [devSkipLock, setDevSkipLockState] = useState(false);
   const cooldownUntil = useRef<number>(0);
   const lockedToday = useRef(false);
@@ -301,8 +304,13 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   // but a full account delete still needs to take them with it.
   const { clearAll: clearJournal } = useJournal();
 
-  useEffect(() => {
-    (async () => {
+  // A failed AsyncStorage read must NEVER drop the user into fresh
+  // onboarding while a previous iOS Screen Time schedule may still exist.
+  // Keep the app in a recoverable error state and allow a read-only retry.
+  const retryLoadSavedSettings = useCallback(async () => {
+    setIsLoading(true);
+    setStorageError(null);
+    try {
       const [bt, wt, bm, un, oc, sl, cd, tu, mo, ls, dsl, pr] = await Promise.all([
         AsyncStorage.getItem(BEDTIME_KEY),
         AsyncStorage.getItem(WAKE_TIME_KEY),
@@ -333,7 +341,8 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
           // the cleaned version immediately so the corrupted data doesn't
           // keep coming back on every future load.
           if (deduped.length !== parsed.length) {
-            AsyncStorage.setItem(SLEEP_LOG_KEY, JSON.stringify(deduped));
+            void AsyncStorage.setItem(SLEEP_LOG_KEY, JSON.stringify(deduped))
+              .catch(error => console.warn("[Curfy] Could not persist repaired local history", error));
           }
         } catch (_) {}
       }
@@ -341,7 +350,8 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       if (tu) {
         try {
           const data = JSON.parse(tu);
-          if (data.date === bedtimeNightKey(new Date(), bt || bedtime, wt || wakeTime)) {
+          if (data.date === bedtimeNightKey(new Date(), bt || "23:00", wt || "06:00") &&
+              Number.isSafeInteger(data.count) && data.count >= 0) {
             setTodayUnlocks(data.count);
             lockedToday.current = data.lockedToday ?? false;
           }
@@ -349,9 +359,14 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       }
       if (ls) setLongestStreak(parseInt(ls, 10) || 0);
       if (__DEV__ && dsl === "true") setDevSkipLockState(true);
+    } catch (error) {
+      console.warn("[Curfy] Could not read saved local configuration", error);
+      setStorageError("Curfy couldn't read your saved settings. Nothing was erased.");
+    } finally {
       setIsLoading(false);
-    })();
+    }
   }, []);
+  useEffect(() => { void retryLoadSavedSettings(); }, [retryLoadSavedSettings]);
 
   useEffect(() => { sleepLogRef.current = sleepLog; }, [sleepLog]);
   useEffect(() => { todayUnlocksRef.current = todayUnlocks; }, [todayUnlocks]);
@@ -675,6 +690,8 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
         streak,
         longestStreak,
         isLoading,
+        storageError,
+        retryLoadSavedSettings,
         signOut,
         deleteAccount,
         devSkipLock,
