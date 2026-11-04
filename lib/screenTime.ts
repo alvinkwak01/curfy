@@ -477,22 +477,48 @@ export function stopBedtimeBlocking(): void {
  * their own monitor-aware cleanup before Premium becomes user-facing.
  */
 export function clearCurfyOnboardingSelectionsAfterAccountDeletion(): void {
-  const key = "familyActivitySelectionIds";
-  const saved = DeviceActivity.userDefaultsGet<unknown>(key);
-  if (saved == null) return;
-  if (typeof saved !== "object" || Array.isArray(saved)) {
-    throw new Error("iOS protected-app selections could not be cleared safely.");
+  // Never erase the ONLY opaque one-app ticket that a still-running iOS
+  // exception monitor could need to re-shield a protected app. The caller
+  // must have stopped protection first; check all exception monitor names.
+  const running = DeviceActivity.getActivities();
+  if (running.some(name =>
+      name === BEDTIME_ACTIVITY_NAME ||
+      name.startsWith(EXCEPTION_ACTIVITY_PREFIX) ||
+      name.startsWith("curfy-premium-exception-"))) {
+    throw new Error("Curfy still has a native protection or exception monitor. Stop it before erasing app selections.");
   }
-  const oldSelections = saved as Record<string, unknown>;
-  const ownedId = /^curfy-(?:block|draft)-(?:social|most|custom)$/;
-  const retained = Object.fromEntries(
-    Object.entries(oldSelections).filter(([id]) => !ownedId.test(id))
-  );
-  DeviceActivity.userDefaultsSet(key, retained);
-  const after = DeviceActivity.userDefaultsGet<unknown>(key);
-  if (!after || typeof after !== "object" || Array.isArray(after) ||
-      Object.keys(after).some((id) => ownedId.test(id))) {
-    throw new Error("iOS did not confirm the old Curfy app selections were erased.");
+  const key = "familyActivitySelectionIds";
+  const ticketKey = "curfy-prepared-app-choice-tickets";
+  const premiumRecoveryKey = "curfy-premium-active-exceptions";
+  const saved = DeviceActivity.userDefaultsGet<unknown>(key);
+  const isOwnedSelection = (id: string) =>
+    /^curfy-(?:block|draft)-(?:social|most|custom)$/.test(id) ||
+    id.startsWith("curfy-single-app-");
+
+  if (saved !== null && saved !== undefined) {
+    if (typeof saved !== "object" || Array.isArray(saved)) {
+      throw new Error("iOS protected-app selections could not be cleared safely.");
+    }
+    const oldSelections = saved as Record<string, unknown>;
+    const retained = Object.fromEntries(
+      Object.entries(oldSelections).filter(([id]) => !isOwnedSelection(id))
+    );
+    DeviceActivity.userDefaultsSet(key, retained);
+    const after = DeviceActivity.userDefaultsGet<unknown>(key);
+    if (!after || typeof after !== "object" || Array.isArray(after) ||
+        Object.keys(after).some(isOwnedSelection)) {
+      throw new Error("iOS did not confirm the old Curfy app selections were erased.");
+    }
+  }
+
+  // Even when the main selection dictionary is absent, private ticket
+  // metadata or an old expired Premium ledger can still survive in App Group.
+  // No native Curfy monitor may remain by the guard above.
+  for (const ownedKey of [ticketKey, premiumRecoveryKey, EXCEPTION_STATE_KEY]) {
+    DeviceActivity.userDefaultsRemove(ownedKey);
+    if (DeviceActivity.userDefaultsGet<unknown>(ownedKey) != null) {
+      throw new Error("iOS did not confirm removal of Curfy's private app-access records.");
+    }
   }
 }
 
