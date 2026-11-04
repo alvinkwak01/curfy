@@ -61,6 +61,8 @@ jobs:
       - run: npx expo prebuild --platform ios --no-install
         env:
           CI: "1"
+      - name: Verify generated iOS Family Controls and App Group entitlements
+        run: node scripts/verify-ios-native-config.cjs
 
   # Explicit opt-in via a [native-ci] commit message; don't burn macOS
   # runner minutes on every small JS/docs commit. This compiles Swift and
