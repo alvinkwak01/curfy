@@ -485,7 +485,20 @@ export function stopBedtimeBlocking(now = new Date()): void {
     }
     DeviceActivity.resetBlocks("curfy-stop-blocking");
     if (DeviceActivity.isShieldActive()) {
-      throw new Error("iOS still reports protected apps after stopping Curfy. Retry before deleting local setup.");
+      // resetBlocks can report success without removing the app-owned
+      // ManagedSettings shield. The recurring monitor is already gone;
+      // don't strand this app until a future iOS callback that cannot arrive.
+      // Retry with the exact previous private app selection, NEVER a broad
+      // system-level unblock or a guessed application identifier.
+      if (previousSelectionId) {
+        DeviceActivity.unblockSelection(
+          { activitySelectionId: previousSelectionId },
+          "curfy-stop-targeted-orphan-shield-recovery"
+        );
+      }
+      if (DeviceActivity.isShieldActive()) {
+        throw new Error("iOS still reports protected apps after stopping Curfy. Retry before deleting local setup.");
+      }
     }
   } catch (error) {
     // If the recurring monitor survived, it must KEEP its start/end actions;
