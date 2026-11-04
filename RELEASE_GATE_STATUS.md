@@ -7,13 +7,16 @@ Updated 2026-11-04. Branch: feat/ios-shield-from-august (draft PR #2). The canon
 - The dormant StoreKit 2 module uses verified current transactions; Premium checkout, multi-app choice and purchase activation are NOT enabled.
 - Current non-EAS CI runs Node tests, TypeScript, Metro iOS release export, Expo Doctor, iOS prebuild, and native-module autolinking.
 - NEW: scripts/verify-ios-native-config.cjs checks source-level Family Controls + App Group configuration across the main target and three extensions. It cannot prove Apple distribution approval.
+- GitHub macOS unsigned app and three-extension build **succeeded** at 15f4d17 (run 41900003098). No Swift changes since then. This is not a signed App Store archive or a tested iPhone restriction.
+- Server profile sync failure handling/repair fixed at 9705b90, with **222/222 local/CI tests** and production-mode iOS JavaScript bundling green. Supabase deployed-account deletion/consent still require App Review verification.
+- **Hard cost rule (user request, 2026-11-04):** Do not request or start another EAS build during ongoing code changes. Previous incremental previews consumed paid build resources without delivering consolidated release verification. Keep this branch in development and use free source checks; no final build until one stable candidate and external entitlement prerequisites are ready.
 
 ## P0 gates — each requires evidence, not assumptions
 
 | Gate | Status now | PASS means |
 | --- | --- | --- |
 | Apple Family Controls distribution approval | UNKNOWN | Apple's Certificates, Identifiers & Profiles lists Family Controls (Distribution) as Assigned for each of main app + 3 extensions; actual provisioning supports distribution. |
-| Native Swift compile and signing | OPEN | Exact current source compiled for app + extensions in unsigned macOS Xcode, then signed with correct distribution provisioning. Prior native job on 41896513416 was cancelled, NOT passed. |
+| Native Swift compile and signing | PARTIAL: unsigned Debug simulator Xcode compilation PASS (41900003098); signed distribution UNKNOWN | App and extensions built in Xcode on current Swift sources; App Store distribution profiles/capabilities and signed archive still need authorization and proof. |
 | Free single-app selection | PARTIAL DEVICE EVIDENCE | One app accepted; second app/categories/websites rejected; choice persists; clear/delete does not inherit checkmarks. |
 | Scheduled shielding and cutoff | UNVERIFIED ON CLOSED APP | Selected app shielded at start when Curfy is killed; unrelated apps work; opens after schedule end; permission/restart/time-zone cases. |
 | 120-second hold and 15-min exception | UNVERIFIED ON PHYSICAL DEVICE | Release at 119s and background resets; 120s continuous hold works; exactly one app opens for <=15m, then re-shields with Curfy closed, subject to cutoff. |
