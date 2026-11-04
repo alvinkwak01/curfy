@@ -157,6 +157,20 @@ test("reboot with a confirmed deletion receipt does not create another cloud ide
   await f.unmount();
 });
 
+test("verified deletion receipt survives auth restoration failure after server removed user", async () => {
+  // A deleted account often has an unusable access token. The independently
+  // persisted success receipt must let the device finish clearing its data.
+  const f = await fixture({
+    receipt: "test-user-id", initialSession: false, restoreError: true,
+  });
+  assert.equal(f.api.isDeletingAccount, true);
+  await act(async () => { await f.api.deleteRemoteAccount(); });
+  assert.equal(f.stats.invokes, 0);
+  assert.equal(f.stats.signOuts, 1);
+  assert.equal(f.storage.get(KEY), "test-user-id");
+  await f.unmount();
+});
+
 test("an unconfirmed server deletion does not write a false receipt or suppress normal retries", async () => {
   const f = await fixture({ failRemote: true });
   await act(async () => {
