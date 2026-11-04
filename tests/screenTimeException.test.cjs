@@ -181,6 +181,37 @@ test("a second concurrent hold cannot overwrite the in-flight native reblock", a
     /already active/);
 });
 
+test("native stop and schedule edit cannot race an unfinished Free exception registration", async () => {
+  let releaseMonitor;
+  const waitForStart = new Promise(resolve => { releaseMonitor = resolve; });
+  const f = fixture({ waitForStart });
+  const now = new Date("2026-10-31T23:00:00");
+  // Simulate an already configured daily monitor without awaiting another
+  // registration behind the same artificial native promise.
+  f.native.userDefaultsSet("curfy-scheduled-selection-id", "curfy-block-custom");
+  f.native.userDefaultsSet("curfy-bedtime-clock-window", { startMinute: 1320, endMinute: 360 });
+  const grant = f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  assert.equal(f.calls.filter(x => x[0] === "start").length, 1);
+  const before = f.calls.length;
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(now),
+    /still preparing a temporary app unlock/);
+  await assert.rejects(f.screenTime.configureBedtimeBlocking({
+    bedtime: "23:00", wakeTime: "06:00", mode: "custom", now,
+  }), /still preparing a temporary app unlock/);
+  assert.equal(f.calls.length, before, "Neither request may mutate native actions or monitors");
+  releaseMonitor();
+  await grant;
+  assert.equal(f.isBlocked(), false);
+  // Native monitor callbacks remain connected until the deliberately
+  // completed exception can be canceled on a subsequent stop.
+  assert.equal(f.storage.has("curfy-active-exception"), true);
+  f.screenTime.stopBedtimeBlocking(now);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+  assert.equal(f.isBlocked(), false);
+});
+
 test("a failed Free grant clears its concurrency guard for a new attempt", async () => {
   const f = fixture({ failStart: true });
   const input = {
