@@ -574,14 +574,30 @@ export function activeExceptionExpiresAt(now = Date.now()): number | null {
   return state && state.expiresAt > now ? state.expiresAt : null;
 }
 
-function readException(): ActiveException | null {
-  const state = DeviceActivity.userDefaultsGet<ActiveException>(EXCEPTION_STATE_KEY);
-  if (!state || typeof state.selectionId !== "string" ||
-      typeof state.expiresAt !== "number" || typeof state.bedtimeEndAt !== "number" ||
-      typeof state.activityName !== "string") {
+function readException(strict = false): ActiveException | null {
+  const raw = DeviceActivity.userDefaultsGet<unknown>(EXCEPTION_STATE_KEY);
+  if (raw === null || raw === undefined) return null;
+  const state = raw as Partial<ActiveException>;
+  const valid = typeof raw === "object" && !Array.isArray(raw) &&
+    typeof state.selectionId === "string" &&
+    /^curfy-block-(social|most|custom)$/.test(state.selectionId) &&
+    typeof state.activityName === "string" &&
+    (state.activityName === "" ||
+      /^curfy-exception-\\d{12,16}$/.test(state.activityName)) &&
+    Number.isSafeInteger(state.expiresAt) && (state.expiresAt ?? 0) > 0 &&
+    Number.isSafeInteger(state.bedtimeEndAt) && (state.bedtimeEndAt ?? 0) > 0 &&
+    state.expiresAt! <= state.bedtimeEndAt!;
+  if (!valid) {
+    // Keep the Home status query nonthrowing, but NEVER overwrite a corrupt
+    // existing record while preparing a native monitor. In particular, an
+    // arbitrary activityName could otherwise clear the recurring bedtime
+    // intervalDidEnd action and strand a selected app behind its shield.
+    if (strict) {
+      throw new Error("Curfy couldn't verify a previous app-access record. Check Screen Time protection in Settings before requesting another unlock.");
+    }
     return null;
   }
-  return state;
+  return state as ActiveException;
 }
 
 export type BedtimeProtectionStatus =
@@ -698,7 +714,7 @@ export async function grantBedtimeException({
   // If a previous exception is still active, tell the user before probing
   // managed shields: an already-unblocked app correctly has no shield, but
   // that's not a missing or failed Screen Time configuration.
-  const previous = readException();
+  const previous = readException(true);
   if (previous && previous.expiresAt > now.getTime()) {
     throw new Error("An app-unlock exception is already active.");
   }
