@@ -678,14 +678,37 @@ function selectedShieldCountOrNull(selectionId: string): number | null {
 
 function stopExceptionMonitor(state: ActiveException): void {
   if (!state.activityName) return;
-  // Apple's stopMonitoring can itself produce intervalDidEnd. Remove its
-  // action FIRST, and the Swift extension additionally guards expired events.
+  // stopMonitoring can synchronously dispatch intervalDidEnd, so clear the
+  // callback first. But native implementations sometimes return without
+  // removing the monitor: in that case we MUST restore its re-shield action
+  // instead of silently leaving a running monitor without recovery.
+  const reblockAction = [{
+    type: "blockSelection" as const,
+    familyActivitySelectionId: state.selectionId,
+  }];
   DeviceActivity.configureActions({
     activityName: state.activityName,
     callbackName: "intervalDidEnd",
     actions: [],
   });
-  DeviceActivity.stopMonitoring([state.activityName]);
+  let stopped = false;
+  try {
+    DeviceActivity.stopMonitoring([state.activityName]);
+    stopped = !DeviceActivity.getActivities().includes(state.activityName);
+  } finally {
+    if (!stopped) {
+      // If this throws, the caller must surface an explicit failure and keep
+      // its App Group recovery record instead of claiming exception cleanup.
+      DeviceActivity.configureActions({
+        activityName: state.activityName,
+        callbackName: "intervalDidEnd",
+        actions: reblockAction,
+      });
+    }
+  }
+  if (!stopped) {
+    throw new Error("iOS didn't stop Curfy's temporary app-access monitor. Protection recovery was kept; retry in Settings.");
+  }
 }
 
 // A second concurrent monitor registration could overwrite the first one's
