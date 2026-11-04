@@ -274,6 +274,9 @@ export async function configureBedtimeBlocking({
   /** Settings stages picker changes independently of live opaque tokens. */
   draftSelectionId?: string;
 }): Promise<void> {
+  if (freeExceptionGrantInProgress) {
+    throw new Error("Curfy is still preparing a temporary app unlock. Finish that request before changing protection.");
+  }
   if (getScreenTimeAccessStatus() !== "authorized") {
     throw new Error("Screen Time permission is required to protect selected apps.");
   }
@@ -429,6 +432,12 @@ export function refreshBedtimeShieldAppearance(): void {
 }
 
 export function stopBedtimeBlocking(now = new Date()): void {
+  if (freeExceptionGrantInProgress) {
+    // The native startMonitoring promise may not have committed its App Group
+    // recovery record yet. Stopping the daily monitor meanwhile could let it
+    // complete later and expose an app with no reliable morning cutoff.
+    throw new Error("Curfy is still preparing a temporary app unlock. Retry stopping protection when the request finishes.");
+  }
   // Validate all recovery state before touching either native monitor.
   // A corrupted one-shot activity must never impersonate the daily cutoff.
   const previousException = readException(true);
