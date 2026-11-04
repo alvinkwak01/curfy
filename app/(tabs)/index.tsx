@@ -157,75 +157,70 @@ export default function Home() {
         </Animated.View>
 
         {inBedtimeWindow && (
-          <View style={styles.escapeCard}>
-            {exceptionExpiresAt ? (
-              <>
-                <Text style={styles.escapeLabel}>Temporary app access is active</Text>
-                <Text style={styles.escapeHint}>
-                  Scheduled to end at {new Date(exceptionExpiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
-                </Text>
-              </>
-            ) : needsSetup ? (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Open Settings to complete app protection setup"
-                onPress={() => router.push("/settings")}
-              >
-                <Text style={styles.escapeLabel}>Finish app protection setup</Text>
-                <Text style={styles.escapeHint}>
-                  {protectionStatus === "permission-required"
-                    ? "Screen Time permission is needed. Open Settings to grant access."
-                    : "Choose exactly one individual app in Settings (no categories or websites)."}
-                </Text>
-              </TouchableOpacity>
-            ) : (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Unlock your chosen protected app with a continuous 120-second hold"
-                accessibilityHint="Opens Curfy's hold screen. Lifting your finger resets the hold."
-                onPress={() => router.push("/escape")}
-                activeOpacity={0.83}
-                style={styles.unlockCard}
-              >
-                <View style={styles.unlockTopRow}>
+          exceptionExpiresAt ? (
+            <View style={styles.escapeCard}>
+              <Text style={styles.escapeLabel}>Temporary app access is active</Text>
+              <Text style={styles.escapeHint}>
+                Scheduled to end at {new Date(exceptionExpiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+              </Text>
+            </View>
+          ) : needsSetup ? (
+            <TouchableOpacity
+              style={styles.escapeCard}
+              accessibilityRole="button"
+              accessibilityLabel="Open Settings to complete app protection setup"
+              onPress={() => router.push("/settings")}
+            >
+              <Text style={styles.escapeLabel}>Finish app protection setup</Text>
+              <Text style={styles.escapeHint}>
+                {protectionStatus === "permission-required"
+                  ? "Screen Time permission is needed. Open Settings to grant access."
+                  : "Choose exactly one individual app in Settings (no categories or websites)."}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Unlock your chosen protected app"
+              accessibilityHint="Opens Curfy's uninterrupted 120-second hold. Lifting your finger resets it."
+              onPress={() => router.push("/escape")}
+              activeOpacity={0.84}
+              style={styles.unlockCard}
+            >
+              <View style={styles.unlockMain}>
+                <View style={styles.unlockCopy}>
                   <View style={styles.unlockStatus}>
                     <View style={styles.unlockStatusDot} />
-                    <Text style={styles.unlockEyebrow}>YOUR PROTECTED APP</Text>
+                    <Text style={styles.unlockEyebrow}>PROTECTED</Text>
                   </View>
-                  <Ionicons name="arrow-forward" size={23} color={Colors.primaryCyan} />
+                  <View style={styles.unlockTitleRow}>
+                    <Text style={styles.unlockVerb}>Unlock</Text>
+                    {protectedApp && selectedMode ? (
+                      // Apple renders the REAL protected app icon and name.
+                      // No app title, opaque token or bundle ID enters JS.
+                      <CurfyAppLabel
+                        key={protectedApp.revision}
+                        selectionId={selectionIdForMode(selectedMode)}
+                        revision={protectedApp.revision}
+                        index={0}
+                        style={styles.unlockNativeAppLabel}
+                      />
+                    ) : (
+                      <Text style={styles.unlockFallback}>your app</Text>
+                    )}
+                  </View>
                 </View>
-                <View style={styles.unlockTitleRow}>
-                  <Text style={styles.unlockVerb}>Unlock</Text>
-                  {protectedApp && selectedMode ? (
-                    // Native iOS renders the selected app's real name and icon;
-                    // JavaScript never receives a title, token or bundle ID.
-                    <CurfyAppLabel
-                      key={protectedApp.revision}
-                      selectionId={selectionIdForMode(selectedMode)}
-                      revision={protectedApp.revision}
-                      index={0}
-                      style={styles.unlockNativeAppLabel}
-                    />
-                  ) : (
-                    <Text style={styles.unlockFallback}>your app</Text>
-                  )}
+                <View style={styles.unlockArrow}>
+                  <Ionicons name="arrow-forward" size={18} color={Colors.primaryCyan} />
                 </View>
-                <View style={styles.unlockSeparator} />
-                <View style={styles.unlockBottomRow}>
-                  <Ionicons name="finger-print-outline" size={17} color={Colors.primaryCyan} />
-                  <Text style={styles.unlockDetail}>
-                    120-second hold · up to 15 minutes of access
-                  </Text>
-                </View>
-                {protectionStatus !== "shield-active" && (
-                  <Text style={styles.unlockCaution}>
-                    iOS hasn't confirmed the shield here. Check the selected app;
-                    access is only granted after native protection is verified.
-                  </Text>
-                )}
-              </TouchableOpacity>
-            )}
-          </View>
+              </View>
+              {protectionStatus !== "shield-active" && (
+                <Text style={styles.unlockCaution}>
+                  iOS hasn't confirmed protection. Check the selected app before unlocking.
+                </Text>
+              )}
+            </TouchableOpacity>
+          )
         )}
 
         <Animated.View entering={FadeInDown.duration(500).delay(200)} style={styles.messageSection}>
@@ -331,45 +326,48 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
   },
+  // One deliberately quiet, repeatable row. When Premium is implemented,
+  // render one of these per app; never concatenate native app labels.
   unlockCard: {
-    backgroundColor: "#151C2E",
+    backgroundColor: "#131829",
     borderWidth: 1,
-    borderColor: "#36536A",
+    borderColor: "#2C3552",
     borderRadius: 18,
-    paddingHorizontal: 17,
-    paddingTop: 17,
-    paddingBottom: 15,
-    margin: -16,
+    paddingHorizontal: 16,
+    paddingVertical: 15,
+    minHeight: 91,
   },
-  unlockTopRow: {
+  unlockMain: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    gap: 12,
   },
-  unlockStatus: { flexDirection: "row", gap: 8, alignItems: "center" },
+  unlockCopy: { flex: 1, minWidth: 0, gap: 8 },
+  unlockStatus: { flexDirection: "row", alignItems: "center", gap: 7 },
   unlockStatusDot: {
-    width: 6, height: 6, borderRadius: 3, backgroundColor: Colors.primaryCyan,
+    width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.primaryCyan,
   },
   unlockEyebrow: {
-    color: "#A4B9C9", fontFamily: Fonts.semiBold, fontSize: 10, letterSpacing: 1.6,
+    color: "#8D94AE", fontFamily: Fonts.medium,
+    fontSize: 10, letterSpacing: 1.4,
   },
   unlockTitleRow: {
-    flexDirection: "row", alignItems: "center", gap: 9,
-    minHeight: 45, marginTop: 13,
+    flexDirection: "row", alignItems: "center", gap: 8,
+    minWidth: 0, minHeight: 30,
   },
   unlockVerb: {
-    color: Colors.textPrimary, fontFamily: Fonts.bold, fontSize: 25, letterSpacing: -0.6,
+    color: Colors.textPrimary, fontFamily: Fonts.semiBold,
+    fontSize: 22, letterSpacing: -0.5,
   },
-  unlockNativeAppLabel: { flex: 1, minWidth: 0, height: 35 },
+  unlockNativeAppLabel: { flex: 1, minWidth: 0, height: 29 },
   unlockFallback: {
-    color: Colors.primaryCyan, fontFamily: Fonts.semiBold,
-    fontSize: 21, flexShrink: 1,
+    color: Colors.textPrimary, fontFamily: Fonts.medium,
+    fontSize: 19, flexShrink: 1,
   },
-  unlockSeparator: {
-    height: 1, backgroundColor: "#294154", marginTop: 12, marginBottom: 13,
-  },
-  unlockBottomRow: { flexDirection: "row", alignItems: "center", gap: 8 },
-  unlockDetail: {
-    color: "#B5C3D1", fontFamily: Fonts.medium, fontSize: 12, lineHeight: 18,
-    flexShrink: 1,
+  unlockArrow: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "rgba(0,229,255,0.055)",
+    borderWidth: 1, borderColor: "#284555",
+    alignItems: "center", justifyContent: "center",
   },
   unlockCaution: {
     color: Colors.textMuted, fontFamily: Fonts.regular,
