@@ -365,6 +365,52 @@ test("foreground recovery re-shields expired exceptions inside bedtime", async (
   assert.equal(f.storage.has("curfy-active-exception"), false);
 });
 
+test("failed Free exception monitor stop retains its reblock callback and recovery record", async () => {
+  const f = fixture({ ignoreStopOnCalls: [1] });
+  await registerRecurringProtectionMonitor(f);
+  const now = new Date("2026-10-31T23:00:00");
+  const expiry = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  const state = f.storage.get("curfy-active-exception");
+  assert.equal(f.isBlocked(), false);
+  assert.throws(() =>
+    f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 2000)),
+    /didn't stop Curfy's temporary app-access monitor/
+  );
+  assert.equal(f.isBlocked(), true);
+  assert.ok(f.monitorSchedules.has(state.activityName));
+  assert.deepEqual(f.storage.get("curfy-active-exception"), state);
+  const actions = f.calls.filter(c => c[0] === "action" &&
+    c[1].activityName === state.activityName && c[1].callbackName === "intervalDidEnd");
+  assert.deepEqual(actions.at(-1)[1].actions, [{
+    type: "blockSelection", familyActivitySelectionId: "curfy-block-custom",
+  }]);
+  // Next attempt may finish safely; do not permanently strand recovery.
+  f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 3000));
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+  assert.equal(f.monitorSchedules.has(state.activityName), false);
+});
+
+test("failed Free monitor stop after morning cutoff never drops an active monitor's callback", async () => {
+  const f = fixture({ ignoreStopOnCalls: [1] });
+  const now = new Date("2026-11-01T05:50:00");
+  const expiry = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  const state = f.storage.get("curfy-active-exception");
+  assert.equal(state.bedtimeEndAt, expiry);
+  assert.throws(() => f.screenTime.reconcileBedtimeException(
+    "22:00", "06:00", new Date(expiry + 2000)
+  ), /didn't stop Curfy's temporary app-access monitor/);
+  assert.deepEqual(f.storage.get("curfy-active-exception"), state);
+  assert.equal(f.isBlocked(), false);
+  const actions = f.calls.filter(c => c[0] === "action" && c[1].activityName === state.activityName);
+  assert.equal(actions.at(-1)[1].actions[0].type, "blockSelection");
+  f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 3000));
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+});
+
 test("recovery never re-shields apps when the bedtime window has ended", async () => {
   const f = fixture();
   const now = new Date("2026-11-01T05:50:00");
