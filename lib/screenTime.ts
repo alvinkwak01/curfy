@@ -646,6 +646,10 @@ function stopExceptionMonitor(state: ActiveException): void {
   DeviceActivity.stopMonitoring([state.activityName]);
 }
 
+// A second concurrent monitor registration could overwrite the first one's
+// shared reblocking state. Never allow two native Free exception grants at once.
+let freeExceptionGrantInProgress = false;
+
 /**
  * Completing the hold earns up to 15 minutes on the selected apps, never
  * extending beyond this bedtime window. Apple's monitor requires >=15 minutes,
@@ -663,6 +667,11 @@ export async function grantBedtimeException({
   mode: BlockModeId;
   now?: Date;
 }): Promise<number> {
+  if (freeExceptionGrantInProgress) {
+    throw new Error("Another Curfy app unlock is already being prepared.");
+  }
+  freeExceptionGrantInProgress = true;
+  try {
   if (getScreenTimeAccessStatus() !== "authorized") {
     throw new Error("Screen Time access is needed to unlock protected apps.");
   }
@@ -704,10 +713,15 @@ export async function grantBedtimeException({
     DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
   }
 
-  // End one second after the rounded-down start to guarantee at least
-  // Apple's minimum 15-minute interval in whole DateComponents.
+  // Apple rejects native monitoring intervals shorter than 15 whole
+  // minutes. DateComponents are second-precision, so the native monitor
+  // extends from the floored start to 15m+1s. This is distinct from the
+  // logical user-facing expiry, which must NEVER exceed 15 actual minutes.
+  // iOS may still delay physical callbacks; only device testing can prove
+  // practical re-shield timing.
   const scheduledStart = new Date(Math.floor(now.getTime() / 1000) * 1000);
   const scheduledEnd = new Date(scheduledStart.getTime() + EXCEPTION_DURATION_MS + 1000);
+  const logicalExpiry = Math.min(now.getTime() + EXCEPTION_DURATION_MS, window.end.getTime());
   const needsMonitor = scheduledEnd.getTime() < window.end.getTime();
   const activityName = needsMonitor
     ? EXCEPTION_ACTIVITY_PREFIX + now.getTime()
@@ -716,7 +730,7 @@ export async function grantBedtimeException({
   const state: ActiveException = {
     activityName,
     selectionId,
-    expiresAt: needsMonitor ? scheduledEnd.getTime() : window.end.getTime(),
+    expiresAt: logicalExpiry,
     bedtimeEndAt: window.end.getTime(),
   };
 
@@ -766,6 +780,9 @@ export async function grantBedtimeException({
     // Fail closed: restore protection if partial native setup failed.
     DeviceActivity.blockSelection({ activitySelectionId: selectionId }, "curfy-exception-rollback");
     throw error;
+  }
+  } finally {
+    freeExceptionGrantInProgress = false;
   }
 }
 
