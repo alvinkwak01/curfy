@@ -695,6 +695,14 @@ export async function grantBedtimeException({
     );
   }
 
+  // If a previous exception is still active, tell the user before probing
+  // managed shields: an already-unblocked app correctly has no shield, but
+  // that's not a missing or failed Screen Time configuration.
+  const previous = readException();
+  if (previous && previous.expiresAt > now.getTime()) {
+    throw new Error("An app-unlock exception is already active.");
+  }
+
   // A token intersection can produce a false negative for an actual
   // category shield. Require either explicit token overlap or an active
   // native ManagedSettingsStore shield before starting the exception.
@@ -704,10 +712,6 @@ export async function grantBedtimeException({
     throw new Error("iOS is not reporting any active Curfy app restrictions.");
   }
 
-  const previous = readException();
-  if (previous && previous.expiresAt > now.getTime()) {
-    throw new Error("An app-unlock exception is already active.");
-  }
   if (previous) {
     stopExceptionMonitor(previous);
     DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
