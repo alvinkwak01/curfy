@@ -60,6 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   // Avoids pushing a redundant identical update on every streak render.
   const lastSynced = useRef<{
+    userId: string;
     bedtime: string;
     current: number;
     longest: number;
@@ -95,11 +96,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const { data, error } = await supabase.auth.signInAnonymously();
       if (error || !data.session) return;
-      // upsert, not insert — safe to call more than once for the same
-      // anonymous user (e.g. a retry) without a duplicate-key error.
-      await supabase
+      // A successful auth session does not guarantee the profile row exists.
+      // If this write fails, later syncProfile() must also be able to
+      // create/repair the row rather than silently updating zero rows.
+      const { error: profileError } = await supabase
         .from("profiles")
         .upsert({ id: data.session.user.id, display_name: displayName || "Sleeper" });
+      if (profileError) throw new Error("Curfy couldn't create the online leaderboard profile.");
     } finally {
       ensuringProfile.current = false;
     }
@@ -136,8 +139,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ) => {
     if (!isSupabaseConfigured) return;
     if (!session?.user) return;
+    const userId = session.user.id;
     const name = displayName || "Sleeper";
     if (
+      lastSynced.current?.userId === userId &&
       lastSynced.current?.bedtime === bedtime &&
       lastSynced.current?.current === currentStreak &&
       lastSynced.current?.longest === longestStreak &&
@@ -145,17 +150,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ) {
       return;
     }
-    lastSynced.current = { bedtime, current: currentStreak, longest: longestStreak, name };
-    await supabase
+    // The account can exist without a profile row if the first anonymous
+    // sign-in succeeded but the initial insert failed (e.g. offline).
+    // Upsert repairs that case; update() would silently touch zero rows.
+    const { error } = await supabase
       .from("profiles")
-      .update({
+      .upsert({
+        id: userId,
         bedtime,
         current_streak: currentStreak,
         longest_streak: longestStreak,
         display_name: name,
         updated_at: new Date().toISOString(),
-      })
-      .eq("id", session.user.id);
+      }, { onConflict: "id" });
+    if (error) {
+      // A rejected network/database write is NOT a successful sync.
+      // Do not poison the equality cache: future retries must be possible.
+      throw new Error("Curfy couldn't sync the online leaderboard profile.");
+    }
+    lastSynced.current = {
+      userId, bedtime, current: currentStreak, longest: longestStreak, name,
+    };
   };
 
   const fetchLeaderboard = async (
