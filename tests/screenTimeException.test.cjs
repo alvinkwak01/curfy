@@ -967,6 +967,63 @@ test("account deletion clears Curfy picker tokens but preserves unrelated shared
   });
 });
 
+test("Delete Account erases prepared native app tickets and recovery keys, not unrelated apps", () => {
+  const f = fixture();
+  const ticket = "curfy-single-app-2B5CE120-66A6-4E53-A6BB-661E51A9AD01";
+  f.storage.set("familyActivitySelectionIds", {
+    [ticket]: "private-single-app-token",
+    "curfy-block-custom": "private-committed-selection",
+    "unrelated-app-choice": "preserve-me",
+  });
+  f.storage.set("curfy-prepared-app-choice-tickets", {
+    [ticket]: "private-ticket-metadata",
+  });
+  f.storage.set("curfy-premium-active-exceptions", {
+    "old-recovery": "not-currently-monitored",
+  });
+  f.storage.set("curfy-active-exception", {
+    activityName: "", selectionId: "curfy-block-custom", expiresAt: 1000, bedtimeEndAt: 2000,
+  });
+  f.screenTime.clearCurfyOnboardingSelectionsAfterAccountDeletion();
+  assert.deepEqual(f.storage.get("familyActivitySelectionIds"), {
+    "unrelated-app-choice": "preserve-me",
+  });
+  for (const key of ["curfy-prepared-app-choice-tickets",
+    "curfy-premium-active-exceptions", "curfy-active-exception"]) {
+    assert.equal(f.storage.has(key), false);
+  }
+});
+
+test("Delete Account never erases a token while its native reblock monitor still exists", async () => {
+  const f = fixture({ initiallyBlocked: false });
+  const ticket = "curfy-single-app-2B5CE120-66A6-4E53-A6BB-661E51A9AD01";
+  const monitor = "curfy-premium-exception-2b5ce120-66a6-4e53-a6bb-661e51a9ad01";
+  f.storage.set("familyActivitySelectionIds", { [ticket]: "private-token" });
+  f.storage.set("curfy-prepared-app-choice-tickets", { [ticket]: "private-ticket" });
+  await f.native.startMonitoring(monitor, {
+    intervalStart: { hour: 22, minute: 0 },
+    intervalEnd: { hour: 22, minute: 15 },
+  });
+  assert.throws(() =>
+    f.screenTime.clearCurfyOnboardingSelectionsAfterAccountDeletion(),
+    /native protection or exception monitor/);
+  assert.equal(f.storage.get("familyActivitySelectionIds")[ticket], "private-token");
+  assert.equal(f.storage.get("curfy-prepared-app-choice-tickets")[ticket], "private-ticket");
+});
+
+test("Delete Account refuses to declare private ticket deletion if App Group refuses it", () => {
+  const f = fixture();
+  f.storage.set("curfy-prepared-app-choice-tickets", { old: "private-data" });
+  const remove = f.native.userDefaultsRemove;
+  f.native.userDefaultsRemove = key => {
+    if (key !== "curfy-prepared-app-choice-tickets") remove(key);
+  };
+  assert.throws(() =>
+    f.screenTime.clearCurfyOnboardingSelectionsAfterAccountDeletion(),
+    /did not confirm removal/);
+  assert.equal(f.storage.has("curfy-prepared-app-choice-tickets"), true);
+});
+
 test("account deletion refuses to claim a wiped native picker if iOS ignores the write", () => {
   const f = fixture();
   f.storage.set("familyActivitySelectionIds", {
