@@ -429,6 +429,10 @@ export function refreshBedtimeShieldAppearance(): void {
 }
 
 export function stopBedtimeBlocking(): void {
+  // Preflight BEFORE stopping the recurring monitor. A corrupted App Group
+  // exception name must not be silently ignored after we have already
+  // removed the daily release callback. Leave Settings intact for recovery.
+  readException(true);
   // Keep the committed selection until BOTH native monitoring and shields
   // have stopped. Stopping can synchronously invoke intervalDidEnd, so its
   // actions must first be cleared, but a FAILED stop must restore them.
@@ -1022,8 +1026,13 @@ export function reconcileBedtimeException(
 
 /** Cancels an existing exception when a new bedtime/selection is saved. */
 function cancelExceptionForScheduleChange(): void {
-  const state = readException();
+  // The caller must not abandon a malformed exception record: an unknown
+  // activity name might still own the only native re-shield callback.
+  const state = readException(true);
   if (!state) return;
   stopExceptionMonitor(state);
   DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
+  if (DeviceActivity.userDefaultsGet<unknown>(EXCEPTION_STATE_KEY) != null) {
+    throw new Error("iOS didn't confirm removal of the old Curfy app-access record. Retry protection setup.");
+  }
 }
