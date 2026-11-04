@@ -21,11 +21,12 @@ const KEY = "@curfy/remote_deletion_confirmed_user";
 
 async function fixture({
   receipt = null, initialSession = true, failSignOut = false,
-  failRemote = false, failRead = false,
+  signOutReturnsError = false, failRemote = false, failRead = false,
 } = {}) {
   const storage = new Map(receipt ? [[KEY, receipt]] : []);
   const stats = { invokes: 0, signOuts: 0, signIns: 0, writes: 0, removes: 0 };
   let signOutFails = failSignOut;
+  let signOutReportsError = signOutReturnsError;
   let remoteFails = failRemote;
   let diskReadsFail = failRead;
   let currentSession = initialSession ? { user: { id: "test-user-id" } } : null;
@@ -41,6 +42,7 @@ async function fixture({
       signOut: async () => {
         stats.signOuts++;
         if (signOutFails) throw Error("native Supabase signout storage failed");
+        if (signOutReportsError) return { error: Error("local auth state refused signout") };
         currentSession = null;
         listeners.forEach(listener => listener("SIGNED_OUT", null));
         return { error: null };
@@ -94,7 +96,7 @@ async function fixture({
   return {
     get api() { return api; },
     storage, stats,
-    allowSignOut: () => { signOutFails = false; },
+    allowSignOut: () => { signOutFails = false; signOutReportsError = false; },
     allowRemote: () => { remoteFails = false; },
     allowReads: () => { diskReadsFail = false; },
     unmount: async () => { await act(async () => { renderer.unmount(); }); },
@@ -122,6 +124,20 @@ test("after confirmed remote deletion, a failed local signout is retryable witho
   await act(async () => { await f.api.finishAccountDeletion(); });
   assert.equal(f.storage.has(KEY), false);
   assert.equal(f.api.isDeletingAccount, false);
+  await f.unmount();
+});
+
+test("Supabase-returned signout errors are rejected, not mistaken for deletion success", async () => {
+  const f = await fixture({ signOutReturnsError: true });
+  await act(async () => {
+    await assert.rejects(f.api.deleteRemoteAccount(), /couldn't clear its local cloud session/);
+  });
+  assert.equal(f.stats.invokes, 1);
+  assert.equal(f.storage.get(KEY), "test-user-id");
+  assert.equal(f.api.isDeletingAccount, true);
+  f.allowSignOut();
+  await act(async () => { await f.api.deleteRemoteAccount(); });
+  assert.equal(f.stats.invokes, 1);
   await f.unmount();
 });
 
