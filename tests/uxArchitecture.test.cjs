@@ -70,6 +70,22 @@ test("optional leaderboard sync repairs missing profiles and never caches an unc
   assert.match(auth, /\.finally\(\(\) => \{\s*if \(active\) setIsAuthLoading\(false\)/);
 });
 
+test("local storage read failures never silently restart onboarding or discard native shields", () => {
+  const sleep = source("context/SleepContext.tsx");
+  const root = source("app/_layout.tsx");
+  assert.match(sleep, /const \[storageError, setStorageError\] = useState<string \| null>\(null\)/);
+  assert.match(sleep, /const retryLoadSavedSettings = useCallback\(async \(\) => \{/);
+  assert.match(sleep, /await Promise\.all\(\[/);
+  assert.match(sleep, /Could not read saved local configuration/);
+  assert.match(sleep, /setStorageError\("Curfy couldn't read your saved settings\. Nothing was erased\."\)/);
+  assert.match(sleep, /\} finally \{\s*setIsLoading\(false\)/);
+  assert.match(root, /if \(storageError\) \{/);
+  assert.match(root, /Retry loading saved Curfy settings/);
+  assert.match(root, /void retryLoadSavedSettings\(\)/);
+  assert.ok(root.indexOf("if (storageError) {") < root.indexOf("if (!isOnboardingComplete) {"),
+    "Storage recovery must appear before onboarding can replace an existing setup");
+});
+
 test("TimePicker uses gestures, never a vertically nested FlatList with hidden warning", () => {
   const wheel = source("components/TimePicker.tsx");
   assert.match(wheel, /PanResponder\.create/);
