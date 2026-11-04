@@ -69,6 +69,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // A success receipt for the specific deleted remote user. It MUST be
   // written only after Supabase's deletion endpoint confirms success.
   const remoteDeletedUserId = useRef<string | null>(null);
+  const authRecoveryFailed = useRef(false);
   // Avoids pushing a redundant identical update on every streak render.
   const lastSynced = useRef<{
     userId: string;
@@ -111,6 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .catch((error) => {
         // If the local deletion receipt cannot be read, do not create a new
         // remote identity until storage becomes available to verify it.
+        authRecoveryFailed.current = true;
         deletionInProgress.current = true;
         if (active) setIsDeletingAccount(true);
         console.warn("[Curfy] Could not restore leaderboard session or deletion receipt", error);
@@ -154,6 +156,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteRemoteAccount = async () => {
     if (!isSupabaseConfigured) return;
+    // If startup could not read the auth session/deletion receipt, treating
+    // a null session as no account would falsely allow a local-only wipe.
+    if (authRecoveryFailed.current) {
+      throw new Error("Curfy couldn't verify your online account or a previous deletion. Reopen Curfy when local storage is available.");
+    }
     // A persisted receipt means a previous attempt has already deleted the
     // server account. Retrying the Edge Function would now get 401 because
     // that remote user no longer exists, leaving local private data stranded.
