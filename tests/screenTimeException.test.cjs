@@ -188,6 +188,55 @@ test("a failed Free grant clears its concurrency guard for a new attempt", async
   assert.equal(f.isBlocked(), true);
 });
 
+test("a forged native exception activity cannot erase the recurring bedtime cutoff", async () => {
+  const f = fixture();
+  const now = new Date("2026-10-31T23:00:00");
+  f.storage.set("curfy-active-exception", {
+    selectionId: "curfy-block-custom",
+    // This is NOT a Curfy exception monitor. If accepted, stopExceptionMonitor
+    // could clear the daily monitor's intervalDidEnd UNBLOCK action.
+    activityName: "curfy-bedtime",
+    expiresAt: now.getTime() - 1,
+    bedtimeEndAt: now.getTime() + 2 * 60 * 60_000,
+  });
+  await assert.rejects(
+    f.screenTime.grantBedtimeException({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+    }),
+    /couldn't verify a previous app-access record/
+  );
+  assert.equal(f.calls.some(x => x[0] === "stop" || x[0] === "unblock"), false);
+  assert.equal(f.calls.some(x => x[0] === "action" &&
+    x[1].activityName === "curfy-bedtime"), false);
+  assert.equal(f.isBlocked(), true);
+});
+
+test("invalid native expiry records cannot be overwritten by a new unlock", async () => {
+  const invalidStates = [
+    { activityName: "curfy-exception-1793497200000", expiresAt: Infinity },
+    { activityName: "curfy-exception-1793497200000", expiresAt: Number.NaN },
+    { activityName: "curfy-exception-1793497200000", expiresAt: -1 },
+    { activityName: "curfy-exception-1793497200000", expiresAt: 1793497200000 + 99_000_000 },
+    { activityName: "../../curfy-bedtime", expiresAt: 1793497200000 },
+  ];
+  for (const altered of invalidStates) {
+    const f = fixture();
+    f.storage.set("curfy-active-exception", {
+      selectionId: "curfy-block-custom",
+      activityName: altered.activityName,
+      expiresAt: altered.expiresAt,
+      bedtimeEndAt: 1793497200000 + 16 * 60_000,
+    });
+    assert.equal(f.screenTime.activeExceptionExpiresAt(), null);
+    await assert.rejects(f.screenTime.grantBedtimeException({
+      bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+      now: new Date("2026-10-31T23:00:00"),
+    }), /couldn't verify a previous app-access record/);
+    assert.equal(f.isBlocked(), true);
+    assert.equal(f.calls.some(call => call[0] === "unblock" || call[0] === "start"), false);
+  }
+});
+
 test("the wake-time boundary never re-shields apps just after morning", async () => {
   const f = fixture();
   const now = new Date("2026-11-01T05:50:00");
