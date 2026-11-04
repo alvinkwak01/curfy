@@ -21,7 +21,7 @@ function plan(ticketId = t, ledger = {}, cutoff = end) {
   });
 }
 function stored(entry) {
-  const { needsMonitor, ...persisted } = entry;
+  const { needsMonitor, monitorEndAt, ...persisted } = entry;
   return persisted;
 }
 
@@ -29,9 +29,32 @@ test("one app uses its own opaque UUID monitor and 15-minute native end", () => 
   const a = plan();
   assert.equal(a.activityName, "curfy-premium-exception-2b5ce120-66a6-4e53-a6bb-661e51a9ad01");
   assert.equal(a.selectionId, t);
-  assert.equal(a.expiresAt, now + 15 * 60_000 + 1_000);
+  assert.equal(a.expiresAt, now + 15 * 60_000);
+  assert.equal(a.monitorEndAt, now + 15 * 60_000 + 1_000);
   assert.equal(a.needsMonitor, true);
   assert.equal(policy.parsePremiumExceptionLedger({[a.activityName]: stored(a)})[a.activityName].selectionId, t);
+});
+
+test("Premium's 15-minute logical expiry stays strict at fractional seconds", () => {
+  const nowMs = now + 875;
+  const entry = policy.planPremiumAppException({
+    ticketId: t, committedSelectionId: "curfy-block-custom",
+    nowMs, bedtimeEndAt: end, currentLedger: {},
+  });
+  assert.equal(entry.expiresAt, nowMs + 15 * 60_000);
+  assert.equal(entry.monitorEndAt, now + 15 * 60_000 + 1_000);
+  assert.equal(entry.needsMonitor, true);
+  assert.equal(Object.hasOwn(stored(entry), "monitorEndAt"), false);
+  const invalid = stored({ ...entry, expiresAt: nowMs + 15 * 60_000 + 1 });
+  assert.throws(() => policy.parsePremiumExceptionLedger({ [entry.activityName]: invalid }),
+    /exception records are invalid/);
+});
+
+test("Premium native scheduling never reuses the customer's logical expiry for its 15m minimum", () => {
+  const coordinator = readFileSync(join(__dirname, "../lib/premiumAppException.ts"), "utf8");
+  assert.match(coordinator, /const \{ needsMonitor, monitorEndAt, \.\.\.entry \} = planned/);
+  assert.match(coordinator, /new Date\(monitorEndAt\)/);
+  assert.doesNotMatch(coordinator, /new Date\(entry\.expiresAt\)/);
 });
 
 test("two distinct app exceptions retain independent names and expirations", () => {
