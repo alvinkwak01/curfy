@@ -86,6 +86,36 @@ test("local storage read failures never silently restart onboarding or discard n
     "Storage recovery must appear before onboarding can replace an existing setup");
 });
 
+test("journal storage is transactional and never reports a failed save or wipe as success", () => {
+  const journal = source("context/JournalContext.tsx");
+  const ui = source("app/(tabs)/journal.tsx");
+  const sleep = source("context/SleepContext.tsx");
+  assert.match(journal, /const writeQueue = useRef<Promise<void>>\(Promise\.resolve\(\)\)/);
+  assert.match(journal, /await AsyncStorage\.setItem\(JOURNAL_KEY, JSON\.stringify\(next\)\)/);
+  const save = journal.slice(journal.indexOf("const persist ="),journal.indexOf("const addEntry ="));
+  assert.ok(save.indexOf("await AsyncStorage.setItem") < save.indexOf("entriesRef.current = next"),
+    "Saved journal UI may only update after native storage confirms the save");
+  assert.match(journal, /writeQueue\.current = operation\.catch\(\(\) => \{\}\)/);
+  assert.match(journal, /if \(!loadedRef\.current\)/);
+  assert.match(journal, /await AsyncStorage\.multiRemove\(\[JOURNAL_KEY, JOURNAL_INTRO_SEEN_KEY\]\)/);
+  assert.match(ui, /Couldn't save this thought/);
+  assert.match(ui, /Couldn't save the edit/);
+  assert.match(ui, /Couldn't delete this thought/);
+  assert.match(ui, /Retry loading saved journal entries/);
+  assert.match(ui, /if \(isLoading \|\| loadError\)/);
+  const deletion = sleep.slice(sleep.indexOf("const deleteAccount = async () => {"),
+    sleep.indexOf("const streak = computeStreak",sleep.indexOf("const deleteAccount = async () => {")));
+  const nativeStop = deletion.indexOf("stopBedtimeBlocking()");
+  const clearTokens = deletion.indexOf("clearCurfyOnboardingSelectionsAfterAccountDeletion()");
+  const clearNotes = deletion.indexOf("await clearJournal()");
+  const clearStorage = deletion.indexOf("await AsyncStorage.multiRemove(ALL_STORAGE_KEYS)");
+  const resetUI = deletion.indexOf("setIsLocked(false)");
+  assert.ok(nativeStop >= 0 && clearTokens > nativeStop &&
+    clearNotes > clearTokens && clearStorage > clearNotes && resetUI > clearStorage,
+    "Delete Account must stop native restrictions, then prove local deletion before resetting UI");
+  assert.doesNotMatch(deletion, /try \{\s*await clearJournal/);
+});
+
 test("TimePicker uses gestures, never a vertically nested FlatList with hidden warning", () => {
   const wheel = source("components/TimePicker.tsx");
   assert.match(wheel, /PanResponder\.create/);
