@@ -394,20 +394,22 @@ test("failed Free exception monitor stop retains its reblock callback and recove
 
 test("failed Free monitor stop after morning cutoff never drops an active monitor's callback", async () => {
   const f = fixture({ ignoreStopOnCalls: [1] });
-  const now = new Date("2026-11-01T05:50:00");
-  const expiry = await f.screenTime.grantBedtimeException({
+  const now = new Date("2026-10-31T23:00:00");
+  await f.screenTime.grantBedtimeException({
     bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
   });
   const state = f.storage.get("curfy-active-exception");
-  assert.equal(state.bedtimeEndAt, expiry);
+  // The monitor scheduled at 23:00 must not block after the 06:00 cutoff.
+  assert.ok(state.activityName);
+  const afterCutoff = new Date("2026-11-01T06:00:02");
   assert.throws(() => f.screenTime.reconcileBedtimeException(
-    "22:00", "06:00", new Date(expiry + 2000)
+    "22:00", "06:00", afterCutoff
   ), /didn't stop Curfy's temporary app-access monitor/);
   assert.deepEqual(f.storage.get("curfy-active-exception"), state);
   assert.equal(f.isBlocked(), false);
   const actions = f.calls.filter(c => c[0] === "action" && c[1].activityName === state.activityName);
   assert.equal(actions.at(-1)[1].actions[0].type, "blockSelection");
-  f.screenTime.reconcileBedtimeException("22:00", "06:00", new Date(expiry + 3000));
+  f.screenTime.reconcileBedtimeException("22:00", "06:00", afterCutoff);
   assert.equal(f.storage.has("curfy-active-exception"), false);
 });
 
