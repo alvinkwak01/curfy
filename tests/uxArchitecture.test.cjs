@@ -22,6 +22,32 @@ test("120-second escape remains a native continuous long-press, not JS timer unl
   assert.match(hold, /\.onStart\(\(\)\s*=>\s*handleNativeHoldComplete\(\)\)/);
   assert.doesNotMatch(hold, /if\s*\(elapsed\s*>=\s*HOLD_DURATION_MS\)/);
 });
+test("escape screen uses only a single X, the real app name, and one concise hold cue", () => {
+  const lock = source("components/LockScreen.tsx");
+  const hold = source("components/HoldButton.tsx");
+  const escape = source("app/escape.tsx");
+
+  assert.match(lock, /accessibilityLabel="Close unlock screen without unlocking"/);
+  assert.match(lock, /<Ionicons name="close"/);
+  assert.match(lock, /onPress=\{onExit \?\? devDismissLock\}/);
+  assert.match(escape, /onExit=\{\(\) => router\.replace\("\/\(tabs\)"\)\}/);
+  assert.doesNotMatch(lock, /Back to Curfy Home|Still want|No hold, no unlock|homeButton|styles\.footer/);
+  assert.doesNotMatch(lock, /Hold the circle for two uninterrupted minutes/);
+  assert.match(lock, /Unlocking/);
+  assert.match(lock, /<CurfyAppLabel/);
+  assert.match(lock, /snapshot\.count === 1 \? snapshot : null/);
+  assert.match(lock, /selectionId=\{selectionIdForMode\(selectedMode\)\}/);
+  assert.match(lock, /revision=\{protectedApp\.revision\}/);
+  assert.match(lock, /<Text style=\{styles\.appFallback\}>your app<\/Text>/);
+  assert.match(lock, /Hold 120s · up to 15 min access/);
+  assert.match(lock, /showIdleMessage=\{false\}/);
+  assert.match(lock, /showUnlockCount=\{false\}/);
+  assert.match(hold, /Gesture\.LongPress\(\)/);
+  assert.match(hold, /\.minDuration\(HOLD_DURATION_MS\)/);
+  assert.match(hold, /onUnlockRef\.current\(\)/);
+  assert.match(lock, /await unlockScreen\(\)/);
+});
+
 test("TimePicker uses gestures, never a vertically nested FlatList with hidden warning", () => {
   const wheel = source("components/TimePicker.tsx");
   assert.match(wheel, /PanResponder\.create/);
