@@ -25,7 +25,7 @@ Deno.serve(async (req: Request) => {
   }
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader || !/^Bearer\\s+\\S+$/i.test(authHeader)) {
+    if (!authHeader || !/^Bearer\s+\S+$/i.test(authHeader)) {
       return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },
