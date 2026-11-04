@@ -19,13 +19,13 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 type LockScreenProps = {
   mode?: "preview" | "escape";
-  /** Leaving this screen never changes Screen Time restrictions or counts as an escape. */
+  /** Leaving never grants access or alters the selected-app shield. */
   onExit?: () => void;
 };
 
 /**
- * The circular 120-second hold runs inside Curfy, not in Apple's shield
- * extension. The user can leave this screen at any time without unlocking.
+ * The circular 120-second hold runs inside Curfy, not Apple's shield extension.
+ * A single top-right X is the only exit action. It never unlocks any app.
  */
 export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
   const { unlockScreen, todayUnlocks, devDismissLock } = useSleep();
@@ -41,7 +41,7 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
     }
     setUnlockPending(true);
     try {
-      // Only navigate after the native Screen Time exception succeeds.
+      // Only navigate after iOS confirms the protected-app exception.
       await unlockScreen();
       setUnlockPending(false);
       router.replace("/(tabs)");
@@ -51,7 +51,7 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
         "Couldn't unlock selected apps",
         error instanceof Error ? error.message : "Please try again."
       );
-      // Propagate to HoldButton so it visibly resets after a native failure.
+      // Propagate failure so the ring resets, rather than faking success.
       throw error;
     }
   };
@@ -64,97 +64,44 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
         scrollEnabled={!isHolding}
         contentContainerStyle={[
           styles.content,
-          { paddingTop: (Platform.OS === "web" ? 42 : top) + 16,
-            paddingBottom: (Platform.OS === "web" ? 24 : bottom) + 20 },
+          {
+            paddingTop: (Platform.OS === "web" ? 42 : top) + 12,
+            paddingBottom: (Platform.OS === "web" ? 24 : bottom) + 18,
+          },
         ]}
         showsVerticalScrollIndicator={false}
         bounces={false}
       >
         <View style={styles.topBar}>
           <View style={styles.brand}>
-            <View style={styles.brandIcon}>
-              <Ionicons name="moon-outline" size={19} color={Colors.primaryCyan} />
-            </View>
-            <View>
-              <Text style={styles.brandName}>CURFY</Text>
-              <Text style={styles.brandTagline}>BEDTIME. FOR REAL.</Text>
-            </View>
+            <Ionicons name="moon-outline" size={18} color={Colors.primaryCyan} />
+            <Text style={styles.brandName}>CURFY</Text>
           </View>
-          {onExit ? (
+          {(onExit || __DEV__) && (
             <TouchableOpacity
               accessibilityRole="button"
-              accessibilityLabel="Exit to Curfy Home without unlocking apps"
+              accessibilityLabel="Close unlock screen without unlocking"
+              accessibilityHint="Returns to Curfy. Your app remains protected."
               disabled={unlockPending}
-              onPress={onExit}
-              activeOpacity={0.75}
-              style={styles.exitTop}
-              hitSlop={8}
+              onPress={onExit ?? devDismissLock}
+              activeOpacity={0.7}
+              style={[styles.closeControl, unlockPending && styles.closeDisabled]}
+              hitSlop={10}
             >
-              <Ionicons name="close" size={19} color={Colors.textPrimary} />
-              <Text style={styles.exitTopText}>Exit</Text>
+              <Ionicons name="close" size={23} color={Colors.textPrimary} />
             </TouchableOpacity>
-          ) : __DEV__ ? (
-            <TouchableOpacity
-              onPress={devDismissLock}
-              style={styles.devExit}
-              accessibilityRole="button"
-              accessibilityLabel="Development: dismiss preview lock"
-            >
-              <Text style={styles.devExitText}>DEV: Skip</Text>
-            </TouchableOpacity>
-          ) : null}
+          )}
         </View>
 
-        <View style={styles.hero}>
-          <View style={styles.eyebrow}>
-            <View style={styles.eyebrowDot} />
-            <Text style={styles.eyebrowText}>
-              {isPreview ? "ESCAPE SCREEN PREVIEW" : "YOUR CURFY BOUNDARY"}
-            </Text>
-          </View>
-          <Text style={styles.heading}>
-            {isPreview ? "A moment to\ndecide." : "Still want\nto go in?"}
-          </Text>
-          <Text style={styles.description}>
-            {isPreview
-              ? "This is the deliberate pause before an exception. Trying it here won't unlock any apps."
-              : "Hold the circle for two uninterrupted minutes to request up to 15 minutes of access."}
-          </Text>
-        </View>
-
-        <View style={styles.holdCard}>
+        <View style={styles.holdArea}>
           <HoldButton
             onUnlock={finishHold}
             unlockCount={todayUnlocks}
             onHoldingChange={setIsHolding}
+            idleHint={isPreview
+              ? "Preview only · no app access granted"
+              : "120s hold · up to 15 min access"}
           />
-        </View>
-
-        <View style={styles.bottom}>
-          <View style={styles.resetHint}>
-            <Ionicons name="refresh-outline" size={16} color={Colors.textMuted} />
-            <Text style={styles.resetHintText}>Let go early and the timer starts over.</Text>
-          </View>
-          {onExit && (
-            <TouchableOpacity
-              onPress={onExit}
-              disabled={unlockPending}
-              accessibilityRole="button"
-              accessibilityLabel="Back to Home without unlocking apps"
-              activeOpacity={0.8}
-              style={[styles.homeButton, unlockPending && styles.homeButtonDisabled]}
-            >
-              <Ionicons name="arrow-back" size={19} color={Colors.textPrimary} />
-              <Text style={styles.homeButtonText}>Back to Curfy Home</Text>
-            </TouchableOpacity>
-          )}
-          <Text style={styles.footer}>
-            {unlockPending
-              ? "Requesting access from iOS…"
-              : isPreview
-              ? "Preview only · No apps will be unlocked"
-              : "No hold, no unlock. Your selected apps stay protected."}
-          </Text>
         </View>
       </ScrollView>
     </View>
@@ -165,80 +112,27 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: Colors.background },
   content: {
     flexGrow: 1,
-    justifyContent: "space-between",
     paddingHorizontal: 24,
-    gap: 20,
   },
   topBar: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    minHeight: 46,
   },
-  brand: { flexDirection: "row", alignItems: "center", gap: 10 },
-  brandIcon: {
-    width: 37, height: 37, borderRadius: 12,
-    justifyContent: "center", alignItems: "center",
-    backgroundColor: "#10202C", borderWidth: 1, borderColor: "#214358",
-  },
+  brand: { flexDirection: "row", alignItems: "center", gap: 9 },
   brandName: {
-    fontFamily: Fonts.bold, fontSize: 14, letterSpacing: 3.1,
+    fontFamily: Fonts.bold, fontSize: 12, letterSpacing: 3.1,
     color: Colors.textPrimary,
   },
-  brandTagline: {
-    fontFamily: Fonts.medium, color: Colors.textMuted, fontSize: 9,
-    letterSpacing: 1.5, marginTop: 3,
+  closeControl: {
+    width: 44, height: 44, borderRadius: 22,
+    borderWidth: 1, borderColor: "#373954",
+    backgroundColor: "rgba(22,24,44,0.82)",
+    alignItems: "center", justifyContent: "center",
   },
-  exitTop: {
-    flexDirection: "row", alignItems: "center", gap: 5,
-    borderWidth: 1, borderColor: "#333451", borderRadius: 18,
-    backgroundColor: "#121423", paddingVertical: 10, paddingHorizontal: 12,
-    minHeight: 44,
-  },
-  exitTopText: { fontFamily: Fonts.semiBold, color: Colors.textPrimary, fontSize: 13 },
-  devExit: { padding: 10, borderRadius: 10, borderWidth: 1, borderColor: Colors.warningAmber },
-  devExitText: { fontFamily: Fonts.medium, fontSize: 12, color: Colors.warningAmber },
-  hero: { alignItems: "center", gap: 10, paddingHorizontal: 8 },
-  eyebrow: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "rgba(0,229,255,0.055)", borderRadius: 20,
-    borderWidth: 1, borderColor: "#174252",
-    paddingHorizontal: 14, paddingVertical: 7,
-  },
-  eyebrowDot: { width: 5, height: 5, borderRadius: 3, backgroundColor: Colors.primaryCyan },
-  eyebrowText: {
-    color: Colors.primaryCyan, fontFamily: Fonts.semiBold,
-    letterSpacing: 1.7, fontSize: 10,
-  },
-  heading: {
-    color: Colors.textPrimary, fontFamily: Fonts.bold,
-    fontSize: 40, lineHeight: 43, letterSpacing: -1.7,
-    textAlign: "center",
-  },
-  description: {
-    maxWidth: 320, textAlign: "center",
-    color: "#A3A3C5", fontFamily: Fonts.regular,
-    fontSize: 14, lineHeight: 21,
-  },
-  holdCard: {
-    minHeight: 235, alignItems: "center", justifyContent: "center",
-    alignSelf: "stretch",
-  },
-  bottom: { alignItems: "center", gap: 16 },
-  resetHint: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 8, paddingHorizontal: 6,
-  },
-  resetHintText: {
-    color: "#8888AF", fontSize: 12, fontFamily: Fonts.regular,
-    textAlign: "center", flexShrink: 1,
-  },
-  homeButton: {
-    width: "100%", minHeight: 56, borderRadius: 16,
-    backgroundColor: "#17192C", borderWidth: 1, borderColor: "#393A60",
-    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 11,
-  },
-  homeButtonDisabled: { opacity: 0.4 },
-  homeButtonText: { fontFamily: Fonts.semiBold, fontSize: 16, color: Colors.textPrimary },
-  footer: {
-    fontFamily: Fonts.regular, color: Colors.textMuted,
-    fontSize: 11, textAlign: "center", lineHeight: 17,
+  closeDisabled: { opacity: 0.4 },
+  holdArea: {
+    flexGrow: 1, minHeight: 300,
+    alignItems: "center", justifyContent: "center",
+    paddingBottom: 35,
   },
 });
