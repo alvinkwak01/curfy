@@ -428,18 +428,53 @@ export function refreshBedtimeShieldAppearance(): void {
 
 }
 
-export function stopBedtimeBlocking(): void {
-  // Preflight BEFORE stopping the recurring monitor. A corrupted App Group
-  // exception name must not be silently ignored after we have already
-  // removed the daily release callback. Leave Settings intact for recovery.
-  readException(true);
+export function stopBedtimeBlocking(now = new Date()): void {
+  // Validate all recovery state before touching either native monitor.
+  // A corrupted one-shot activity must never impersonate the daily cutoff.
+  const previousException = readException(true);
+  const previousSelectionId = previousScheduledSelectionId();
+  const previousClockWindow = DeviceActivity.userDefaultsGet<BedtimeClockWindow>(
+    BEDTIME_CLOCK_KEY
+  );
+  const dailyIsRunning = DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME);
+
+  // Stop the one-shot exception FIRST. In the former order, stopping the
+  // recurring monitor succeeded and a refused exception stop left a still-
+  // running reblock callback with no daily cutoff to release its new shield.
+  // Do not stop an active exception until the selected app is re-shielded:
+  // a refused daily stop must leave the still-running daily schedule safe.
+  // Stop Protection / Restart Setup explicitly ends the temporary exception.
+  if (previousException) {
+    if (dailyIsRunning && previousException.selectionId !== previousSelectionId) {
+      throw new Error("Curfy's temporary app exception does not match its scheduled app. Check Screen Time Settings before stopping protection.");
+    }
+    const withinPreviousWindow = !!previousClockWindow &&
+      Number.isInteger(previousClockWindow.startMinute) &&
+      Number.isInteger(previousClockWindow.endMinute) &&
+      currentBedtimeWindow(
+        now,
+        `${String(Math.floor(previousClockWindow.startMinute / 60)).padStart(2, "0")}:${String(previousClockWindow.startMinute % 60).padStart(2, "0")}`,
+        `${String(Math.floor(previousClockWindow.endMinute / 60)).padStart(2, "0")}:${String(previousClockWindow.endMinute % 60).padStart(2, "0")}`
+      ) !== null;
+    if (dailyIsRunning && withinPreviousWindow &&
+        now.getTime() < previousException.bedtimeEndAt) {
+      DeviceActivity.blockSelection(
+        { activitySelectionId: previousException.selectionId },
+        "curfy-stop-restore-shield-before-exception-cancel"
+      );
+      const overlap = selectedShieldCountOrNull(previousException.selectionId);
+      if ((overlap ?? 0) === 0 && !DeviceActivity.isShieldActive()) {
+        throw new Error("iOS did not confirm Curfy's app was re-shielded before stopping the temporary monitor.");
+      }
+    }
+    // A refused stop restores the one-shot intervalDidEnd action and throws;
+    // the daily monitor has NOT yet been touched. Do not erase either record.
+    cancelExceptionForScheduleChange();
+  }
+
   // Keep the committed selection until BOTH native monitoring and shields
   // have stopped. Stopping can synchronously invoke intervalDidEnd, so its
   // actions must first be cleared, but a FAILED stop must restore them.
-  const previousSelectionId = previousScheduledSelectionId();
-  // Leave an earned 15-minute exception monitor intact until native stop
-  // and clearing Curfy's shields BOTH succeed. A failed stop must not
-  // silently cancel automatic reblocking if the app is force-quit.
   try {
     // Even clearing action metadata can fail. Keep that operation inside the
     // rollback boundary, so a partly-cleared action set is reconstructed.
@@ -467,7 +502,6 @@ export function stopBedtimeBlocking(): void {
     }
     throw error;
   }
-  cancelExceptionForScheduleChange();
   DeviceActivity.userDefaultsRemove(SCHEDULED_SELECTION_ID_KEY);
   DeviceActivity.userDefaultsRemove(BEDTIME_CLOCK_KEY);
 }
