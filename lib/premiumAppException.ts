@@ -128,7 +128,9 @@ export async function grantPremiumAppException({
       bedtimeEndAt: window.end.getTime(), nowMs: now.getTime(),
       currentLedger: existing,
     });
-    const { needsMonitor, ...entry } = planned;
+    // Only the logical expiry belongs in the persisted App Group ledger.
+    // Keep the longer native DateComponents scheduling boundary separate.
+    const { needsMonitor, monitorEndAt, ...entry } = planned;
     const ledger = { ...existing, [entry.activityName]: entry };
     let persisted = false;
     let monitorRequested = false;
@@ -145,9 +147,10 @@ export async function grantPremiumAppException({
           actions: [{ type: "blockSelection", familyActivitySelectionId: ticketId }],
         });
         monitorRequested = true; // startMonitoring may install then throw.
-        // Same minimum-15-minute+1s convention as Curfy's existing Free hold.
+        // DeviceActivity minimum interval is 15 minutes, with whole-second
+        // DateComponents. The customer-facing expiry remains <=15 minutes.
         const roundedStart = new Date(Math.floor(now.getTime() / 1000) * 1000);
-        const endDate = new Date(entry.expiresAt);
+        const endDate = new Date(monitorEndAt);
         await DeviceActivity.startMonitoring(entry.activityName, {
           intervalStart: nativeDateComponents(roundedStart),
           intervalEnd: nativeDateComponents(endDate), repeats: false,
