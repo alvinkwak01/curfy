@@ -940,6 +940,50 @@ test("a swallowed native reset error cannot leave the old app shielded alongside
   );
 });
 
+test("Stop Protection leaves the recurring schedule untouched if its Free exception record is corrupt", async () => {
+  const f = fixture();
+  const now = new Date("2026-11-02T23:00:00");
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  f.storage.set("curfy-active-exception", {
+    selectionId: "curfy-block-custom",
+    activityName: "curfy-bedtime", // NOT an exception activity
+    expiresAt: now.getTime() + 900_000,
+    bedtimeEndAt: new Date("2026-11-03T06:00:00").getTime(),
+  });
+  const callCount = f.calls.length;
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(),
+    /couldn't verify a previous app-access record/);
+  assert.equal(f.calls.length, callCount);
+  assert.equal(f.monitorSchedules.has("curfy-bedtime"), true);
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
+});
+
+test("Free cancellation never reports success if iOS refuses to erase its recovered exception state", async () => {
+  const f = fixture();
+  const now = new Date("2026-11-02T23:00:00");
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-02T23:01:00"),
+  });
+  const previous = f.storage.get("curfy-active-exception");
+  const remove = f.native.userDefaultsRemove;
+  f.native.userDefaultsRemove = key => {
+    if (key !== "curfy-active-exception") remove(key);
+  };
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(),
+    /didn't confirm removal of the old Curfy app-access record/);
+  assert.deepEqual(f.storage.get("curfy-active-exception"), previous);
+  // Delete Account cannot proceed if stop did not finish, and foreground
+  // recovery still retains the saved exception identity for a later retry.
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
+});
+
 test("account/reset stop refuses to erase recovery metadata if native monitor refuses to stop", async () => {
   const f = fixture({ ignoreStopOnCalls: [1] });
   const now = new Date("2026-11-02T23:00:00");
