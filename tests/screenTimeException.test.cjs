@@ -1001,18 +1001,34 @@ test("account/reset stop refuses to erase recovery metadata if native monitor re
   assert.equal(f.monitorSchedules.has("curfy-bedtime"), false);
 });
 
-test("account/reset stop refuses to discard metadata when managed app shield remains", async () => {
+test("a swallowed native reset failure uses the exact old app token to release an orphaned shield", async () => {
   const f = fixture({ ignoreResetOnCalls: [2] });
   await f.screenTime.configureBedtimeBlocking({
     bedtime: "22:00", wakeTime: "06:00", mode: "custom",
     now: new Date("2026-11-02T23:00:00"),
   });
-  assert.throws(() => f.screenTime.stopBedtimeBlocking(), /still reports protected apps/);
+  f.screenTime.stopBedtimeBlocking();
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.storage.has("curfy-scheduled-selection-id"), false);
+  const recovery = f.calls.find(c => c[0] === "unblock");
+  assert.ok(recovery, "Targeted unblock must run when the full reset was ignored");
+});
+
+test("if both native shield-removal paths fail, Stop Protection retains local recovery metadata", async () => {
+  const f = fixture({ ignoreResetOnCalls: [2], failUnblock: true });
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-02T23:00:00"),
+  });
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(),
+    /still reports protected apps/);
   assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
   assert.equal(f.isBlocked(), true);
-  assert.doesNotThrow(() => f.screenTime.stopBedtimeBlocking());
-  assert.equal(f.storage.has("curfy-scheduled-selection-id"), false);
-  assert.equal(f.isBlocked(), false);
+  // Even after the daily monitor was removed, the original opaque app ID and
+  // clock are kept so Settings can offer another native repair attempt.
+  assert.deepEqual(f.storage.get("curfy-bedtime-clock-window"), {
+    startMinute: 1320, endMinute: 360,
+  });
 });
 
 test("failed native stop restores bedtime start AND end callbacks for the existing app", async () => {
