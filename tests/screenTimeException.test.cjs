@@ -24,6 +24,7 @@ function fixture({
   failOnStartCalls = [], failAfterOverwriteStartCalls = [],
   ignoreBlockOnCalls = [], ignoreResetOnCalls = [],
   ignoreStopOnCalls = [], failOnActionCalls = [],
+  waitForStart = null,
 } = {}) {
   const storage = new Map();
   const selections = new Map();
@@ -66,6 +67,7 @@ function fixture({
       if (failStart || failOnStartCalls.includes(count)) {
         throw Error("Native scheduling failed");
       }
+      if (waitForStart) await waitForStart;
       if (!silentMonitorFailure) {
         monitoredActivities.add(name);
         monitorSchedules.set(name, schedule);
@@ -127,13 +129,63 @@ test("completing the hold schedules native reblock before unshielding", async ()
   const expiresAt = await f.screenTime.grantBedtimeException({
     bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
   });
-  assert.equal(expiresAt, now.getTime() + 15 * 60_000 + 1_000);
+  assert.equal(expiresAt, now.getTime() + 15 * 60_000);
+  // The native callback interval is >=15m despite second-precision dates.
+  // It is separate from the user-facing logical expiry.
+  const monitor = f.calls.find(call => call[0] === "start");
+  assert.equal(monitor[2].intervalStart.second, 0);
+  assert.equal(monitor[2].intervalEnd.second, 1);
   assert.equal(f.isBlocked(), false);
   const start = f.calls.findIndex(call => call[0] === "start");
   const unblock = f.calls.findIndex(call => call[0] === "unblock");
   const endAction = f.calls.findIndex(call => call[0] === "action" &&
     call[1].callbackName === "intervalDidEnd" && call[1].actions.length > 0);
   assert.ok(endAction >= 0 && endAction < start && start < unblock);
+});
+
+test("a fractional-second hold never promises access longer than 15 minutes", async () => {
+  const f = fixture();
+  const now = new Date("2026-10-31T23:00:00.875");
+  const expiresAt = await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  assert.equal(expiresAt, now.getTime() + 15 * 60_000);
+  const state = f.storage.get("curfy-active-exception");
+  assert.equal(state.expiresAt, expiresAt);
+  // The OS's whole-second minimum-duration monitor is deliberately distinct.
+  const nativeSchedule = f.calls.find(x => x[0] === "start")[2];
+  assert.equal(nativeSchedule.intervalStart.second, 0);
+  assert.equal(nativeSchedule.intervalEnd.second, 1);
+});
+
+test("a second concurrent hold cannot overwrite the in-flight native reblock", async () => {
+  let releaseMonitor;
+  const waitForStart = new Promise(resolve => { releaseMonitor = resolve; });
+  const f = fixture({ waitForStart });
+  const now = new Date("2026-10-31T23:00:00");
+  const input = { bedtime: "22:00", wakeTime: "06:00", mode: "custom", now };
+  const first = f.screenTime.grantBedtimeException(input);
+  // First registration is suspended inside startMonitoring.
+  await assert.rejects(f.screenTime.grantBedtimeException(input),
+    /Another Curfy app unlock is already being prepared/);
+  assert.equal(f.calls.filter(x => x[0] === "start").length, 1);
+  releaseMonitor();
+  const expiry = await first;
+  assert.equal(expiry, now.getTime() + 15 * 60_000);
+  assert.equal(f.calls.filter(x => x[0] === "unblock").length, 1);
+  await assert.rejects(f.screenTime.grantBedtimeException(input),
+    /already active/);
+});
+
+test("a failed Free grant clears its concurrency guard for a new attempt", async () => {
+  const f = fixture({ failStart: true });
+  const input = {
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-10-31T23:00:00"),
+  };
+  await assert.rejects(f.screenTime.grantBedtimeException(input), /Native scheduling failed/);
+  await assert.rejects(f.screenTime.grantBedtimeException(input), /Native scheduling failed/);
+  assert.equal(f.isBlocked(), true);
 });
 
 test("the wake-time boundary never re-shields apps just after morning", async () => {
