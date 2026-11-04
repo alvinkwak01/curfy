@@ -583,7 +583,7 @@ function readException(strict = false): ActiveException | null {
     /^curfy-block-(social|most|custom)$/.test(state.selectionId) &&
     typeof state.activityName === "string" &&
     (state.activityName === "" ||
-      /^curfy-exception-\\d{12,16}$/.test(state.activityName)) &&
+      /^curfy-exception-\d{12,16}$/.test(state.activityName)) &&
     Number.isSafeInteger(state.expiresAt) && (state.expiresAt ?? 0) > 0 &&
     Number.isSafeInteger(state.bedtimeEndAt) && (state.bedtimeEndAt ?? 0) > 0 &&
     state.expiresAt! <= state.bedtimeEndAt!;
