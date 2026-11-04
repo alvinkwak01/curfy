@@ -169,7 +169,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (session?.user && session.user.id !== confirmedId) {
         throw new Error("A different Curfy account is active. Cannot reuse a prior deletion receipt.");
       }
-      await supabase.auth.signOut({ scope: "local" });
+      const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+      if (signOutError) {
+        throw new Error("Curfy couldn't clear its local cloud session. Retry Delete Account.");
+      }
       lastSynced.current = null;
       return;
     }
@@ -193,7 +196,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // fails, the user can retry deletion without reusing an invalid JWT.
       remoteDeletedUserId.current = session.user.id;
       await AsyncStorage.setItem(REMOTE_DELETION_CONFIRMED_KEY, session.user.id);
-      await supabase.auth.signOut({ scope: "local" });
+      const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
+      if (signOutError) {
+        throw new Error("Curfy couldn't clear its local cloud session. Retry Delete Account.");
+      }
       lastSynced.current = null;
     } catch (error) {
       if (remoteDeletedUserId.current === null) {
