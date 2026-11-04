@@ -67,7 +67,7 @@ function fixture({
       if (failStart || failOnStartCalls.includes(count)) {
         throw Error("Native scheduling failed");
       }
-      if (waitForStart) await waitForStart;
+      if (waitForStart && name.startsWith("curfy-exception-")) await waitForStart;
       if (!silentMonitorFailure) {
         monitoredActivities.add(name);
         monitorSchedules.set(name, schedule);
@@ -186,14 +186,15 @@ test("native stop and schedule edit cannot race an unfinished Free exception reg
   const waitForStart = new Promise(resolve => { releaseMonitor = resolve; });
   const f = fixture({ waitForStart });
   const now = new Date("2026-10-31T23:00:00");
-  // Simulate an already configured daily monitor without awaiting another
-  // registration behind the same artificial native promise.
+  // The recurring monitor is registered first. Only the one-shot exception
+  // is held in-flight at the native await boundary.
+  await registerRecurringProtectionMonitor(f);
   f.native.userDefaultsSet("curfy-scheduled-selection-id", "curfy-block-custom");
   f.native.userDefaultsSet("curfy-bedtime-clock-window", { startMinute: 1320, endMinute: 360 });
   const grant = f.screenTime.grantBedtimeException({
     bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
   });
-  assert.equal(f.calls.filter(x => x[0] === "start").length, 1);
+  assert.equal(f.calls.filter(x => x[0] === "start").length, 2);
   const before = f.calls.length;
   assert.throws(() => f.screenTime.stopBedtimeBlocking(now),
     /still preparing a temporary app unlock/);
