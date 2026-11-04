@@ -48,6 +48,28 @@ test("escape screen uses only a single X, the real app name, and one concise hol
   assert.match(lock, /await unlockScreen\(\)/);
 });
 
+test("optional leaderboard sync repairs missing profiles and never caches an unconfirmed write", () => {
+  const auth = source("context/AuthContext.tsx");
+  const root = source("app/_layout.tsx");
+  const section = auth.slice(
+    auth.indexOf("const syncProfile = async ("),
+    auth.indexOf("const fetchLeaderboard = async (")
+  );
+  const writeIndex = section.indexOf(".upsert({");
+  const cacheIndex = section.indexOf("lastSynced.current = {");
+  assert.ok(writeIndex >= 0 && cacheIndex > writeIndex,
+    "Do not cache a write before the Supabase upsert succeeds");
+  assert.match(section, /id: userId/);
+  assert.match(section, /onConflict: "id"/);
+  assert.match(section, /if \(error\) \{/);
+  assert.match(section, /lastSynced\.current\?\.userId === userId/);
+  assert.doesNotMatch(section, /\.update\(\{/);
+  assert.match(root, /void syncProfile\([\s\S]*?\)\.catch/);
+  assert.match(root, /void ensureAnonymousProfile\(userName\)\.catch/);
+  assert.match(auth, /Could not restore leaderboard session/);
+  assert.match(auth, /\.finally\(\(\) => \{\s*if \(active\) setIsAuthLoading\(false\)/);
+});
+
 test("TimePicker uses gestures, never a vertically nested FlatList with hidden warning", () => {
   const wheel = source("components/TimePicker.tsx");
   assert.match(wheel, /PanResponder\.create/);
