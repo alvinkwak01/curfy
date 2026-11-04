@@ -75,15 +75,15 @@ export default function RootLayout() {
 // scope, same reasoning as StreakSync below.
 function EnsureLeaderboardIdentity() {
   const { userName, isOnboardingComplete, storageError } = useSleep();
-  const { isSignedIn, isAuthLoading, ensureAnonymousProfile } = useAuth();
+  const { isSignedIn, isAuthLoading, isDeletingAccount, ensureAnonymousProfile } = useAuth();
 
   useEffect(() => {
-    if (storageError || !isOnboardingComplete || isAuthLoading || isSignedIn) return;
+    if (storageError || !isOnboardingComplete || isAuthLoading || isSignedIn || isDeletingAccount) return;
     void ensureAnonymousProfile(userName).catch((error) => {
       // A cloud leaderboard failure must not interrupt native protection.
       console.warn("[Curfy] Online leaderboard profile creation failed", error);
     });
-  }, [isOnboardingComplete, isAuthLoading, isSignedIn, userName, storageError, ensureAnonymousProfile]);
+  }, [isOnboardingComplete, isAuthLoading, isSignedIn, isDeletingAccount, userName, storageError, ensureAnonymousProfile]);
 
   return null;
 }
@@ -95,16 +95,16 @@ function EnsureLeaderboardIdentity() {
 // scope, which requires it to sit inside both providers (see above).
 function StreakSync() {
   const { bedtime, streak, longestStreak, userName, storageError } = useSleep();
-  const { isSignedIn, syncProfile } = useAuth();
+  const { isSignedIn, isDeletingAccount, syncProfile } = useAuth();
 
   useEffect(() => {
-    if (storageError || !isSignedIn) return;
+    if (storageError || !isSignedIn || isDeletingAccount) return;
     void syncProfile(bedtime, streak, longestStreak, userName).catch((error) => {
       // Do not silently discard failed cloud writes. The local history and
       // the iOS Screen Time schedule are independent from this optional sync.
       console.warn("[Curfy] Online leaderboard sync failed", error);
     });
-  }, [isSignedIn, bedtime, streak, longestStreak, userName, storageError, syncProfile]);
+  }, [isSignedIn, isDeletingAccount, bedtime, streak, longestStreak, userName, storageError, syncProfile]);
 
   return null;
 }
