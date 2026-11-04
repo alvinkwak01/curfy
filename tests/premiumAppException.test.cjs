@@ -112,7 +112,9 @@ function fixture({
 test("verified Premium installs one native reblock before releasing only the intended app", async () => {
   const f = fixture();
   const end = await f.grant();
-  assert.equal(end, now.getTime() + 901000);
+  // The separate native monitor ends at 15m+1s so Apple's second-precision
+  // DeviceActivity accepts its minimum interval. Access itself is <=15m.
+  assert.equal(end, now.getTime() + 900000);
   assert.deepEqual([...f.blocked].sort(), ["B","C"]);
   assert.equal(f.activities.size, 1);
   const start = f.calls.findIndex(x => x[0] === "start");
