@@ -1,10 +1,16 @@
 import { Ionicons } from "@expo/vector-icons";
 import { StarBackground } from "@/components/StarBackground";
 import { HoldButton } from "@/components/HoldButton";
+import {
+  CurfyAppLabel,
+  readProtectedAppChoices,
+  type CurfyProtectedAppsSnapshot,
+} from "@/modules/curfy-protected-apps";
+import { selectionIdForMode, type BlockModeId } from "@/lib/screenTime";
 import { Colors, Fonts } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
-import { router } from "expo-router";
-import React, { useState } from "react";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useState } from "react";
 import {
   Alert,
   Platform,
@@ -28,11 +34,30 @@ type LockScreenProps = {
  * A single top-right X is the only exit action. It never unlocks any app.
  */
 export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
-  const { unlockScreen, todayUnlocks, devDismissLock } = useSleep();
+  const { unlockScreen, devDismissLock, blockMode } = useSleep();
   const { top, bottom } = useSafeAreaInsets();
   const [unlockPending, setUnlockPending] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
   const isPreview = mode === "preview";
+  const [protectedApp, setProtectedApp] = useState<CurfyProtectedAppsSnapshot | null>(null);
+  const selectedMode: BlockModeId | null =
+    blockMode === "social" || blockMode === "most" || blockMode === "custom"
+      ? blockMode : null;
+
+  useFocusEffect(useCallback(() => {
+    if (isPreview || !selectedMode) {
+      setProtectedApp(null);
+      return;
+    }
+    try {
+      const snapshot = readProtectedAppChoices(selectionIdForMode(selectedMode));
+      // Free mode must only display the exact saved individual app.
+      setProtectedApp(snapshot.count === 1 ? snapshot : null);
+    } catch {
+      // Missing/revoked Screen Time selection: never guess the app name.
+      setProtectedApp(null);
+    }
+  }, [isPreview, selectedMode]));
 
   const finishHold = async () => {
     if (isPreview) {
@@ -94,13 +119,31 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
         </View>
 
         <View style={styles.holdArea}>
+          <View style={styles.unlockTitleRow}>
+            <Text style={styles.unlockTitle}>
+              {isPreview ? "Hold preview" : "Unlocking"}
+            </Text>
+            {!isPreview && protectedApp && selectedMode ? (
+              <CurfyAppLabel
+                key={protectedApp.revision}
+                selectionId={selectionIdForMode(selectedMode)}
+                revision={protectedApp.revision}
+                index={0}
+                style={styles.nativeAppLabel}
+              />
+            ) : !isPreview ? (
+              <Text style={styles.appFallback}>your app</Text>
+            ) : null}
+          </View>
           <HoldButton
             onUnlock={finishHold}
-            unlockCount={todayUnlocks}
+            unlockCount={0}
             onHoldingChange={setIsHolding}
             idleHint={isPreview
               ? "Preview only · no app access granted"
-              : "120s hold · up to 15 min access"}
+              : "Hold 120s · up to 15 min access"}
+            showIdleMessage={false}
+            showUnlockCount={false}
           />
         </View>
       </ScrollView>
@@ -133,6 +176,23 @@ const styles = StyleSheet.create({
   holdArea: {
     flexGrow: 1, minHeight: 300,
     alignItems: "center", justifyContent: "center",
-    paddingBottom: 35,
+    paddingBottom: 35, gap: 30,
+  },
+  unlockTitleRow: {
+    alignSelf: "stretch", flexDirection: "row",
+    alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 4, gap: 9, minHeight: 37,
+  },
+  unlockTitle: {
+    color: Colors.textPrimary, fontFamily: Fonts.semiBold,
+    fontSize: 23, letterSpacing: -0.45,
+  },
+  nativeAppLabel: {
+    flex: 1, minWidth: 0, height: 36,
+    maxWidth: 215,
+  },
+  appFallback: {
+    color: Colors.primaryCyan, fontFamily: Fonts.medium,
+    fontSize: 20, flexShrink: 1,
   },
 });
