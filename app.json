@@ -14,7 +14,7 @@
       "backgroundColor": "#080810"
     },
     "ios": {
-      "supportsTablet": true,
+      "supportsTablet": false,
       "bundleIdentifier": "com.alvinkwak.curfy",
       "appleTeamId": "H735Q3WW8K",
       "infoPlist": {
@@ -36,6 +36,12 @@
     },
     "plugins": [
       "expo-router",
+      [
+        "expo-dev-client",
+        {
+          "launchMode": "launcher"
+        }
+      ],
       "expo-font",
       "expo-notifications",
       "expo-web-browser",
@@ -43,7 +49,7 @@
         "expo-build-properties",
         {
           "ios": {
-            "deploymentTarget": "15.1"
+            "deploymentTarget": "15.2"
           }
         }
       ],
@@ -87,7 +93,7 @@
                   }
                 },
                 {
-                  "bundleIdentifier": "com.alvinkwak.curfy.ActivityMonitorExtension",
+                  "bundleIdentifier": "com.alvinkwak.curfy.ActivityMonitor",
                   "targetName": "ActivityMonitorExtension",
                   "entitlements": {
                     "com.apple.developer.family-controls": true,

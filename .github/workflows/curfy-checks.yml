@@ -1,0 +1,104 @@
+name: Curfy code checks
+
+on:
+  push:
+    branches:
+      - feat/ios-shield-from-august
+  pull_request:
+    branches:
+      - backup/local-curfy-august
+
+jobs:
+  typescript-and-unit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      # Fail if the locked dependency tree is not reproducible.
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm run test:unit
+        env:
+          TZ: America/Los_Angeles
+      - run: npx tsc --noEmit
+      # A successful typecheck / iOS prebuild doesn't prove Metro can produce
+      # the JavaScript bundle embedded in the signed EAS preview.
+      - name: Bundle release-mode iOS JavaScript and assets
+        run: npx expo export --platform ios --output-dir /tmp/curfy-ios-export
+        env:
+          CI: "1"
+      - name: Verify Curfy local native module autolinking
+        run: |
+          npx expo-modules-autolinking resolve --platform apple --json > /tmp/curfy-modules.json
+          node -e '
+            const fs = require("fs");
+            const result = JSON.parse(fs.readFileSync("/tmp/curfy-modules.json", "utf8"));
+            const required = [
+              ["curfy-storekit", "CurfyStoreKit", "CurfyStoreKitModule"],
+              ["curfy-protected-apps", "CurfyProtectedApps", "CurfyProtectedAppsModule"]
+            ];
+            for (const [packageName, podName, moduleName] of required) {
+              const native = result.modules?.find(x => x.packageName === packageName);
+              if (!native ||
+                  !native.pods?.some(p => p.podName === podName) ||
+                  !native.modules?.includes(moduleName)) {
+                console.error(packageName + " local native module was not discovered.");
+                process.exit(1);
+              }
+              console.log(podName + " pod and " + moduleName + " are autolinked.");
+            }
+          '
+      # Check configuration and native dependencies without consuming an EAS build.
+      - run: npx expo-doctor
+      # npm install may silently rewrite a stale lockfile. Catch that drift
+      # before signing and uploading the next iPhone preview.
+      - run: git diff --exit-code -- package-lock.json
+      # Generate the iOS project/config-plugin targets without Xcode or EAS.
+      # This does not compile Swift, but catches CNG/plugin generation failures.
+      - run: npx expo prebuild --platform ios --no-install
+        env:
+          CI: "1"
+      - name: Verify generated iOS Family Controls and App Group entitlements
+        run: node scripts/verify-ios-native-config.cjs
+
+  # Explicit opt-in via a [native-ci] commit message; don't burn macOS
+  # runner minutes on every small JS/docs commit. This compiles Swift and
+  # extension targets without Apple signing or an EAS cloud build.
+  ios-native-compile:
+    # Opt in explicitly by setting [native-ci] in a future PR title,
+    # avoiding expensive macOS compilation for ordinary JS/docs commits.
+    if: ${{ github.event_name == 'pull_request' && contains(github.event.pull_request.title, '[native-ci]') }}
+    runs-on: macos-15
+    timeout-minutes: 55
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Generate iOS target and extensions
+        run: npx expo prebuild --platform ios --no-install
+        env:
+          CI: "1"
+      - name: Install CocoaPods for compiled native targets
+        run: cd ios && pod install
+        env:
+          LANG: en_US.UTF-8
+          LC_ALL: en_US.UTF-8
+      - name: Compile app and Swift extension targets without signing
+        shell: bash
+        run: |
+          set -o pipefail
+          workspace=$(find ios -maxdepth 1 -name '*.xcworkspace' -print -quit)
+          test -n "$workspace" || { echo 'Missing generated Xcode workspace'; exit 1; }
+          xcodebuild -workspace "$workspace" -scheme Curfy -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build > "$RUNNER_TEMP/curfy-xcodebuild.log" 2>&1 || {
+              tail -n 150 "$RUNNER_TEMP/curfy-xcodebuild.log"
+              exit 1
+            }
+          tail -n 25 "$RUNNER_TEMP/curfy-xcodebuild.log"
