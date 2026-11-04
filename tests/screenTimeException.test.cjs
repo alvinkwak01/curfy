@@ -17,7 +17,7 @@ const time = loadTS("lib/bedtimeWindow.ts");
 const premiumPolicy = loadTS("lib/premiumPolicy.ts");
 
 function fixture({
-  failStart = false, failUnblock = false, overlapReportsZero = false,
+  failStart = false, failUnblock = false, failUnblockAfterClear = false, overlapReportsZero = false,
   overlapUnavailable = false, authorization = 2, selectionCount = 1, categoryCount = 0,
   webDomainCount = 0, includeEntireCategory = false, initiallyBlocked = true,
   silentMonitorFailure = false,
@@ -94,6 +94,10 @@ function fixture({
     },
     unblockSelection: () => {
       calls.push(["unblock"]);
+      if (failUnblockAfterClear) {
+        blocked = false;
+        throw Error("Native unshield failed after clearing the ManagedSettings shield");
+      }
       if (!failUnblock) blocked = false;
     },
     resetBlocks: () => {
@@ -306,6 +310,47 @@ test("a native unshield failure rolls back the exception and stays protected", a
   );
   assert.equal(f.isBlocked(), true);
   assert.equal(f.storage.has("curfy-active-exception"), false);
+});
+
+test("Free rollback preserves App Group recovery when iOS refuses to re-shield", async () => {
+  const f = fixture({ failUnblockAfterClear: true, ignoreBlockOnCalls: [1] });
+  const now = new Date("2026-10-31T23:00:00");
+  await assert.rejects(f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  }), /couldn't confirm recovery of the selected app restriction/);
+  assert.equal(f.isBlocked(), false);
+  assert.equal(f.storage.has("curfy-active-exception"), true,
+    "Do not erase the recovery record while the app remains unshielded");
+  const activityName = f.storage.get("curfy-active-exception").activityName;
+  assert.equal(f.monitorSchedules.has(activityName), true,
+    "Keep the reblock monitor alive if physical restoration failed");
+});
+
+test("silent native stop failure retains reblock action and recovery record", async () => {
+  const f = fixture({ failUnblockAfterClear: true, ignoreStopOnCalls: [1] });
+  const now = new Date("2026-10-31T23:00:00");
+  await assert.rejects(f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  }), /couldn't confirm recovery of the selected app restriction/);
+  assert.equal(f.isBlocked(), true);
+  const state = f.storage.get("curfy-active-exception");
+  assert.ok(state);
+  assert.equal(f.monitorSchedules.has(state.activityName), true);
+  const actions = f.calls.filter(x => x[0] === "action" &&
+    x[1].activityName === state.activityName && x[1].callbackName === "intervalDidEnd");
+  assert.equal(actions.at(-1)[1].actions[0].familyActivitySelectionId, "curfy-block-custom",
+    "The still-active monitor must retain a reblock callback");
+});
+
+test("verified Free rollback clears the failed record but still reports native failure", async () => {
+  const f = fixture({ failUnblockAfterClear: true });
+  const now = new Date("2026-10-31T23:00:00");
+  await assert.rejects(f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  }), /Native unshield failed after clearing/);
+  assert.equal(f.isBlocked(), true);
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+  assert.equal(f.monitorSchedules.size, 0);
 });
 
 test("foreground recovery re-shields expired exceptions inside bedtime", async () => {
