@@ -8,8 +8,18 @@ Updated 2026-11-04. Branch: feat/ios-shield-from-august (draft PR #2). The canon
 - Current non-EAS CI runs Node tests, TypeScript, Metro iOS release export, Expo Doctor, iOS prebuild, and native-module autolinking.
 - NEW: scripts/verify-ios-native-config.cjs checks source-level Family Controls + App Group configuration across the main target and three extensions. It cannot prove Apple distribution approval.
 - GitHub macOS unsigned app and three-extension build **succeeded** at 15f4d17 (run 41900003098). No Swift changes since then. This is not a signed App Store archive or a tested iPhone restriction.
-- Server profile sync failure handling/repair fixed at 9705b90, with **222/222 local/CI tests** and production-mode iOS JavaScript bundling green. Supabase deployed-account deletion/consent still require App Review verification.
+- Server profile sync failure handling/repair fixed at 9705b90. Latest code CI at 10ec318 (https://github.com/alvinkwak01/curfy/actions/runs/41918484517) passed **239/239 tests**, TypeScript, Expo Doctor 18/18, production iOS Metro bundle, and all four entitlement config checks. Supabase deployed-account deletion/consent remain UNKNOWN.
 - **Hard cost rule (user request, 2026-11-04):** Do not request or start another EAS build during ongoing code changes. Previous incremental previews consumed paid build resources without delivering consolidated release verification. Keep this branch in development and use free source checks; no final build until one stable candidate and external entitlement prerequisites are ready.
+
+## November 4 no-EAS engineering checkpoint
+
+- **Verified in code and automated tests:** Free and dormant Premium exception records now cap logical access at 15 minutes while preserving the separate 15m+1s DeviceActivity minimum monitor interval; concurrent Free native exception grants are serialized. Real iOS callback timing remains a device gate.
+- **Verified in code and automated tests:** malformed Free exception records cannot impersonate the recurring `curfy-bedtime` monitor and clear its cutoff actions.
+- **Verified in code and automated tests:** Delete Account removes Curfy-private native singleton selection tickets and exception ledgers only after monitors stop, with confirmed native readback; local Journal wipe failure now stops the account-deletion operation and reports failure rather than disappearing behind an empty catch.
+- **Verified in code and automated tests:** saved-settings storage read failure shows a safe retry screen instead of starting onboarding or hanging indefinitely. Journal storage writes are serialized and checked before success; the user keeps their draft after failed saves. Real React provider tests exercise failed writes, corrupted/unreadable hydration, concurrent saves and deletion while a write is pending.
+- **No signed device proof added.** Native Swift source unchanged since prior successful unsigned Xcode compile. Neither Apple distribution approval nor actual native re-shield timings are inferred from JS tests.
+- **Public policy and consent:** see `APP_PRIVACY_DATA_INVENTORY.md`; automatic Supabase anonymous public leaderboard enrollment is STILL a material consent decision requiring approval before release. Do not silently turn it on/off or invent support URLs.
+- **Hard limit:** no more EAS builds during development. All the above work used GitHub commits and existing CI only.
 
 ## P0 gates — each requires evidence, not assumptions
 
