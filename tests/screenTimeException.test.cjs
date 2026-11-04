@@ -1048,7 +1048,7 @@ test("successful native stop keeps recurring callback actions cleared", async ()
   assert.equal(f.storage.has("curfy-scheduled-selection-id"), false);
 });
 
-test("a failed Stop Protection keeps the live exception monitor and 15-minute expiry", async () => {
+test("a refused Free exception stop keeps the daily cutoff monitor and 15-minute recovery", async () => {
   const f = fixture({ ignoreStopOnCalls: [1] });
   const now = new Date("2026-11-02T23:00:00");
   await f.screenTime.configureBedtimeBlocking({
@@ -1062,17 +1062,78 @@ test("a failed Stop Protection keeps the live exception monitor and 15-minute ex
   const stateBefore = f.storage.get("curfy-active-exception");
   assert.ok(stateBefore.activityName.startsWith("curfy-exception-"));
   assert.ok(f.monitorSchedules.has(stateBefore.activityName));
-  assert.throws(() => f.screenTime.stopBedtimeBlocking(), /still has Curfy's protection schedule/);
+  const stopAt = new Date("2026-11-02T23:06:00");
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(stopAt),
+    /didn't stop Curfy's temporary app-access monitor/);
   assert.deepEqual(f.storage.get("curfy-active-exception"), stateBefore);
   assert.equal(f.screenTime.activeExceptionExpiresAt(now.getTime()), expiresAt);
   assert.ok(f.monitorSchedules.has(stateBefore.activityName));
+  assert.ok(f.monitorSchedules.has("curfy-bedtime"), "Never lose the daily cutoff on failure");
   assert.equal(f.calls.filter(x => x[0] === "stop").length, 1);
-  assert.deepEqual(f.calls.filter(x => x[0] === "stop")[0][1], ["curfy-bedtime"]);
+  assert.deepEqual(f.calls.filter(x => x[0] === "stop")[0][1], [stateBefore.activityName]);
+  assert.equal(f.isBlocked(), true, "Explicit Stop Protection restores the selected shield first");
+  const callbacks = f.calls.filter(x => x[0] === "action" &&
+    x[1].activityName === "curfy-bedtime" && x[1].callbackName === "intervalDidEnd");
+  assert.equal(callbacks.at(-1)[1].actions[0].type, "unblockSelection");
 
-  f.screenTime.stopBedtimeBlocking();
+  f.screenTime.stopBedtimeBlocking(stopAt);
   assert.equal(f.monitorSchedules.has("curfy-bedtime"), false);
   assert.equal(f.monitorSchedules.has(stateBefore.activityName), false);
+  assert.equal(f.isBlocked(), false);
   assert.equal(f.storage.has("curfy-active-exception"), false);
+});
+
+test("if daily stop refuses AFTER a successful exception stop, the remaining daily monitor protects the app", async () => {
+  const f = fixture({ ignoreStopOnCalls: [2] });
+  const now = new Date("2026-11-02T23:00:00");
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-02T23:01:00"),
+  });
+  const state = f.storage.get("curfy-active-exception");
+  assert.equal(f.isBlocked(), false);
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(
+    new Date("2026-11-02T23:02:00")),
+    /still has Curfy's protection schedule/
+  );
+  assert.equal(f.monitorSchedules.has(state.activityName), false,
+    "The temporary monitor must be fully removed before daily stop is attempted");
+  assert.equal(f.storage.has("curfy-active-exception"), false);
+  assert.equal(f.monitorSchedules.has("curfy-bedtime"), true);
+  assert.equal(f.isBlocked(), true, "Do not leave the app exposed with its one-shot callback gone");
+  assert.equal(f.storage.get("curfy-scheduled-selection-id"), "curfy-block-custom");
+  const cutoff = f.calls.filter(x => x[0] === "action" && x[1].activityName === "curfy-bedtime" &&
+    x[1].callbackName === "intervalDidEnd").at(-1)[1];
+  assert.equal(cutoff.actions[0].type, "unblockSelection");
+  assert.equal(cutoff.actions[0].familyActivitySelectionId, "curfy-block-custom");
+  f.screenTime.stopBedtimeBlocking(new Date("2026-11-02T23:02:01"));
+  assert.equal(f.monitorSchedules.has("curfy-bedtime"), false);
+  assert.equal(f.isBlocked(), false);
+});
+
+test("failure to restore the selected shield before cancelling an exception leaves both monitors intact", async () => {
+  const f = fixture({ ignoreBlockOnCalls: [2] });
+  const now = new Date("2026-11-02T23:00:00");
+  await f.screenTime.configureBedtimeBlocking({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom", now,
+  });
+  await f.screenTime.grantBedtimeException({
+    bedtime: "22:00", wakeTime: "06:00", mode: "custom",
+    now: new Date("2026-11-02T23:01:00"),
+  });
+  const state = f.storage.get("curfy-active-exception");
+  assert.throws(() => f.screenTime.stopBedtimeBlocking(
+    new Date("2026-11-02T23:02:00")),
+    /did not confirm Curfy's app was re-shielded/
+  );
+  assert.equal(f.monitorSchedules.has(state.activityName), true);
+  assert.equal(f.monitorSchedules.has("curfy-bedtime"), true);
+  assert.equal(f.isBlocked(), false);
+  assert.deepEqual(f.storage.get("curfy-active-exception"), state);
+  assert.equal(f.calls.filter(x => x[0] === "stop").length, 0);
 });
 
 test("failure while clearing native callbacks restores both actions instead of orphaning a live monitor", async () => {
