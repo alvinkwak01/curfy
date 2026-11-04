@@ -137,8 +137,18 @@ test("Home unlock action shows the real selected iOS app label, not a fake app n
   assert.match(home, /readProtectedAppChoices\(selectionIdForMode\(selectedMode\)\)/);
   assert.match(home, /<Text style=\{styles\.unlockFallback\}>your app<\/Text>/);
   assert.match(home, /router\.push\("\/escape"\)/);
-  assert.match(home, /120-second hold · up to 15 minutes of access/);
+  // The hold details live on the actual escape screen, not in this card.
+  assert.doesNotMatch(home, /120-second hold · up to 15 minutes of access/);
+  assert.doesNotMatch(home, /unlockSeparator|unlockBottomRow|unlockDetail/);
+  assert.doesNotMatch(home, /finger-print-outline/);
+  assert.match(home, /<Text style=\{styles\.unlockEyebrow\}>PROTECTED<\/Text>/);
+  assert.match(home, /<View style=\{styles\.unlockMain\}>/);
+  assert.match(home, /<View style=\{styles\.unlockArrow\}>/);
+  assert.match(home, /minHeight: 91/);
   assert.match(home, /protectionStatus !== "shield-active"/);
+  assert.match(swift, /\.font\(\.system\(size: 14\)\)/);
+  assert.match(swift, /\.imageScale\(\.small\)/);
+  assert.match(swift, /\.lineLimit\(1\)/);
 
   // A real app icon/title is rendered by Apple's SwiftUI on the iPhone,
   // never copied as an identifier string into JS or persisted remotely.
