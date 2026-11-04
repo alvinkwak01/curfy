@@ -71,16 +71,19 @@ async function fixture(initial = {}, options = {}) {
 test("journal persists before acknowledging a write, retaining old entries on disk failure", async () => {
   const f = await fixture();
   assert.equal(f.api.loadError, null);
-  const first = await f.api.addEntry("2026-11-04", "Keep this private");
+  let first;
+  await act(async () => { first = await f.api.addEntry("2026-11-04", "Keep this private"); });
   assert.equal(f.api.entries[0].id, first.id);
   assert.equal(JSON.parse(f.stored.get("@dusk/journal_entries"))[0].text, "Keep this private");
   f.failWrites(true);
-  await assert.rejects(f.api.addEntry("2026-11-04", "Should not appear"),
-    /disk write unavailable/);
+  await act(async () => {
+    await assert.rejects(f.api.addEntry("2026-11-04", "Should not appear"),
+      /disk write unavailable/);
+  });
   assert.equal(f.api.entries.length, 1);
   assert.equal(JSON.parse(f.stored.get("@dusk/journal_entries")).length, 1);
   f.failWrites(false);
-  await f.api.addEntry("2026-11-04", "A real second entry");
+  await act(async () => { await f.api.addEntry("2026-11-04", "A real second entry"); });
   assert.equal(JSON.parse(f.stored.get("@dusk/journal_entries")).length, 2);
   await f.unmount();
 });
@@ -105,10 +108,12 @@ test("journal hydration failures refuse new edits and permit a non-destructive r
 
 test("journal serializes overlapping writes without losing either entry", async () => {
   const f = await fixture();
-  await Promise.all([
-    f.api.addEntry("2026-11-04", "First"),
-    f.api.addEntry("2026-11-04", "Second"),
-  ]);
+  await act(async () => {
+    await Promise.all([
+      f.api.addEntry("2026-11-04", "First"),
+      f.api.addEntry("2026-11-04", "Second"),
+    ]);
+  });
   const actual = JSON.parse(f.stored.get("@dusk/journal_entries"));
   assert.equal(actual.length, 2);
   assert.deepEqual(new Set(actual.map(x => x.text)), new Set(["First", "Second"]));
@@ -120,10 +125,12 @@ test("journal deletion waits for in-flight saves and never resurrects local data
   let release;
   const wait = new Promise(resolve => { release = resolve; });
   f.pauseWrites(wait);
-  const save = f.api.addEntry("2026-11-04", "Must be removed");
-  const clear = f.api.clearAll();
-  release();
-  await Promise.all([save, clear]);
+  await act(async () => {
+    const save = f.api.addEntry("2026-11-04", "Must be removed");
+    const clear = f.api.clearAll();
+    release();
+    await Promise.all([save, clear]);
+  });
   assert.equal(f.stored.has("@dusk/journal_entries"), false);
   assert.equal(f.api.entries.length, 0);
   await f.unmount();
@@ -131,9 +138,13 @@ test("journal deletion waits for in-flight saves and never resurrects local data
 
 test("journal removal error is reported and does not falsely clear displayed history", async () => {
   const f = await fixture();
-  await f.api.addEntry("2026-11-04", "Don't silently lose this");
+  await act(async () => {
+    await f.api.addEntry("2026-11-04", "Don't silently lose this");
+  });
   f.failClears(true);
-  await assert.rejects(f.api.clearAll(), /disk removal unavailable/);
+  await act(async () => {
+    await assert.rejects(f.api.clearAll(), /disk removal unavailable/);
+  });
   assert.equal(f.api.entries.length, 1);
   assert.equal(JSON.parse(f.stored.get("@dusk/journal_entries")).length, 1);
   await f.unmount();
