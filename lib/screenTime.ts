@@ -787,8 +787,13 @@ export async function grantBedtimeException({
     throw new Error("iOS couldn't save the exception for native recovery.");
   }
 
+  let monitorRequested = false;
+  let unshieldAttempted = false;
   try {
     if (activityName) {
+      // Native monitoring APIs can fail AFTER installing a monitor.
+      // The rollback path must know to inspect and stop it in either case.
+      monitorRequested = true;
       DeviceActivity.configureActions({
         activityName,
         callbackName: "intervalDidEnd",
@@ -805,6 +810,7 @@ export async function grantBedtimeException({
     }
     // The third-party library catches native blocking exceptions, so verify
     // resulting managed settings instead of assuming its call succeeded.
+    unshieldAttempted = true;
     DeviceActivity.unblockSelection({ activitySelectionId: selectionId }, "curfy-120-second-hold");
     // Only count an unlock after independent native verification. If our
     // selected-token intersection was already zero despite a visible shield,
@@ -821,11 +827,63 @@ export async function grantBedtimeException({
     }
     return state.expiresAt;
   } catch (error) {
-    if (activityName) stopExceptionMonitor(state);
-    DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
-    // Fail closed: restore protection if partial native setup failed.
-    DeviceActivity.blockSelection({ activitySelectionId: selectionId }, "curfy-exception-rollback");
-    throw error;
+    // A failed native method can have already changed the shield. Re-apply
+    // the one selected app FIRST, and verify ManagedSettings. If this fails,
+    // keep both the shared recovery state and the monitor's reblock action:
+    // otherwise force-quitting Curfy could strand the app unshielded.
+    let shieldRestored = false;
+    try {
+      if (unshieldAttempted) {
+        DeviceActivity.blockSelection(
+          { activitySelectionId: selectionId }, "curfy-exception-rollback"
+        );
+      }
+      const overlap = selectedShieldCountOrNull(selectionId);
+      shieldRestored = (overlap !== null && overlap > 0) || DeviceActivity.isShieldActive();
+    } catch (restoreError) {
+      console.warn("[Curfy] Failed verifying exception rollback shield", restoreError);
+    }
+
+    let monitorStopped = !monitorRequested;
+    if (monitorRequested && shieldRestored) {
+      try {
+        stopExceptionMonitor(state);
+        monitorStopped = !DeviceActivity.getActivities().includes(activityName);
+        if (!monitorStopped) {
+          // stopMonitoring sometimes returns without actually stopping. The
+          // live monitor must KEEP a reblock action for its own expiry.
+          DeviceActivity.configureActions({
+            activityName, callbackName: "intervalDidEnd",
+            actions: [{ type: "blockSelection", familyActivitySelectionId: selectionId }],
+          });
+        }
+      } catch (stopError) {
+        console.warn("[Curfy] Failed stopping the partial native exception monitor", stopError);
+        monitorStopped = false;
+        try {
+          DeviceActivity.configureActions({
+            activityName, callbackName: "intervalDidEnd",
+            actions: [{ type: "blockSelection", familyActivitySelectionId: selectionId }],
+          });
+        } catch (restoreActionError) {
+          console.warn("[Curfy] Failed recovering native exception reblock action", restoreActionError);
+        }
+      }
+    }
+
+    if (shieldRestored && monitorStopped) {
+      DeviceActivity.userDefaultsRemove(EXCEPTION_STATE_KEY);
+      if (DeviceActivity.userDefaultsGet<unknown>(EXCEPTION_STATE_KEY) !== null &&
+          DeviceActivity.userDefaultsGet<unknown>(EXCEPTION_STATE_KEY) !== undefined) {
+        throw new Error("Curfy couldn't confirm cleanup of the failed app-access record. Check Screen Time protection.");
+      }
+      throw error;
+    }
+    // Failed rollback is NOT a normal denied unlock. Preserve native
+    // recovery metadata for foreground restart and the extension callback.
+    throw new Error(
+      "Curfy couldn't confirm recovery of the selected app restriction. Open Settings and check native protection."
+    );
   }
   } finally {
     freeExceptionGrantInProgress = false;
