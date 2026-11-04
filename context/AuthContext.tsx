@@ -101,7 +101,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     ])
       .then(([{ data, error }, confirmedId]) => {
         if (!active) return;
-        if (error) console.warn("[Curfy] Could not restore leaderboard session", error);
+        if (error) {
+          // An unsuccessful session read is not evidence that a remote
+          // account doesn't exist. Do not permit a local-only delete.
+          authRecoveryFailed.current = true;
+          deletionInProgress.current = true;
+          setIsDeletingAccount(true);
+          console.warn("[Curfy] Could not restore leaderboard session", error);
+        }
         if (confirmedId) {
           remoteDeletedUserId.current = confirmedId;
           deletionInProgress.current = true;
