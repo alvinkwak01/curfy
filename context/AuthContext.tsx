@@ -163,25 +163,28 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteRemoteAccount = async () => {
     if (!isSupabaseConfigured) return;
-    // If startup could not read the auth session/deletion receipt, treating
-    // a null session as no account would falsely allow a local-only wipe.
-    if (authRecoveryFailed.current) {
-      throw new Error("Curfy couldn't verify your online account or a previous deletion. Reopen Curfy when local storage is available.");
-    }
-    // A persisted receipt means a previous attempt has already deleted the
-    // server account. Retrying the Edge Function would now get 401 because
-    // that remote user no longer exists, leaving local private data stranded.
+    // A persisted, server-confirmed receipt is stronger evidence than a
+    // failed session read. The deleted user cannot authenticate again, so
+    // retries must NOT depend on refreshing the invalidated Supabase JWT.
     const confirmedId = remoteDeletedUserId.current;
     if (confirmedId) {
       if (session?.user && session.user.id !== confirmedId) {
         throw new Error("A different Curfy account is active. Cannot reuse a prior deletion receipt.");
       }
+      // Reassert the receipt before continuing. A previous attempt may have
+      // confirmed the server deletion but failed its first disk write.
+      await AsyncStorage.setItem(REMOTE_DELETION_CONFIRMED_KEY, confirmedId);
       const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
       if (signOutError) {
         throw new Error("Curfy couldn't clear its local cloud session. Retry Delete Account.");
       }
       lastSynced.current = null;
       return;
+    }
+    // Without a deletion receipt, a failed session/receipt read cannot
+    // distinguish an empty account from a hidden, still-live online user.
+    if (authRecoveryFailed.current) {
+      throw new Error("Curfy couldn't verify your online account or a previous deletion. Reopen Curfy when local storage is available.");
     }
     if (!session?.user) return;
     if (deletionInProgress.current) {
