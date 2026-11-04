@@ -79,7 +79,10 @@ function EnsureLeaderboardIdentity() {
 
   useEffect(() => {
     if (!isOnboardingComplete || isAuthLoading || isSignedIn) return;
-    ensureAnonymousProfile(userName);
+    void ensureAnonymousProfile(userName).catch((error) => {
+      // A cloud leaderboard failure must not interrupt native protection.
+      console.warn("[Curfy] Online leaderboard profile creation failed", error);
+    });
   }, [isOnboardingComplete, isAuthLoading, isSignedIn, userName, ensureAnonymousProfile]);
 
   return null;
@@ -96,7 +99,11 @@ function StreakSync() {
 
   useEffect(() => {
     if (!isSignedIn) return;
-    syncProfile(bedtime, streak, longestStreak, userName);
+    void syncProfile(bedtime, streak, longestStreak, userName).catch((error) => {
+      // Do not silently discard failed cloud writes. The local history and
+      // the iOS Screen Time schedule are independent from this optional sync.
+      console.warn("[Curfy] Online leaderboard sync failed", error);
+    });
   }, [isSignedIn, bedtime, streak, longestStreak, userName, syncProfile]);
 
   return null;
