@@ -2,6 +2,16 @@
 
 **Updated:** 2026-11-04 (NO EAS development builds; exception-before-daily stop ordering, orphan-shield targeted recovery and in-flight hold guards; 262 tests green; Apple distribution/device/Premium gates OPEN). Read CURRENT decisions first; past docs describing a combined StepFinish or Apple shield mock are SUPERSEDED.
 
+## Current session checkpoint — 2026-11-07
+
+- Live starting head verified: `96ca17fc340ac6f957cc7d648cb09d6eb4bf71af`; PR #2 remains draft, correct base, no merge. GitHub run `41928602213` reports success on that head. Local baseline reproduced **262/262 tests**.
+- Latest code checkpoint: `25e9305d1bbecad0bdd0e031079817989fd3eafc` (four commits beginning `3385b63`). Fixed Premium rollback losing its reblock callback when stop/readback/partial action-clear throws. Added daily-monitor/committed-selection/clock preconditions before grant AND after asynchronous monitor registration. Foreground Premium recovery refuses to create a new shield if the recurring cutoff monitor is absent.
+- Changed: `lib/premiumAppException.ts`, `lib/premiumExceptionRecovery.ts`, `tests/premiumAppException.test.cjs`, `tests/premiumExceptionRecovery.test.cjs`. **Actually run locally:** baseline 262/262; three new rollback tests failed before fix, passed after; full suite **273/273**, `npx tsc --noEmit`, production `expo export --platform ios`, `git diff --check` PASS. Native mocks are not device proof. No Swift changes relative to the previously compiled `15f4d17`; no new native compile/signing/device claim.
+- **New explicit user authorization:** add missing Premium controls as needed to complete the app, including compact Settings purchase/Restore and existing Home row repeated per protected app. Preserve existing hold-button design, onboarding look/order, branding and existing designs. This authorizes missing functionality, not arbitrary redesign.
+- **Next unfinished engineering:** multi-app configuration/foreground reconciliation/stop safety, wire private per-app hold route and StoreKit purchase/restore. Premium is STILL dormant at this checkpoint. No EAS/paid action authorized. Older instructions below to request preview builds before Premium integration are SUPERSEDED.
+- External gates remain UNKNOWN: all four Apple distribution approvals/profiles, App Store Connect non-consumable configuration, signed iPhone behavior, sandbox purchases, deployed Supabase deletion/privacy, leaderboard consent, policy/support destinations and accessibility accommodation.
+- Rollback: revert the four checkpoint commits together; do not reset or merge main.
+
 ## Where to resume
 - Repository: `alvinkwak01/curfy`.
 - Active work: **draft PR #2**, https://github.com/alvinkwak01/curfy/pull/2, branch `feat/ios-shield-from-august`; base `backup/local-curfy-august`; **do not merge into main** until release gates are satisfied.
@@ -43,12 +53,11 @@
 - `modules/curfy-storekit`, `modules/curfy-protected-apps`, `lib/premiumAppException.ts` and `lib/premiumExceptionRecovery.ts` contain dormant Premium foundations with verified-transaction ownership, private native labels/tickets, and independent app-exception recovery. **Multi-app UI, purchase checkout, and Premium feature activation remain OFF.** No signed StoreKit sandbox purchase/restore test.
 - Previous iPhone QA found: incorrect shortened onboarding, TimePicker wheel scrolling the page, and selecting one app then receiving a rejection. The first two have source fixes; neither the revised UI nor the picker fix has passed new iPhone QA.
 
-## Next smallest steps — in this order
-1. **DONE (unsigned compile):** app and extension Swift targets compiled on GitHub macOS with `BUILD SUCCEEDED` on `ddcc15f`; latest JS-only changes pass CI at `79e0efd` (218/218 tests, production iOS Metro bundle export). No signed build or on-device proof yet.
-2. **DONE source review for picker count mismatch:** fixed native-Swift `webdomainCount` alias across UI, Free validation, Settings, and dormant Premium. Maintain exact one-app rejection. Other Screen Time behavior remains device-unknown.
-3. **NEXT: ONE user-triggered signed EAS preview build to test the consolidated nine-screen onboarding and the actual Free protection flow**, after checking current HEAD/CI; user must run from authorized Expo/Apple environment as no Expo build connector is connected. Confirm signing/App Group/Family Controls distribution entitlements on signed app and extensions, then install and test on a physical iPhone. Keep PR draft and do not spend credits on speculative builds. Previous preview `78de5ac0-91d1-4ad9-ad10-fd82f86f925c` FAILED Swift compile on older code; new source target is iOS 15.2. Confirm actual signing/entitlements on signed targets.
-4. User's physical-iPhone acceptance: **10-screen UI order (Welcome + 9 setup)/clock drag; Step 8 Curfy ring, Step 9 separate optional name with Skip/Finish, NO Apple shield mock**, Apple picker Done → immediate Continue with exactly one individual app, scheduled shield while Curfy is closed, unrelated apps untouched, 119-second release reset, continuous 120-second hold, up-to-15-minute access/reblock while closed, cutoff release, denied/revoked permission, restarts and restart/setup reset. Record actual pass/fail, iOS/build/commit.
-5. Only after Free device gates are proven, finish per-app Premium chooser/configuration and sandbox $5.99 one-time purchase/restore, distribution Family Controls entitlement verification, accessibility and App Store release checks.
+## Next smallest steps — current order (supersedes older preview requests)
+1. Finish Premium integration and regression-tested native recovery while preserving approved existing designs.
+2. Complete available code/production bundle/native configuration and applicable unsigned compilation checks. Update this handoff and release gates after each substantial batch.
+3. Resolve external entitlement/product/privacy/consent/accessibility gates and prepare a single consolidated physical-device matrix.
+4. Only then propose one signed release candidate; obtain explicit approval before EAS or other paid action. Signed-device, StoreKit and App Review evidence are required before release.
 
 ## Continuity rules
 - Preserve approved decisions, but prioritize verified CURRENT code and current CI over older prose. Treat historical entries in `CURRENT_STATE.md`, `PREMIUM_IMPLEMENTATION.md`, `IOS_DEVICE_ACCEPTANCE.md`, and the uploaded October project documents as a change log, **not automatically current requirements**.
