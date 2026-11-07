@@ -128,7 +128,8 @@ test("TimePicker uses gestures, never a vertically nested FlatList with hidden w
 });
 test("Settings only reschedules native protection when its protected fields change", () => {
   const settings = source("app/settings.tsx");
-  assert.match(settings, /if\s*\(protectionChanged\)\s*\{\s*await configureBedtimeBlocking/);
+  assert.match(settings, /await saveSettings/);
+  assert.doesNotMatch(settings, /await configureBedtimeBlocking/);
   assert.match(settings, /allowProtectionReconfiguration/);
 });
 test("The Apple shield never promises an unsupported automatic Curfy launch", () => {

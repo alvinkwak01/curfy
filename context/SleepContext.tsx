@@ -1,9 +1,11 @@
+import { recoverSettingsTransaction, saveSettingsTransaction, SETTINGS_JOURNAL_KEY, type SavedSettings } from "@/lib/settingsTransaction";
 import { grantPremiumAppException } from "@/lib/premiumAppException";
 import { allPremiumAppsHaveActiveExceptions } from "@/lib/premiumProtection";
 import { protectionOperationPending } from "@/lib/protectionOperation";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import {
+  configureBedtimeBlocking,
   BlockModeId,
   selectionIdForMode,
   activeExceptionExpiresAt,
@@ -53,6 +55,7 @@ const DEV_SKIP_LOCK_KEY = "@dusk/dev_skip_lock";
 // All keys wiped by deleteAccount(). Keep this in sync when adding new
 // persisted fields, or Delete Account will silently leave data behind.
 const ALL_STORAGE_KEYS = [
+  SETTINGS_JOURNAL_KEY,
   BEDTIME_KEY,
   WAKE_TIME_KEY,
   PROTECTION_ROUTINE_KEY,
@@ -78,6 +81,7 @@ export interface SleepEntry {
 }
 
 interface SleepContextType {
+  saveSettings: (settings: SavedSettings, protectionChanged: boolean, draftSelectionId?: string) => Promise<void>;
   bedtime: string;
   setBedtime: (time: string, routine?: ProtectionRoutine) => Promise<void>;
   // Legacy storage names: bedtime = protection start, wakeTime = apps
@@ -223,6 +227,14 @@ async function scheduleBedtimeNotifications(bedtime: string) {
   } catch (_) {}
 }
 
+async function refreshSettingsReminders(settings: SavedSettings): Promise<void> {
+  if (routineIsEveningBased(settings.routine)) await scheduleBedtimeNotifications(settings.bedtime);
+  else if (Platform.OS !== "web") {
+    try { await Notifications.cancelAllScheduledNotificationsAsync(); }
+    catch (error) { console.warn("[Curfy] Couldn't clear old evening reminders", error); }
+  }
+}
+
 // This counts recorded protection nights, never nights of measured sleep.
 function computeStreak(log: SleepEntry[]): number {
   return countLoggedNightStreak(log);
@@ -311,11 +323,13 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
 
   // A failed AsyncStorage read must NEVER drop the user into fresh
   // onboarding while a previous iOS Screen Time schedule may still exist.
-  // Keep the app in a recoverable error state and allow a read-only retry.
+  // Keep the app in a recoverable error state. Retry finishes any journal
+  // before reading preferences; it never resets onboarding or local history.
   const retryLoadSavedSettings = useCallback(async () => {
     setIsLoading(true);
     setStorageError(null);
     try {
+      const recovered = await recoverSettingsTransaction(configureBedtimeBlocking);
       const [bt, wt, bm, un, oc, sl, cd, tu, mo, ls, dsl, pr] = await Promise.all([
         AsyncStorage.getItem(BEDTIME_KEY),
         AsyncStorage.getItem(WAKE_TIME_KEY),
@@ -364,6 +378,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       }
       if (ls) setLongestStreak(parseInt(ls, 10) || 0);
       if (__DEV__ && dsl === "true") setDevSkipLockState(true);
+      if (recovered) await refreshSettingsReminders(recovered);
     } catch (error) {
       console.warn("[Curfy] Could not read saved local configuration", error);
       setStorageError("Curfy couldn't read your saved settings. Nothing was erased.");
@@ -378,7 +393,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { userNameRef.current = userName; }, [userName]);
 
   const checkLock = useCallback(() => {
-    if (!isOnboardingComplete) return;
+    if (isLoading || storageError || protectionOperationPending() || !isOnboardingComplete) return;
     // Dev-only escape hatch so the real bedtime window doesn't lock you
     // out of testing other screens. `__DEV__` is compiled to `false` in
     // every production/release bundle, so this branch is dead code in the
@@ -430,7 +445,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       const streak = computeStreak(currentLog);
       sendMorningSummary(userNameRef.current, escapes, streak);
     }
-  }, [bedtime, wakeTime, isOnboardingComplete, devSkipLock]);
+  }, [bedtime, wakeTime, isOnboardingComplete, devSkipLock, isLoading, storageError]);
 
   useEffect(() => {
     checkLock();
@@ -441,7 +456,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   // DeviceActivity callbacks can be deferred until the user next uses
   // the device. Reconcile missed exception expiry whenever Curfy reopens.
   useEffect(() => {
-    if (isLoading || !isOnboardingComplete) return;
+    if (isLoading || storageError || !isOnboardingComplete) return;
     try {
       // Updating an installed preview does not automatically replace native
       // shield actions stored in the shared app-group UserDefaults.
@@ -450,30 +465,48 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       console.warn("[Curfy] Could not refresh native shield appearance", error);
     }
     reconcileNativeProtection(bedtime, wakeTime, blockMode);
-  }, [isLoading, isOnboardingComplete, bedtime, wakeTime, blockMode]);
+  }, [isLoading, storageError, isOnboardingComplete, bedtime, wakeTime, blockMode]);
 
   // Foreground-only safety net. The real re-shield is in iOS's native
   // extension, so this interval is not required for a closed app to work.
   useEffect(() => {
-    if (isLoading || !isOnboardingComplete) return;
+    if (isLoading || storageError || !isOnboardingComplete) return;
     const id = setInterval(() => {
       if (AppState.currentState !== "active") return;
       reconcileNativeProtection(bedtime, wakeTime, blockMode);
     }, 30000);
     return () => clearInterval(id);
-  }, [isLoading, isOnboardingComplete, bedtime, wakeTime, blockMode]);
+  }, [isLoading, storageError, isOnboardingComplete, bedtime, wakeTime, blockMode]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         checkLock();
-        if (isOnboardingComplete) {
+        if (!isLoading && !storageError && isOnboardingComplete) {
           reconcileNativeProtection(bedtime, wakeTime, blockMode);
         }
       }
     });
     return () => sub.remove();
-  }, [checkLock, isOnboardingComplete, bedtime, wakeTime, blockMode]);
+  }, [checkLock, isLoading, storageError, isOnboardingComplete, bedtime, wakeTime, blockMode]);
+
+  const saveSettings = async (settings: SavedSettings, protectionChanged: boolean, draftSelectionId?: string) => {
+    try {
+      const committed = await saveSettingsTransaction(settings, protectionChanged, draftSelectionId, configureBedtimeBlocking);
+      setBedtimeState(committed.bedtime);
+      setWakeTimeState(committed.wakeTime);
+      setBlockModeState(committed.blockMode);
+      setProtectionRoutineState(committed.routine);
+      setUserNameState(committed.userName);
+      setMotivationState(committed.motivation);
+      if (protectionChanged) await refreshSettingsReminders(committed);
+    } catch (error) {
+      // Hide stale values and pause foreground reconciliation until the journal
+      // has completed. The existing recovery screen offers a safe retry.
+      setStorageError("Curfy couldn't finish saving your settings. Nothing was erased.");
+      throw error;
+    }
+  };
 
   const setBedtime = async (time: string, routine = protectionRoutine) => {
     await AsyncStorage.setItem(BEDTIME_KEY, time);
@@ -493,8 +526,8 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setWakeTime = async (time: string) => {
-    setWakeTimeState(time);
     await AsyncStorage.setItem(WAKE_TIME_KEY, time);
+    setWakeTimeState(time);
   };
 
   const setProtectionRoutine = async (routine: ProtectionRoutine) => {
@@ -503,18 +536,18 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   };
 
   const setBlockMode = async (mode: string) => {
-    setBlockModeState(mode);
     await AsyncStorage.setItem(BLOCK_MODE_KEY, mode);
+    setBlockModeState(mode);
   };
 
   const setUserName = async (name: string) => {
-    setUserNameState(name);
     await AsyncStorage.setItem(USERNAME_KEY, name);
+    setUserNameState(name);
   };
 
   const setMotivation = async (note: string) => {
-    setMotivationState(note);
     await AsyncStorage.setItem(MOTIVATION_KEY, note);
+    setMotivationState(note);
   };
 
   const completeOnboarding = async () => {
@@ -683,6 +716,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
         bedtime,
         setBedtime,
         wakeTime,
+        saveSettings,
         setWakeTime,
         protectionRoutine,
         setProtectionRoutine,

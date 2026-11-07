@@ -2,6 +2,9 @@
 
 Integrated source `a1a400b`: Premium purchase/restore, multi-app configuration, private per-app hold route, independent monitor lifecycle and approved leaderboard consent are now wired. Local 303/303 tests, TypeScript, Expo Doctor 18/18, iOS release JS export, four-target entitlement configuration and unsigned local Xcode compilation PASS. No signed-device/StoreKit/backend proof. Read CURRENT_HANDOFF.md and RELEASE_GATE_STATUS.md first. All older dormant-Premium, automatic-without-consent, mode-selector and preview-build instructions below are historical/superseded.
 
+
+Latest continuation from verified `8e839fc`: Settings now uses a recoverable local journal and native commit/abort receipts. Partial local writes never publish partial React preferences; startup/retry resolves the journal first, and native replay after commit cannot cancel earned exceptions. Focused review also closed overlapping-save/picker and stale foreground-reconciliation paths. **332/332 tests**, TypeScript and iOS release export PASS locally. Screens/onboarding/hold unchanged. Actual process-kill/disk durability remains a signed-device gate. See current handoff for exact files, recovery semantics and rollback.
+
 ---
 
 ## Fail-open when recurring native monitor disappears (2026-11-02)

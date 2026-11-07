@@ -1,3 +1,4 @@
+import { protectionOperationPending } from "@/lib/protectionOperation";
 import { LeaderboardSettings } from "@/components/LeaderboardConsent";
 import { PremiumSettings } from "@/components/PremiumSettings";
 import { usePremium } from "@/context/PremiumContext";
@@ -10,7 +11,6 @@ import { useSleep } from "@/context/SleepContext";
 import {
   BLOCK_MODE_PRESETS,
   BlockModeId,
-  configureBedtimeBlocking,
   getSelectionCount,
   draftSelectionIdForMode,
   prepareSelectionDraft,
@@ -49,18 +49,13 @@ export default function Settings() {
   const { entitlement } = usePremium();
   const selectionIssue = (metadata: ActivitySelectionMetadata | null | undefined) => selectionIssueForEntitlement(metadata, entitlement);
   const {
+    saveSettings,
     bedtime,
-    setBedtime,
     wakeTime,
-    setWakeTime,
     protectionRoutine,
-    setProtectionRoutine,
     blockMode,
-    setBlockMode,
     userName,
-    setUserName,
     motivation,
-    setMotivation,
     signOut,
     deleteAccount,
     devSkipLock,
@@ -96,8 +91,7 @@ export default function Settings() {
     return counts;
   });
 
-  const onSave = async () => {
-    if (saveInFlight.current || saved || deleting) return;
+  const performSave = async () => {
     if (!localBlockMode) {
       Alert.alert("Choose an app", "Select an app to protect before saving.");
       return;
@@ -154,29 +148,11 @@ export default function Settings() {
       );
       return;
     }
-    saveInFlight.current = true;
-    setSaving(true);
     try {
-      // Name/motivation edits must not reset the native shield, cancel an
-      // exception, or restart DeviceActivity monitoring.
-      if (protectionChanged) {
-        await configureBedtimeBlocking({
-          bedtime: localBedtime,
-          wakeTime: localWakeTime,
-          mode: localBlockMode,
-          draftSelectionId: pickerEdited
-            ? draftSelectionIdForMode(localBlockMode)
-            : undefined,
-        });
-        if (localBedtime !== bedtime || localRoutine !== protectionRoutine) {
-          await setBedtime(localBedtime, localRoutine);
-        }
-        if (localWakeTime !== wakeTime) await setWakeTime(localWakeTime);
-        if (localBlockMode !== blockMode) await setBlockMode(localBlockMode);
-        if (localRoutine !== protectionRoutine) await setProtectionRoutine(localRoutine);
-      }
-      if (localName.trim() !== userName) await setUserName(localName.trim());
-      if (localMotivation.trim() !== motivation) await setMotivation(localMotivation.trim());
+      await saveSettings({
+        bedtime: localBedtime, wakeTime: localWakeTime, blockMode: localBlockMode,
+        routine: localRoutine, userName: localName.trim(), motivation: localMotivation.trim(),
+      }, protectionChanged, pickerEdited ? draftSelectionIdForMode(localBlockMode) : undefined);
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setSaved(true);
       setTimeout(() => router.back(), 800);
@@ -184,13 +160,19 @@ export default function Settings() {
       console.warn("[Curfy] Failed to save Settings", error);
       Alert.alert("Settings couldn't be fully saved",
         error instanceof Error ? error.message : "Please try saving again.");
-    } finally {
-      saveInFlight.current = false;
-      setSaving(false);
     }
   };
 
+  const onSave = async () => {
+    if (saveInFlight.current || protectionOperationPending() || saved || deleting) return;
+    saveInFlight.current = true;
+    setSaving(true);
+    try { await performSave(); }
+    finally { saveInFlight.current = false; setSaving(false); }
+  };
+
   const handlePickApps = (mode: BlockModeId) => {
+    if (saveInFlight.current || protectionOperationPending() || deleting) return;
     try {
       // The picker edits a distinct opaque selection. Leaving Settings
       // without Save cannot change tokens used by the active iOS monitor.

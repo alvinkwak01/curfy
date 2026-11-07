@@ -1494,3 +1494,44 @@ test("unremovable orphan exception shield preserves recovery state for retry", a
   assert.equal(f.isBlocked(), true);
   assert.equal(f.storage.has("curfy-active-exception"), true);
 });
+
+test('Settings receipt replay does not reset monitors, selection or a later earned exception', async () => {
+  const f = fixture();
+  const input = {bedtime:'22:00',wakeTime:'06:00',mode:'custom',settingsTransactionId:'settings-test',now:new Date('2026-11-07T23:00:00')};
+  await f.screenTime.configureBedtimeBlocking(input);
+  assert.equal(f.storage.get('curfy-settings-commit-id'),'settings-test');
+  const expiry = await f.screenTime.grantBedtimeException({...input,now:new Date('2026-11-07T23:01:00')});
+  const calls = f.calls.length;
+  await f.screenTime.configureBedtimeBlocking(input);
+  assert.equal(f.calls.length,calls);
+  assert.equal(f.screenTime.activeExceptionExpiresAt(new Date('2026-11-07T23:02:00')),expiry);
+});
+test('native Settings failure stores an abort receipt so failed local cleanup cannot replay it', async () => {
+  const f = fixture({authorization:1});
+  const input={bedtime:'22:00',wakeTime:'06:00',mode:'custom',settingsTransactionId:'abort-test'};
+  await assert.rejects(f.screenTime.configureBedtimeBlocking(input),e=>e.settingsRollbackConfirmed===true);
+  assert.equal(f.storage.get('curfy-settings-commit-id'),'aborted:abort-test');
+  const calls=f.calls.length;
+  await assert.rejects(f.screenTime.configureBedtimeBlocking(input),/rolled back/);
+  assert.equal(f.calls.length,calls);
+});
+
+test('unreadable native receipt cannot abort an already committed Settings journal',async()=>{
+ const f=fixture();const get=f.native.userDefaultsGet;
+ f.native.userDefaultsGet=key=>{if(key==='curfy-settings-commit-id')throw Error('receipt unavailable');return get(key);};
+ await assert.rejects(f.screenTime.configureBedtimeBlocking({bedtime:'22:00',wakeTime:'06:00',mode:'custom',settingsTransactionId:'unreadable'}),e=>!e.settingsRollbackConfirmed);
+ assert.equal(f.storage.has('curfy-settings-commit-id'),false);
+});
+test('failed native commit receipt preserves the journal for recovery rather than claiming rollback',async()=>{
+ const f=fixture();const set=f.native.userDefaultsSet;
+ f.native.userDefaultsSet=(key,value)=>{if(key!=='curfy-settings-commit-id')set(key,value);};
+ await assert.rejects(f.screenTime.configureBedtimeBlocking({bedtime:'22:00',wakeTime:'06:00',mode:'custom',settingsTransactionId:'missing',now:new Date('2026-11-07T23:00:00')}),e=>!e.settingsRollbackConfirmed);
+ assert.equal(f.storage.get('curfy-scheduled-selection-id'),'curfy-block-custom');
+ assert.equal(f.storage.has('curfy-settings-commit-id'),false);
+});
+
+test('interrupted native recovery failure never discards its unresolved journal intent',async()=>{
+ const f=fixture({authorization:1});
+ await assert.rejects(f.screenTime.configureBedtimeBlocking({bedtime:'22:00',wakeTime:'06:00',mode:'custom',settingsTransactionId:'interrupted',settingsRecovery:true}),e=>!e.settingsRollbackConfirmed);
+ assert.equal(f.storage.has('curfy-settings-commit-id'),false);
+});

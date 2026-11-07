@@ -3,8 +3,8 @@ Updated 2026-11-07. Draft PR #2, branch `feat/ios-shield-from-august`. Canonical
 
 | Gate | Evidence / status | Still required |
 |---|---|---|
-| Settings persistence | OPEN code blocker: native configuration commits before separate local writes; failures can diverge schedule and saved UI | Recoverable transaction/journal, injected write-failure/restart/retry tests before candidate build |
-| Code tests | Local **303/303 PASS**, TypeScript PASS; React provider/hold-route tests plus native mocks | GitHub CI `42424947488`/`42424943611` also PASS; integration review continues; no mock proves iPhone behavior |
+| Settings persistence | IMPLEMENTED / mocked tests PASS: write-ahead journal, native commit/abort receipts, verified local writes, startup/retry recovery, stale-state guards | Signed process-kill/reboot and real storage/permission failure recovery; native disk durability not proven |
+| Code tests | Latest local **332/332 PASS**, TypeScript PASS; React provider/hold-route tests plus native mocks | Prior integrated GitHub CI `42424947488`/`42424943611` PASS; new checkpoint CI to verify; integration review continues; no mock proves iPhone behavior |
 | Production JS | iOS Hermes export PASS | Signed binary using same reviewed source |
 | Expo/native config | Doctor **18/18 PASS**, prebuild/autolinking, app + 3 entitlement-config checks PASS | Actual distribution profiles/capabilities |
 | Swift compilation | Local Xcode 26.6, Simulator SDK 26.5, unsigned Debug app + 3 extensions **BUILD SUCCEEDED**; final callback source compiled arm64/x86_64 | Signed archive/real-device behavior; simulator compilation is not Screen Time proof |

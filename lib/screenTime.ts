@@ -141,6 +141,7 @@ function restoreSelection(id: string, previous: string | undefined): void {
 
 const BEDTIME_ACTIVITY_NAME = "curfy-bedtime";
 const SCHEDULED_SELECTION_ID_KEY = "curfy-scheduled-selection-id";
+const SETTINGS_COMMIT_KEY = "curfy-settings-commit-id";
 const BEDTIME_CLOCK_KEY = "curfy-bedtime-clock-window";
 
 type BedtimeClockWindow = { startMinute: number; endMinute: number };
@@ -266,10 +267,24 @@ async function restorePreviousBedtimeMonitor({
 
 export async function configureBedtimeBlocking(input: {
   bedtime: string; wakeTime: string; mode: BlockModeId; now?: Date; draftSelectionId?: string;
+  settingsTransactionId?: string; operationOwner?: object; settingsRecovery?: boolean;
 }): Promise<void> {
   if (freeExceptionGrantInProgress) throw new Error("Curfy is still preparing a temporary app unlock. Finish that request before changing protection.");
-  const finish = beginProtectionOperation();
+  const finish = beginProtectionOperation(input.operationOwner);
+  let nativeStarted = false;
+  let receiptRead = false;
+  let knownAborted = false;
   try {
+    // A journal replay after the native commit only finishes local storage.
+    // Never reset monitors or an earned exception a second time.
+    const receipt = input.settingsTransactionId
+      ? DeviceActivity.userDefaultsGet<string>(SETTINGS_COMMIT_KEY) : undefined;
+    receiptRead = true;
+    if (input.settingsTransactionId && receipt === input.settingsTransactionId) return;
+    if (input.settingsTransactionId && receipt === `aborted:${input.settingsTransactionId}`) {
+      knownAborted = true;
+      throw new Error("The previous Settings save was rolled back. Your previous settings were kept.");
+    }
     const pendingId = input.draftSelectionId ?? selectionIdForMode(input.mode);
     const metadata = DeviceActivity.activitySelectionMetadata({ activitySelectionId: pendingId });
     const count = normalizeActivitySelectionMetadata(metadata)?.applicationCount ?? 0;
@@ -278,7 +293,31 @@ export async function configureBedtimeBlocking(input: {
     if (issue) throw new Error(count > 1
       ? "Verified Curfy Premium is required for multiple individual apps. Categories and websites aren't supported."
       : "Select one individual app to protect.");
+    if (getScreenTimeAccessStatus() !== "authorized") {
+      throw new Error("Screen Time permission is required to protect selected apps.");
+    }
+    assertMonitorableBedtimeSchedule(input.bedtime, input.wakeTime);
+    nativeStarted = true;
     await configureVerifiedBedtimeBlocking(input);
+  } catch (error) {
+    // Ordinary validation/native failures leave the old configuration intact.
+    // An unconfirmed rollback keeps the journal for explicit recovery retry.
+    // After a process interruption, the rollback snapshot may itself be a
+    // partially applied configuration. Only a pre-existing abort receipt can
+    // justify discarding that journal; otherwise retry must keep its intent.
+    if (error instanceof Error && input.settingsRecovery && !knownAborted) {
+      delete (error as Error & { settingsRollbackConfirmed?: boolean }).settingsRollbackConfirmed;
+      throw error;
+    }
+    if (error instanceof Error && (receiptRead && !nativeStarted || (error as Error & { settingsRollbackConfirmed?: boolean }).settingsRollbackConfirmed)) {
+      if (input.settingsTransactionId) {
+        const aborted = `aborted:${input.settingsTransactionId}`;
+        DeviceActivity.userDefaultsSet(SETTINGS_COMMIT_KEY, aborted);
+        if (DeviceActivity.userDefaultsGet(SETTINGS_COMMIT_KEY) !== aborted) throw error;
+      }
+      Object.assign(error, { settingsRollbackConfirmed: true });
+    }
+    throw error;
   } finally { finish(); }
 }
 
@@ -288,6 +327,7 @@ async function configureVerifiedBedtimeBlocking({
   mode,
   now = new Date(),
   draftSelectionId,
+  settingsTransactionId,
 }: {
   bedtime: string;
   wakeTime: string;
@@ -295,6 +335,7 @@ async function configureVerifiedBedtimeBlocking({
   now?: Date;
   /** Settings stages picker changes independently of live opaque tokens. */
   draftSelectionId?: string;
+  settingsTransactionId?: string;
 }): Promise<void> {
   if (freeExceptionGrantInProgress) {
     throw new Error("Curfy is still preparing a temporary app unlock. Finish that request before changing protection.");
@@ -431,9 +472,19 @@ async function configureVerifiedBedtimeBlocking({
     // Do not report normal "save failed" if old protections may have been
     // lost. State exactly what must be checked on the phone.
     if (rollbackError) {
-      throw new Error("New schedule failed and Curfy couldn't confirm the previous native protection was restored. Open Curfy Settings and check your protected app and hours.");
+      throw Object.assign(new Error("New schedule failed and Curfy couldn't confirm the previous native protection was restored. Open Curfy Settings and check your protected app and hours."), { rollbackUnconfirmed: true });
     }
+    if (error instanceof Error) Object.assign(error, { settingsRollbackConfirmed: true });
     throw error;
+  }
+  // This receipt follows the complete native commit. A failed receipt write
+  // must keep the local journal, not claim a rollback after exceptions were
+  // retired. Recovery can retry the accepted configuration if no receipt exists.
+  if (settingsTransactionId) {
+    DeviceActivity.userDefaultsSet(SETTINGS_COMMIT_KEY, settingsTransactionId);
+    if (DeviceActivity.userDefaultsGet(SETTINGS_COMMIT_KEY) !== settingsTransactionId) {
+      throw new Error("iOS could not confirm the Settings commit. Please retry.");
+    }
   }
 }
 
