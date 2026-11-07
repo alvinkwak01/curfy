@@ -47,6 +47,7 @@ function fixture({
     { startMinute: 22*60, endMinute: 6*60 });
   const monitors = new Set(ledger && typeof ledger === "object" && !Array.isArray(ledger)
     ? Object.keys(ledger) : []);
+  monitors.add("curfy-bedtime");
   const calls = [];
   const tokens = id => id === group ? ["A", "B", "C"] :
     id === t1 ? ["A"] : id === t2 ? ["B"] : [];
@@ -87,7 +88,7 @@ function fixture({
     if (name === "@/lib/premiumPolicy") return premiumPolicy;
     throw Error("Unexpected import " + name);
   });
-  return { mod, apps, calls, storage, monitors };
+  return { mod, apps, calls, storage, monitors, native };
 }
 
 test("free tier with no Premium ledger never calls native mutation", () => {
@@ -100,7 +101,7 @@ test("active Premium exception remains untouched until its own expiration", () =
   const f = fixture({ ledger: { [B.activityName]: B }, blocked: ["A", "C"] });
   assert.equal(f.mod.reconcilePremiumAppExceptions(after20), 0);
   assert.equal(f.calls.length, 0);
-  assert.equal(f.monitors.size, 1);
+  assert.equal(f.monitors.size, 2);
 });
 
 test("expired app A is re-shielded while active app B remains unshielded", () => {
@@ -140,7 +141,7 @@ test("after selection was replaced recovery cannot re-shield a formerly chosen a
 test("revoked Screen Time permission preserves ledger and monitor for later recovery", () => {
   const f = fixture({ ledger: {[A.activityName]:A}, authorization:false });
   assert.equal(f.mod.reconcilePremiumAppExceptions(after20), 0);
-  assert.equal(f.monitors.size, 1);
+  assert.equal(f.monitors.size, 2);
   assert.equal(f.calls.length, 0);
 });
 
@@ -153,7 +154,7 @@ test("corrupted native ledger is rejected without cleaning any monitor", () => {
 test("unreliable native re-shield fails closed and retains recovery metadata", () => {
   const f = fixture({ ledger:{[A.activityName]:A}, ignoreBlock:true });
   assert.throws(()=>f.mod.reconcilePremiumAppExceptions(after20), /did not confirm/);
-  assert.equal(f.monitors.size, 1);
+  assert.equal(f.monitors.size, 2);
   assert.ok(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY)[A.activityName]);
 });
 
@@ -161,7 +162,7 @@ test("native stop failure restores the reblock action and preserves the ledger",
   const f = fixture({ ledger:{[A.activityName]:A}, ignoreStop:true });
   assert.throws(()=>f.mod.reconcilePremiumAppExceptions(after20), /could not stop/);
   assert.ok(f.calls.some(x=>x[0]==="actions" && x[1].actions.length === 1));
-  assert.equal(f.monitors.size, 1);
+  assert.equal(f.monitors.size, 2);
   assert.ok(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY)[A.activityName]);
 });
 
@@ -170,20 +171,20 @@ test("unexpected re-shield of active app B is detected, with its record preserve
     [A.activityName]: A, [B.activityName]: B,
   }, overblock: true });
   assert.throws(()=>f.mod.reconcilePremiumAppExceptions(after20), /single-app re-shielding|still-active exception/);
-  assert.equal(f.monitors.size, 2);
+  assert.equal(f.monitors.size, 3);
   assert.equal(Object.keys(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY)).length, 2);
 });
 
 test("a changed native singleton refuses to re-shield and preserves its record", () => {
   const f = fixture({ ledger:{[A.activityName]:A}, targetCategoryCount:1 });
   assert.throws(()=>f.mod.reconcilePremiumAppExceptions(after20), /no longer has one valid app token/);
-  assert.equal(f.monitors.size, 1);
+  assert.equal(f.monitors.size, 2);
 });
 
 test("a token no longer in the committed parent requires recovery guidance", () => {
   const f = fixture({ ledger:{[A.activityName]:A}, targetInParent:false });
   assert.throws(()=>f.mod.reconcilePremiumAppExceptions(after20), /selection changed/);
-  assert.equal(f.monitors.size, 1);
+  assert.equal(f.monitors.size, 2);
 });
 
 test("no old-window app shield is applied when saved clock is invalid", () => {
@@ -196,4 +197,26 @@ test("Recovery never modifies a free-tier exception or unshields an app", () => 
   const text = readFileSync(join(__dirname, "../lib/premiumExceptionRecovery.ts"), "utf8");
   assert.doesNotMatch(text, /unblockSelection\(/);
   assert.doesNotMatch(text, /curfy-active-exception/);
+});
+
+test("missing daily cutoff never permits foreground Premium re-shield", () => {
+  const f = fixture({ ledger: { [A.activityName]: A } });
+  f.monitors.delete("curfy-bedtime");
+  assert.throws(() => f.mod.reconcilePremiumAppExceptions(after20), /monitor is missing/);
+  assert.equal(f.calls.length, 0);
+  assert.ok(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY)[A.activityName]);
+});
+
+test("partially cleared callback is restored when its write throws", () => {
+  const f = fixture({ ledger: { [A.activityName]: A } });
+  const configure = f.native.configureActions;
+  f.native.configureActions = action => {
+    configure(action);
+    if (!action.actions.length) throw Error("clear failed after write");
+  };
+  assert.throws(() => f.mod.reconcilePremiumAppExceptions(after20), /clear failed/);
+  const actions = f.calls.filter(call => call[0] === "actions");
+  assert.equal(actions.at(-1)[1].actions[0].familyActivitySelectionId, t1);
+  assert.ok(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY)[A.activityName]);
+  assert.ok(f.monitors.has(A.activityName));
 });
