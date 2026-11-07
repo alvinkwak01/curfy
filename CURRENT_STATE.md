@@ -1,3 +1,9 @@
+# Current checkpoint — 2026-11-07
+
+Integrated source `a1a400b`: Premium purchase/restore, multi-app configuration, private per-app hold route, independent monitor lifecycle and approved leaderboard consent are now wired. Local 303/303 tests, TypeScript, Expo Doctor 18/18, iOS release JS export, four-target entitlement configuration and unsigned local Xcode compilation PASS. No signed-device/StoreKit/backend proof. Read CURRENT_HANDOFF.md and RELEASE_GATE_STATUS.md first. All older dormant-Premium, automatic-without-consent, mode-selector and preview-build instructions below are historical/superseded.
+
+---
+
 ## Fail-open when recurring native monitor disappears (2026-11-02)
 
 **Verified in code / tested in mocked-native unit tests:** `reconcileProtectionWindow()` previously called `DeviceActivity.blockSelection` while within the user's configured hours even if `DeviceActivityCenter.activities` no longer included `curfy-bedtime`. Without that recurring iOS schedule, no future intervalDidEnd callback could reliably release a shield after Curfy closes. Now, before foreground re-shielding, Curfy verifies the recurring monitor exists. If missing, it NEVER re-shields and resets any orphaned Curfy shield; a swallowed reset triggers an explicit error, not a false success.

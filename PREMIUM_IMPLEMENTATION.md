@@ -1,3 +1,9 @@
+# Current implementation — 2026-11-07
+
+Premium is no longer dormant in source at `a1a400b`. Settings provides StoreKit-localized one-time purchase/restore; multi-app configuration independently rechecks ownership; Home has private native per-app rows leading to the unchanged 120s hold; independent exception lifecycle, rollback and concurrency are integrated. One app hold never unlocks a group or grants global Settings-edit access. Source/native mocks and React simulations pass; unsigned Xcode compiles. Product configuration, signed sandbox purchase/restore and physical per-app shielding remain UNVERIFIED. Historical “not implemented” sections below do not describe current code; canonical detail/evidence is in CURRENT_HANDOFF.md.
+
+---
+
 # Curfy Premium — one-time iOS purchase and per-app exception
 
 Decision date: 2026-11-02. This supersedes the earlier pending-subscription/price discussion. No App Store product or live checkout is implied by this document.

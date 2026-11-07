@@ -1,3 +1,9 @@
+# Current acceptance matrix — 2026-11-07
+
+Use CONSOLIDATED_DEVICE_ACCEPTANCE.md for the ONE consolidated signed candidate. No EAS build is authorized. Existing onboarding is Welcome + nine steps, original ring at Step 8, optional name at Step 9, no routine selectors. Premium and explicit leaderboard consent are now wired in source but NOT tested on the current signed iPhone. Older scenarios below are historical and must not override current product decisions.
+
+---
+
 ## Native safety gate: recurring monitor is required for foreground re-shield (2026-11-02)
 
 If the recurring `curfy-bedtime` DeviceActivity monitor is absent, Curfy must not put a new shield on the selected app in foreground recovery, because it cannot guarantee native release at cutoff. If an orphaned Curfy shield is already present, foreground recovery attempts to clear it; any failure is surfaced rather than hidden. Automated mock-native tests cover missing/present monitors and expired exceptions, but a real iPhone test (via a purpose-built debug scenario) is still required before classifying recovery as device-verified. Under Apple's documented DeviceActivity callback semantics, real-time end may be delivered when the user next uses the device: verify the selected app is available when opened after cutoff, not simply an idle clock screenshot. Do not treat CI/iOS prebuild as native Swift compilation or physical-device proof.

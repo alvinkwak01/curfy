@@ -1,3 +1,17 @@
+# Current privacy delta — 2026-11-07
+
+- User approved keeping the leaderboard with one-time Join/Not now disclosure before uploads, automatic participation after joining, and a Settings leave control.
+- `components/LeaderboardConsent.tsx`, `AuthContext.tsx`, `_layout.tsx` implement this at source checkpoint `a1a400b`. Unknown/declined/unreadable consent prevents signup and profile writes. Consent is local (`@curfy/leaderboard_consent_v1`); `leaving` persists pending cloud removal and suppresses uploads across restart. No tracking permission is inferred from this consent.
+- Leaving uses the existing authenticated deletion endpoint to remove cloud identity/profile, while preserving local history, journal, native shields and Premium. Provider simulations cover failed consent storage, legacy sessions, failed leave/retry and withdrawal during signup. **Live deployment remains unverified.**
+- **Verified in source schema:** public SELECT policy exposes whole `profiles` rows, including ID, configured start time and update timestamp as well as name/streaks. New disclosure explicitly calls protection start time part of the public profile. Do not claim only two columns are accessible just because UI only displays name/streaks. Final deployed-schema/data-minimization and App Privacy review required.
+- Premium Settings now exposes purchase/restore; Apple handles payment and verified ownership. No card data is collected by Curfy source. Product/sandbox behavior remains unverified.
+- Native `curfy-premium-recovery-selection` is an on-device opaque subtraction selection used to preserve active exceptions. Account deletion includes it in native cleanup; no deliberate network transmission.
+- Public privacy-policy/support URLs and in-app policy link are STILL absent/unverified. Provider retention, SDK manifests, production environment and backend behavior remain external launch gates.
+
+The following inventory is historical; the automatic-without-consent and dormant-purchase descriptions are superseded by this delta. Read CURRENT_HANDOFF.md for current evidence.
+
+---
+
 # Curfy — app privacy data inventory (pre-submission audit)
 Updated: 2026-11-04. VERIFIED IN REPOSITORY unless marked UNKNOWN.
 Do NOT publish as a customer-facing privacy policy without legal, provider and deployed-backend verification.

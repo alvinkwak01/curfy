@@ -5,7 +5,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useSleep } from "@/context/SleepContext";
 import { isSupabaseConfigured } from "@/lib/supabase";
 
-const disclosure = "Curfy stores your display name, protection start time and streaks with Supabase. Your display name and streaks appear on the public leaderboard and update automatically. Your app selections and journal stay on your device. You can leave in Settings without losing local history, app protection or Premium.";
+const disclosure = "Your public Curfy profile includes your display name, protection start time and streaks, stored with Supabase. The leaderboard displays your name and streaks and updates automatically. Your app selections and journal stay on your device. You can leave in Settings without losing local history, app protection or Premium.";
 function useParticipationAction() {
   const { setLeaderboardParticipation } = useAuth();
   const pending = useRef(false);
