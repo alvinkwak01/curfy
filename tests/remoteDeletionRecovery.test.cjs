@@ -22,10 +22,11 @@ const KEY = "@curfy/remote_deletion_confirmed_user";
 async function fixture({
   receipt = null, initialSession = true, failSignOut = false,
   signOutReturnsError = false, failRemote = false, failRead = false,
-  restoreError = false,
+  restoreError = false, consent = null, waitForSignIn = null, failConsentWrite = false,
 } = {}) {
   const storage = new Map(receipt ? [[KEY, receipt]] : []);
-  const stats = { invokes: 0, signOuts: 0, signIns: 0, writes: 0, removes: 0 };
+  if (consent) storage.set("@curfy/leaderboard_consent_v1", consent);
+  const stats = { profileWrites: 0, invokes: 0, signOuts: 0, signIns: 0, writes: 0, removes: 0 };
   let signOutFails = failSignOut;
   let signOutReportsError = signOutReturnsError;
   let remoteFails = failRemote;
@@ -53,6 +54,7 @@ async function fixture({
       },
       signInAnonymously: async () => {
         stats.signIns++;
+        if (waitForSignIn) await waitForSignIn;
         currentSession = { user: { id: "accidentally-new-account" } };
         return { data: { session: currentSession }, error: null };
       },
@@ -67,7 +69,7 @@ async function fixture({
       },
     },
     from: () => ({
-      upsert: async () => ({ error: null }),
+      upsert: async () => { stats.profileWrites++; return { error: null }; },
     }),
   };
   const asyncStorage = {
@@ -75,7 +77,7 @@ async function fixture({
       if (diskReadsFail) throw Error("AsyncStorage unavailable");
       return storage.get(key) ?? null;
     },
-    setItem: async (key, value) => { stats.writes++; storage.set(key, value); },
+    setItem: async (key, value) => { if (failConsentWrite && key === "@curfy/leaderboard_consent_v1") throw Error("consent storage failed"); stats.writes++; storage.set(key, value); },
     removeItem: async key => { stats.removes++; storage.delete(key); },
   };
   const mod = { exports: {} };
@@ -223,4 +225,46 @@ test("finish receipt removal occurs only in the completed local deletion workflo
   }
   assert.match(root, /isOnboardingComplete \|\| isAuthLoading \|\| isSignedIn \|\| isDeletingAccount/);
   assert.match(root, /!isSignedIn \|\| isDeletingAccount/);
+});
+
+test("first launch does not enroll or upload a profile without explicit consent", async () => {
+  const f = await fixture({ initialSession: false });
+  await act(async () => { await f.api.ensureAnonymousProfile("Private"); await f.api.syncProfile("23:00", 2, 3, "Private"); });
+  assert.equal(f.stats.signIns, 0); assert.equal(f.stats.profileWrites, 0);
+  await act(async () => { await f.api.setLeaderboardParticipation(true); await f.api.ensureAnonymousProfile("Public"); });
+  assert.equal(f.stats.signIns, 1); assert.equal(f.stats.profileWrites, 1);
+  assert.equal(f.storage.get("@curfy/leaderboard_consent_v1"), "joined"); await f.unmount();
+});
+test("legacy cloud sessions cannot sync until consent is recorded", async () => {
+  const f = await fixture();
+  await act(async () => { await f.api.syncProfile("23:00", 2, 3, "Private"); });
+  assert.equal(f.stats.profileWrites, 0); await f.unmount();
+});
+test("failed consent persistence cannot authorize cloud enrollment", async () => {
+  const f = await fixture({ initialSession: false, failConsentWrite: true });
+  await act(async () => { await assert.rejects(f.api.setLeaderboardParticipation(true), /consent storage/); await f.api.ensureAnonymousProfile("Private"); });
+  assert.equal(f.stats.signIns, 0); await f.unmount();
+});
+test("failed leave pauses uploads durably and preserves a retry until remote removal succeeds", async () => {
+  const f = await fixture({ consent: "joined", failRemote: true });
+  await act(async () => { await assert.rejects(f.api.setLeaderboardParticipation(false), /couldn't delete/); });
+  assert.equal(f.storage.get("@curfy/leaderboard_consent_v1"), "leaving");
+  await act(async () => { await f.api.syncProfile("23:00", 2, 3, "Private"); });
+  assert.equal(f.stats.profileWrites, 0);
+  f.allowRemote(); await act(async () => { await f.api.setLeaderboardParticipation(false); });
+  assert.equal(f.api.leaderboardConsent, "declined"); assert.equal(f.api.isSignedIn, false);
+  assert.equal(f.stats.invokes, 2); await f.unmount();
+});
+test("withdrawal waits for in-flight anonymous signup, then removes that exact newly created identity", async () => {
+  let release; const wait = new Promise(resolve => { release = resolve; });
+  const f = await fixture({ initialSession: false, consent: "joined", waitForSignIn: wait });
+  await act(async () => {
+    const signing = f.api.ensureAnonymousProfile("Private");
+    await Promise.resolve();
+    const leaving = f.api.setLeaderboardParticipation(false);
+    release(); await signing; await leaving;
+  });
+  assert.equal(f.stats.signIns, 1); assert.equal(f.stats.profileWrites, 0);
+  assert.equal(f.stats.invokes, 1); assert.equal(f.api.isSignedIn, false);
+  assert.equal(f.api.leaderboardConsent, "declined"); await f.unmount();
 });

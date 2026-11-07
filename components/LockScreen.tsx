@@ -4,6 +4,7 @@ import { HoldButton } from "@/components/HoldButton";
 import {
   CurfyAppLabel,
   readProtectedAppChoices,
+  prepareProtectedAppChoice,
   type CurfyProtectedAppsSnapshot,
 } from "@/modules/curfy-protected-apps";
 import { selectionIdForMode, type BlockModeId } from "@/lib/screenTime";
@@ -27,15 +28,20 @@ type LockScreenProps = {
   mode?: "preview" | "escape";
   /** Leaving never grants access or alters the selected-app shield. */
   onExit?: () => void;
+  choice?: { index: number; revision: string };
 };
 
 /**
  * The circular 120-second hold runs inside Curfy, not Apple's shield extension.
  * A single top-right X is the only exit action. It never unlocks any app.
  */
-export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
+export function LockScreen({ mode = "preview", onExit, choice }: LockScreenProps) {
   const { unlockScreen, devDismissLock, blockMode } = useSleep();
   const { top, bottom } = useSafeAreaInsets();
+  const [ticketId, setTicketId] = useState<string | undefined>();
+  const [choiceError, setChoiceError] = useState<string | null>(null);
+  const choiceIndex = choice?.index;
+  const choiceRevision = choice?.revision;
   const [unlockPending, setUnlockPending] = useState(false);
   const [isHolding, setIsHolding] = useState(false);
   const isPreview = mode === "preview";
@@ -49,25 +55,38 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
       setProtectedApp(null);
       return;
     }
+    setTicketId(undefined); setChoiceError(null);
     try {
       const snapshot = readProtectedAppChoices(selectionIdForMode(selectedMode));
-      // Free mode must only display the exact saved individual app.
-      setProtectedApp(snapshot.count === 1 ? snapshot : null);
-    } catch {
+      if (choiceRevision !== undefined && choiceRevision !== snapshot.revision) {
+        throw new Error("Your protected apps changed. Choose the app again from Home.");
+      }
+      if (snapshot.count > 1) {
+        if (choiceIndex === undefined || choiceRevision !== snapshot.revision || choiceIndex >= snapshot.count) {
+          throw new Error("Choose one protected app from Home before starting a hold.");
+        }
+        setTicketId(prepareProtectedAppChoice(selectionIdForMode(selectedMode), snapshot.revision, choiceIndex));
+      }
+      setProtectedApp(snapshot);
+    } catch (error) {
+      setChoiceError(error instanceof Error ? error.message : "Choose your protected app again from Home.");
       // Missing/revoked Screen Time selection: never guess the app name.
       setProtectedApp(null);
     }
-  }, [isPreview, selectedMode]));
+  }, [isPreview, selectedMode, choiceIndex, choiceRevision]));
 
   const finishHold = async () => {
     if (isPreview) {
       Alert.alert("Preview complete", "This was a preview. No apps were unlocked.");
       return;
     }
+    if (choiceError || !protectedApp || (protectedApp.count > 1 && !ticketId)) {
+      throw new Error(choiceError ?? "Choose your protected app again from Home.");
+    }
     setUnlockPending(true);
     try {
       // Only navigate after iOS confirms the protected-app exception.
-      await unlockScreen();
+      await unlockScreen(ticketId);
       setUnlockPending(false);
       router.replace("/(tabs)");
     } catch (error) {
@@ -128,14 +147,14 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
                 key={protectedApp.revision}
                 selectionId={selectionIdForMode(selectedMode)}
                 revision={protectedApp.revision}
-                index={0}
+                index={protectedApp.count > 1 ? choiceIndex! : 0}
                 style={styles.nativeAppLabel}
               />
             ) : !isPreview ? (
               <Text style={styles.appFallback}>your app</Text>
             ) : null}
           </View>
-          <HoldButton
+          {choiceError && !isPreview ? <Text style={styles.appFallback}>{choiceError}</Text> : <HoldButton
             onUnlock={finishHold}
             unlockCount={0}
             onHoldingChange={setIsHolding}
@@ -144,7 +163,7 @@ export function LockScreen({ mode = "preview", onExit }: LockScreenProps) {
               : "Hold 120s · up to 15 min access"}
             showIdleMessage={false}
             showUnlockCount={false}
-          />
+          />}
         </View>
       </ScrollView>
     </View>

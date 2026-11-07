@@ -60,6 +60,7 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
       let committedId = record["committedSelectionId"] as? String,
       let recordedActivity = record["activityName"] as? String,
       recordedActivity == activityName,
+      userDefaults?.string(forKey: "curfy-scheduled-selection-id") == committedId,
       selectionId.hasPrefix(premiumSelectionPrefix),
       committedId == "curfy-block-social" || committedId == "curfy-block-most" ||
         committedId == "curfy-block-custom",
@@ -88,6 +89,10 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
         let expiresMs = (entry["expiresAt"] as? NSNumber)?.doubleValue,
         let windowEndMs = (entry["bedtimeEndAt"] as? NSNumber)?.doubleValue,
         startMs <= nowMs, nowMs < expiresMs, nowMs < windowEndMs,
+        // A pending/failed grant record cannot unshield from a delayed daily
+        // start unless its independent reblock monitor exists (or cutoff owns release).
+        floor(startMs / 1000) * 1000 + 901_000 >= windowEndMs ||
+          DeviceActivityCenter().activities.contains(DeviceActivityName(activityName)),
         let singleton = validPremiumScopedSelection(for: activityName, record: entry)
       else { continue }
       active.append(singleton)
@@ -99,6 +104,7 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     // stopMonitoring may invoke intervalDidEnd early; a delayed callback
     // must not re-shield after the daily cutoff or in a new window.
     guard isWithinConfiguredCurfyWindow() == true,
+      DeviceActivityCenter().activities.contains(DeviceActivityName("curfy-bedtime")),
       let ledger = userDefaults?.dictionary(forKey: premiumExceptionLedgerKey),
       let entry = ledger[activityName] as? [String: Any],
       let startMs = (entry["startedAt"] as? NSNumber)?.doubleValue,
@@ -172,6 +178,7 @@ class DeviceActivityMonitorExtension: DeviceActivityMonitor {
     // Never let a delayed/stale callback re-shield apps after bedtime ends.
     if activity.rawValue.hasPrefix("curfy-exception-") {
       guard
+        DeviceActivityCenter().activities.contains(DeviceActivityName("curfy-bedtime")),
         let state = userDefaults?.dictionary(forKey: "curfy-active-exception"),
         let currentName = state["activityName"] as? String,
         let expiryMs = (state["expiresAt"] as? NSNumber)?.doubleValue,

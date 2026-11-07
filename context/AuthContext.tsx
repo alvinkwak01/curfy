@@ -3,26 +3,25 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Session } from "@supabase/supabase-js";
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useRef,
   useState,
 } from "react";
 
+export type LeaderboardConsent = "unknown" | "joined" | "declined" | "leaving";
 interface AuthContextType {
+  leaderboardConsent: LeaderboardConsent;
+  isConsentLoading: boolean;
+  consentError: boolean;
+  retryConsent: () => Promise<void>;
+  setLeaderboardParticipation: (join: boolean) => Promise<void>;
   session: Session | null;
   isSignedIn: boolean;
   isAuthLoading: boolean;
-  // No email/password screen — every install gets a silent, anonymous
-  // Supabase auth session and a matching `profiles` row the first time
-  // onboarding finishes (see EnsureLeaderboardIdentity in app/_layout.tsx).
-  // Safe to call repeatedly: no-ops once a session already exists.
-  // Trade-off worth knowing: an anonymous session lives only on this
-  // device/install. There's no email+password to sign back in with, so
-  // deleting the app or switching devices orphans that leaderboard row —
-  // it's not recoverable the way a real account would be. Accepted
-  // deliberately for zero-friction participation; revisit if that trade-off
-  // stops being fine (e.g. a "claim this profile with an email" upgrade path).
+  // After explicit leaderboard consent, maintain an anonymous cloud profile.
+  // No email/password or cloud account is required for app protection/Premium.
   ensureAnonymousProfile: (displayName: string) => Promise<void>;
   // Explicit Supabase sign out for future authenticated flows. Curfy's
   // current "Restart Setup" intentionally preserves the anonymous session
@@ -59,9 +58,17 @@ interface AuthContextType {
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
+const LEADERBOARD_CONSENT_KEY = "@curfy/leaderboard_consent_v1";
 const REMOTE_DELETION_CONFIRMED_KEY = "@curfy/remote_deletion_confirmed_user";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [leaderboardConsent, setConsent] = useState<LeaderboardConsent>("unknown");
+  const [isConsentLoading, setConsentLoading] = useState(true);
+  const [consentError, setConsentError] = useState(false);
+  const consentRef = useRef<LeaderboardConsent>("unknown");
+  const consentChangePending = useRef(false);
+  const profileWork = useRef<Promise<void>>(Promise.resolve());
+  const sessionRef = useRef<Session | null>(null);
   const [session, setSession] = useState<Session | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
@@ -81,6 +88,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Guards against firing signInAnonymously() twice from a double-mount
   // or a fast re-render before the first call's session has come back.
   const ensuringProfile = useRef(false);
+
+  const retryConsent = useCallback(async () => {
+    setConsentLoading(true); setConsentError(false);
+    try {
+      const saved = await AsyncStorage.getItem(LEADERBOARD_CONSENT_KEY);
+      const value: LeaderboardConsent = saved === "joined" || saved === "declined" || saved === "leaving" ? saved : "unknown";
+      consentRef.current = value; setConsent(value);
+    } catch {
+      consentRef.current = "unknown"; setConsent("unknown"); setConsentError(true);
+    } finally { setConsentLoading(false); }
+  }, []);
+  useEffect(() => { void retryConsent(); }, [retryConsent]);
+
+  const persistConsent = async (value: LeaderboardConsent) => {
+    await AsyncStorage.setItem(LEADERBOARD_CONSENT_KEY, value);
+    if (await AsyncStorage.getItem(LEADERBOARD_CONSENT_KEY) !== value) throw new Error("Curfy couldn't save your leaderboard preference. Please retry.");
+    consentRef.current = value; setConsent(value); setConsentError(false);
+  };
+  const queueProfileWork = (work: () => Promise<void>): Promise<void> => {
+    const next = profileWork.current.then(async () => {
+      if (consentRef.current !== "joined" || deletionInProgress.current) return;
+      await work();
+    });
+    profileWork.current = next.catch(() => {});
+    return next;
+  };
 
   useEffect(() => {
     // No project configured yet (see lib/supabase.ts) — skip touching the
@@ -114,6 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           deletionInProgress.current = true;
           setIsDeletingAccount(true);
         }
+        sessionRef.current = data.session ?? null;
         setSession(data.session ?? null);
       })
       .catch((error) => {
@@ -128,7 +162,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         if (active) setIsAuthLoading(false);
       });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
-      if (active) setSession(newSession);
+      if (active) { sessionRef.current = newSession; setSession(newSession); }
     });
     return () => {
       active = false;
@@ -136,13 +170,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     };
   }, []);
 
-  const ensureAnonymousProfile = async (displayName: string) => {
+  const ensureAnonymousProfile = (displayName: string) => queueProfileWork(async () => {
     if (!isSupabaseConfigured || deletionInProgress.current) return;
-    if (session || ensuringProfile.current) return;
+    if (sessionRef.current || ensuringProfile.current) return;
     ensuringProfile.current = true;
     try {
       const { data, error } = await supabase.auth.signInAnonymously();
-      if (error || !data.session) return;
+      if (error || !data.session) throw new Error("Curfy couldn't connect your leaderboard profile. Please retry.");
+      sessionRef.current = data.session; setSession(data.session);
+      authRecoveryFailed.current = false;
+      if (consentRef.current !== "joined" || deletionInProgress.current) return;
       // A successful auth session does not guarantee the profile row exists.
       // If this write fails, later syncProfile() must also be able to
       // create/repair the row rather than silently updating zero rows.
@@ -153,7 +190,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     } finally {
       ensuringProfile.current = false;
     }
-  };
+  });
 
   const signOutRemote = async () => {
     if (!isSupabaseConfigured) return;
@@ -163,6 +200,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const deleteRemoteAccount = async () => {
     if (!isSupabaseConfigured) return;
+    await profileWork.current;
+    const session = sessionRef.current;
     // A persisted, server-confirmed receipt is stronger evidence than a
     // failed session read. The deleted user cannot authenticate again, so
     // retries must NOT depend on refreshing the invalidated Supabase JWT.
@@ -230,18 +269,38 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (await AsyncStorage.getItem(REMOTE_DELETION_CONFIRMED_KEY) != null) {
       throw new Error("Curfy could not clear the confirmed deletion receipt.");
     }
+    await persistConsent("declined");
+    authRecoveryFailed.current = false;
     remoteDeletedUserId.current = null;
     deletionInProgress.current = false;
     setIsDeletingAccount(false);
   };
 
-  const syncProfile = async (
+  const setLeaderboardParticipation = async (join: boolean) => {
+    if (isConsentLoading || consentChangePending.current) throw new Error("A leaderboard preference is already being checked.");
+    if (join && (!isSupabaseConfigured || consentRef.current === "leaving" || deletionInProgress.current)) {
+      throw new Error("Finish removing the previous cloud profile before joining again, or retry when the leaderboard is available.");
+    }
+    consentChangePending.current = true;
+    try {
+      if (join) { await persistConsent("joined"); return; }
+      // Stop uploads immediately, including work queued before the user's tap.
+      consentRef.current = "leaving"; setConsent("leaving");
+      await persistConsent("leaving");
+      await deleteRemoteAccount();
+      await finishAccountDeletion();
+      // Only cloud identity is removed: no native protection or journal wipe.
+    } finally { consentChangePending.current = false; }
+  };
+
+  const syncProfile = (
     bedtime: string,
     currentStreak: number,
     longestStreak: number,
     displayName: string
-  ) => {
-    if (!isSupabaseConfigured) return;
+  ) => queueProfileWork(async () => {
+    if (!isSupabaseConfigured || deletionInProgress.current || consentRef.current !== "joined") return;
+    const session = sessionRef.current;
     if (!session?.user) return;
     const userId = session.user.id;
     const name = displayName || "Sleeper";
@@ -275,7 +334,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     lastSynced.current = {
       userId, bedtime, current: currentStreak, longest: longestStreak, name,
     };
-  };
+  });
 
   const fetchLeaderboard = async (
     metric: "current_streak" | "longest_streak"
@@ -320,6 +379,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   return (
     <AuthContext.Provider
       value={{
+        leaderboardConsent, isConsentLoading, consentError, retryConsent, setLeaderboardParticipation,
         session,
         isSignedIn: !!session,
         isAuthLoading,

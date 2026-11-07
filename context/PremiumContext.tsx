@@ -4,7 +4,7 @@ import React, {
 import { AppState, Platform } from "react-native";
 import { PremiumEntitlement } from "@/lib/premiumPolicy";
 import {
-  loadPremiumEntitlement, restorePremium, subscribePremiumTransactions,
+  loadPremiumEntitlement, restorePremium, purchasePremium, subscribePremiumTransactions, type PremiumPurchaseOutcome,
 } from "@/lib/premiumStore";
 
 type PremiumContextValue = {
@@ -12,20 +12,21 @@ type PremiumContextValue = {
   isChecking: boolean;
   refresh: () => Promise<PremiumEntitlement>;
   restore: () => Promise<"owned" | "free">;
+  purchase: () => Promise<PremiumPurchaseOutcome>;
 };
 
 const PremiumContext = createContext<PremiumContextValue | null>(null);
 
 /**
- * A read-only entitlement observer until Curfy can deliver per-app Premium
- * exceptions. It NEVER changes native shielding on its own, and never
- * exposes a purchase button. Every ownership claim originates in StoreKit.
+ * Every ownership claim originates in StoreKit. Purchase/restore never change
+ * native shields or the saved app selection on their own.
  */
 export function PremiumProvider({ children }: { children: React.ReactNode }) {
   const [entitlement, setEntitlement] = useState<PremiumEntitlement>("unknown");
   const [isChecking, setChecking] = useState(Platform.OS === "ios");
   const mounted = useRef(true);
   const sequence = useRef(0);
+  const storeActionPending = useRef(false);
 
   const refresh = useCallback(async (): Promise<PremiumEntitlement> => {
     if (Platform.OS !== "ios") return "unknown";
@@ -42,6 +43,8 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
 
   const restore = useCallback(async (): Promise<"owned" | "free"> => {
     if (Platform.OS !== "ios") throw new Error("Restore is available on iPhone.");
+    if (storeActionPending.current) throw new Error("An App Store request is already in progress.");
+    storeActionPending.current = true;
     // Invalidate older refreshes before the potentially interactive sync.
     const request = ++sequence.current;
     if (mounted.current) setChecking(true);
@@ -57,9 +60,30 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
       }
       throw error;
     } finally {
+      storeActionPending.current = false;
       if (mounted.current && request === sequence.current) setChecking(false);
     }
   }, []);
+
+  const purchase = useCallback(async (): Promise<PremiumPurchaseOutcome> => {
+    if (Platform.OS !== "ios") throw new Error("Premium is available on iPhone.");
+    if (storeActionPending.current) throw new Error("An App Store request is already in progress.");
+    storeActionPending.current = true;
+    ++sequence.current;
+    if (mounted.current) setChecking(true);
+    try {
+      const result = await purchasePremium();
+      // Includes cancellation/pending: always reconcile the latest verified state.
+      const current = await refresh();
+      if (result === "owned" && current !== "owned") throw new Error("Apple hasn't confirmed current Premium ownership. Please restore purchases.");
+      return result;
+    } catch (error) {
+      await refresh();
+      throw error;
+    } finally {
+      storeActionPending.current = false;
+    }
+  }, [refresh]);
 
   useEffect(() => {
     mounted.current = true;
@@ -85,7 +109,7 @@ export function PremiumProvider({ children }: { children: React.ReactNode }) {
   }, [refresh]);
 
   return (
-    <PremiumContext.Provider value={{ entitlement, isChecking, refresh, restore }}>
+    <PremiumContext.Provider value={{ entitlement, isChecking, refresh, restore, purchase }}>
       {children}
     </PremiumContext.Provider>
   );

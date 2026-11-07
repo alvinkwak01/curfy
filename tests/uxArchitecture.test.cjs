@@ -35,7 +35,7 @@ test("escape screen uses only a single X, the real app name, and one concise hol
   assert.doesNotMatch(lock, /Hold the circle for two uninterrupted minutes/);
   assert.match(lock, /Unlocking/);
   assert.match(lock, /<CurfyAppLabel/);
-  assert.match(lock, /snapshot\.count === 1 \? snapshot : null/);
+  assert.match(lock, /setProtectedApp\(snapshot\)/);
   assert.match(lock, /selectionId=\{selectionIdForMode\(selectedMode\)\}/);
   assert.match(lock, /revision=\{protectedApp\.revision\}/);
   assert.match(lock, /<Text style=\{styles\.appFallback\}>your app<\/Text>/);
@@ -45,14 +45,14 @@ test("escape screen uses only a single X, the real app name, and one concise hol
   assert.match(hold, /Gesture\.LongPress\(\)/);
   assert.match(hold, /\.minDuration\(HOLD_DURATION_MS\)/);
   assert.match(hold, /onUnlockRef\.current\(\)/);
-  assert.match(lock, /await unlockScreen\(\)/);
+  assert.match(lock, /await unlockScreen\(ticketId\)/);
 });
 
 test("optional leaderboard sync repairs missing profiles and never caches an unconfirmed write", () => {
   const auth = source("context/AuthContext.tsx");
   const root = source("app/_layout.tsx");
   const section = auth.slice(
-    auth.indexOf("const syncProfile = async ("),
+    auth.indexOf("const syncProfile = ("),
     auth.indexOf("const fetchLeaderboard = async (")
   );
   const writeIndex = section.indexOf(".upsert({");
@@ -197,11 +197,11 @@ test("Home unlock action shows the real selected iOS app label, not a fake app n
   const swift = source("modules/curfy-protected-apps/ios/CurfyProtectedAppsModule.swift");
 
   assert.doesNotMatch(home, /Start (your timer|120-second hold)/);
-  assert.match(home, /<Text style=\{styles\.unlockVerb\}>Unlock<\/Text>/);
+  assert.match(home, /style=\{styles\.unlockVerb\}/);
   assert.match(home, /<CurfyAppLabel/);
   assert.match(home, /selectionId=\{selectionIdForMode\(selectedMode\)\}/);
   assert.match(home, /revision=\{protectedApp\.revision\}/);
-  assert.match(home, /snapshot\.count === 1 \? snapshot : null/);
+  assert.match(home, /setProtectedApp\(snapshot\)/);
   assert.match(home, /readProtectedAppChoices\(selectionIdForMode\(selectedMode\)\)/);
   assert.match(home, /<Text style=\{styles\.unlockFallback\}>your app<\/Text>/);
   assert.match(home, /router\.push\("\/escape"\)/);
@@ -209,7 +209,7 @@ test("Home unlock action shows the real selected iOS app label, not a fake app n
   assert.doesNotMatch(home, /120-second hold · up to 15 minutes of access/);
   assert.doesNotMatch(home, /unlockSeparator|unlockBottomRow|unlockDetail/);
   assert.doesNotMatch(home, /finger-print-outline/);
-  assert.match(home, /<Text style=\{styles\.unlockEyebrow\}>PROTECTED<\/Text>/);
+  assert.match(home, /style=\{styles\.unlockEyebrow\}/);
   assert.match(home, /<View style=\{styles\.unlockMain\}>/);
   assert.match(home, /<View style=\{styles\.unlockArrow\}>/);
   assert.match(home, /minHeight: 91/);
@@ -425,6 +425,6 @@ test("Settings and onboarding wait for native picker persistence and validate Fr
   assert.ok(onboarding.includes("Free protects one app"));
   assert.ok(settings.includes("waitForPersistedPickerCommit"));
   assert.ok(settings.includes("pendingPickerCommit.current"));
-  assert.ok(settings.includes("freeSelectionIssue(draftSelectionIdForMode(localBlockMode))"));
+  assert.ok(settings.includes("selectionIssue(activitySelectionMetadata({ activitySelectionId: draftSelectionIdForMode(localBlockMode) }))"));
   assert.ok(settings.includes("includeEntireCategory={false}"));
 });

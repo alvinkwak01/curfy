@@ -13,6 +13,7 @@ import { useEffect } from "react";
 import { StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import "react-native-reanimated";
 
+import { LeaderboardConsentPrompt } from "@/components/LeaderboardConsent";
 import { Colors, Fonts } from "@/constants/theme";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { JournalProvider } from "@/context/JournalContext";
@@ -56,6 +57,7 @@ export default function RootLayout() {
         <AuthProvider>
           <PremiumProvider>
           <SleepProvider>
+            <LeaderboardConsentPrompt />
             <EnsureLeaderboardIdentity />
             <StreakSync />
             <RootLayoutNav />
@@ -67,23 +69,19 @@ export default function RootLayout() {
   );
 }
 
-// Every user is on the global leaderboard automatically — no visible
-// "Join"/create-account step. The first time onboarding finishes (i.e. a
-// display name exists) and there's no session yet, this silently signs
-// the device into an anonymous Supabase auth session and seeds a
-// `profiles` row with that name. Renders nothing; needs both contexts in
-// scope, same reasoning as StreakSync below.
+// Participation syncs automatically only after the approved first-upload disclosure.
 function EnsureLeaderboardIdentity() {
   const { userName, isOnboardingComplete, storageError } = useSleep();
-  const { isSignedIn, isAuthLoading, isDeletingAccount, ensureAnonymousProfile } = useAuth();
+  const { isSignedIn, isAuthLoading, isDeletingAccount, leaderboardConsent, ensureAnonymousProfile } = useAuth();
 
   useEffect(() => {
+    if (leaderboardConsent !== "joined") return;
     if (storageError || !isOnboardingComplete || isAuthLoading || isSignedIn || isDeletingAccount) return;
     void ensureAnonymousProfile(userName).catch((error) => {
       // A cloud leaderboard failure must not interrupt native protection.
       console.warn("[Curfy] Online leaderboard profile creation failed", error);
     });
-  }, [isOnboardingComplete, isAuthLoading, isSignedIn, isDeletingAccount, userName, storageError, ensureAnonymousProfile]);
+  }, [isOnboardingComplete, isAuthLoading, isSignedIn, isDeletingAccount, userName, storageError, leaderboardConsent, ensureAnonymousProfile]);
 
   return null;
 }
@@ -95,16 +93,17 @@ function EnsureLeaderboardIdentity() {
 // scope, which requires it to sit inside both providers (see above).
 function StreakSync() {
   const { bedtime, streak, longestStreak, userName, storageError } = useSleep();
-  const { isSignedIn, isDeletingAccount, syncProfile } = useAuth();
+  const { isSignedIn, isDeletingAccount, leaderboardConsent, syncProfile } = useAuth();
 
   useEffect(() => {
+    if (leaderboardConsent !== "joined") return;
     if (storageError || !isSignedIn || isDeletingAccount) return;
     void syncProfile(bedtime, streak, longestStreak, userName).catch((error) => {
       // Do not silently discard failed cloud writes. The local history and
       // the iOS Screen Time schedule are independent from this optional sync.
       console.warn("[Curfy] Online leaderboard sync failed", error);
     });
-  }, [isSignedIn, isDeletingAccount, bedtime, streak, longestStreak, userName, storageError, syncProfile]);
+  }, [isSignedIn, isDeletingAccount, bedtime, streak, longestStreak, userName, storageError, leaderboardConsent, syncProfile]);
 
   return null;
 }

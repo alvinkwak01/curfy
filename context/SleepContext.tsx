@@ -1,7 +1,11 @@
+import { grantPremiumAppException } from "@/lib/premiumAppException";
+import { allPremiumAppsHaveActiveExceptions } from "@/lib/premiumProtection";
+import { protectionOperationPending } from "@/lib/protectionOperation";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Notifications from "expo-notifications";
 import {
   BlockModeId,
+  selectionIdForMode,
   activeExceptionExpiresAt,
   getScreenTimeAccessStatus,
   grantBedtimeException,
@@ -100,7 +104,7 @@ interface SleepContextType {
   sleepLog: SleepEntry[];
   isLocked: boolean;
   lockScreen: () => void;
-  unlockScreen: () => Promise<void>;
+  unlockScreen: (ticketId?: string) => Promise<void>;
   todayUnlocks: number;
   streak: number;
   // Highest streak ever reached, independent of the current one — this is
@@ -253,6 +257,7 @@ function dedupeSleepLog(log: SleepEntry[]): SleepEntry[] {
  * missing starts and stale restrictions without invalidating an active escape.
  */
 function reconcileNativeProtection(bedtime: string, wakeTime: string, blockMode: string | null): void {
+  if (protectionOperationPending()) return;
   try {
     reconcileBedtimeException(bedtime, wakeTime);
   } catch (error) {
@@ -536,21 +541,19 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     setIsLocked(true);
   };
 
-  const unlockScreen = useCallback(async () => {
+  const unlockScreen = useCallback(async (ticketId?: string) => {
     if (blockMode !== "social" && blockMode !== "most" && blockMode !== "custom") {
       throw new Error("Choose a protected app in Settings first.");
     }
     // Grant the actual OS-level exception BEFORE incrementing the escape
     // counter or dismissing the hold UI. Failure must stay visible.
-    await grantBedtimeException({
-      bedtime,
-      wakeTime,
-      mode: blockMode as BlockModeId,
-    });
+    const expiresAt = ticketId
+      ? await grantPremiumAppException({ bedtime, wakeTime, mode: blockMode, ticketId })
+      : await grantBedtimeException({ bedtime, wakeTime, mode: blockMode as BlockModeId });
     const newCount = todayUnlocks + 1;
     setTodayUnlocks(newCount);
     setIsLocked(false);
-    cooldownUntil.current = Date.now() + 15 * 60 * 1000;
+    cooldownUntil.current = ticketId ? 0 : expiresAt;
     AsyncStorage.setItem(
       COOLDOWN_KEY,
       cooldownUntil.current.toString()
@@ -596,7 +599,9 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       insideBedtime: isBedtimeWindowActive(new Date(), bedtime, wakeTime),
       screenTimeAuthorized: getScreenTimeAccessStatus() === "authorized",
       hasSelectedMode: blockMode === "social" || blockMode === "most" || blockMode === "custom",
-      activeException: activeExceptionExpiresAt() !== null,
+      activeException: activeExceptionExpiresAt() !== null ||
+        ((blockMode === "custom" || blockMode === "social" || blockMode === "most") &&
+          allPremiumAppsHaveActiveExceptions(selectionIdForMode(blockMode))),
     });
     if (!canRestart) {
       throw new Error("During bedtime, complete the 120-second hold from Curfy Home before restarting setup, or wait until your morning end time.");

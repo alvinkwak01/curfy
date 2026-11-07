@@ -4,16 +4,19 @@ import { useSleep } from "@/context/SleepContext";
 import {
   CurfyAppLabel,
   readProtectedAppChoices,
+  prepareProtectedAppChoice,
   type CurfyProtectedAppsSnapshot,
 } from "@/modules/curfy-protected-apps";
+import { premiumAccessExpiresAt } from "@/lib/premiumProtection";
 import { isBedtimeWindowActive } from "@/lib/bedtimeWindow";
 import { clockLabel } from "@/lib/protectionRoutine";
 import { activeExceptionExpiresAt, getBedtimeProtectionStatus, BlockModeId, selectionIdForMode } from "@/lib/screenTime";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useFocusEffect } from "expo-router";
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -71,24 +74,35 @@ export default function Home() {
   // Apple's SwiftUI Label(ApplicationToken) shows the real chosen app icon
   // and name without handing its identifier to React Native.
   const [protectedApp, setProtectedApp] = useState<CurfyProtectedAppsSnapshot | null>(null);
+  const [appRows, setAppRows] = useState<Array<{ index: number; expiresAt: number | null }>>([]);
+  const cachedTickets = useRef<{ revision: string; tickets: string[] } | null>(null);
   const selectedMode: BlockModeId | null =
     blockMode === "social" || blockMode === "most" || blockMode === "custom"
       ? blockMode : null;
   const inBedtimeWindow = !!selectedMode &&
     isBedtimeWindowActive(new Date(), bedtime, wakeTime);
   useFocusEffect(useCallback(() => {
-    if (!inBedtimeWindow || !selectedMode) {
-      setProtectedApp(null);
-      return;
-    }
-    try {
-      const snapshot = readProtectedAppChoices(selectionIdForMode(selectedMode));
-      // Free protects exactly one app, never the first of several.
-      setProtectedApp(snapshot.count === 1 ? snapshot : null);
-    } catch {
-      // Missing/changed iOS selection or permission: never fabricate an app name.
-      setProtectedApp(null);
-    }
+    const refreshRows = () => {
+      if (!inBedtimeWindow || !selectedMode) {
+        setProtectedApp(null); setAppRows([]); return;
+      }
+      try {
+        const snapshot = readProtectedAppChoices(selectionIdForMode(selectedMode));
+        if (snapshot.count > 1) {
+          if (cachedTickets.current?.revision !== snapshot.revision) {
+            cachedTickets.current = { revision: snapshot.revision, tickets: Array.from({ length: snapshot.count }, (_, index) =>
+              prepareProtectedAppChoice(selectionIdForMode(selectedMode), snapshot.revision, index)) };
+          }
+          setAppRows(cachedTickets.current.tickets.map((ticket, index) => ({ index, expiresAt: premiumAccessExpiresAt(ticket) })));
+        } else setAppRows([{ index: 0, expiresAt: null }]);
+        setProtectedApp(snapshot);
+      } catch {
+        setProtectedApp(null); setAppRows([]); cachedTickets.current = null;
+      }
+    };
+    refreshRows();
+    const timer = setInterval(refreshRows, 15000);
+    return () => clearInterval(timer);
   }, [selectedMode, inBedtimeWindow]));
 
   useEffect(() => {
@@ -179,11 +193,19 @@ export default function Home() {
               </Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity
+            <View style={{ gap: 10 }}>
+            {(appRows.length ? appRows : [{ index: 0, expiresAt: null }]).map(row => <TouchableOpacity
+              key={`${protectedApp?.revision ?? "unavailable"}-${row.index}`}
+              disabled={row.expiresAt !== null}
               accessibilityRole="button"
               accessibilityLabel="Unlock your chosen protected app"
               accessibilityHint="Opens Curfy's uninterrupted 120-second hold. Lifting your finger resets it."
-              onPress={() => router.push("/escape")}
+              onPress={() => {
+                if (protectedApp && protectedApp.count > 1) {
+                  router.push({ pathname: "/escape", params: { appIndex: String(row.index), revision: protectedApp.revision } });
+                } else if (protectedApp?.count === 1) router.push("/escape");
+                else Alert.alert("App selection unavailable", "Open Settings to verify your protected apps before starting a hold.");
+              }}
               activeOpacity={0.84}
               style={styles.unlockCard}
             >
@@ -191,10 +213,10 @@ export default function Home() {
                 <View style={styles.unlockCopy}>
                   <View style={styles.unlockStatus}>
                     <View style={styles.unlockStatusDot} />
-                    <Text style={styles.unlockEyebrow}>PROTECTED</Text>
+                    <Text style={styles.unlockEyebrow}>{row.expiresAt ? "TEMPORARY ACCESS" : "PROTECTED"}</Text>
                   </View>
                   <View style={styles.unlockTitleRow}>
-                    <Text style={styles.unlockVerb}>Unlock</Text>
+                    <Text style={styles.unlockVerb}>{row.expiresAt ? "Until " + new Date(row.expiresAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" }) : "Unlock"}</Text>
                     {protectedApp && selectedMode ? (
                       // Apple renders the REAL protected app icon and name.
                       // No app title, opaque token or bundle ID enters JS.
@@ -202,7 +224,7 @@ export default function Home() {
                         key={protectedApp.revision}
                         selectionId={selectionIdForMode(selectedMode)}
                         revision={protectedApp.revision}
-                        index={0}
+                        index={row.index}
                         style={styles.unlockNativeAppLabel}
                       />
                     ) : (
@@ -219,7 +241,8 @@ export default function Home() {
                   iOS hasn't confirmed protection. Check the selected app before unlocking.
                 </Text>
               )}
-            </TouchableOpacity>
+            </TouchableOpacity>)}
+            </View>
           )
         )}
 

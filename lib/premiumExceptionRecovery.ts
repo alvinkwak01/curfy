@@ -60,7 +60,7 @@ function assertNativeSingleton(entry: PremiumExceptionEntry): boolean {
     activitySelectionId: entry.committedSelectionId,
   }) === 1;
 }
-function persistLedger(ledger: PremiumExceptionLedger): void {
+export function persistPremiumExceptionLedger(ledger: PremiumExceptionLedger): void {
   DeviceActivity.userDefaultsSet(PREMIUM_EXCEPTIONS_KEY, ledger);
   const readBack = parsePremiumExceptionLedger(
     DeviceActivity.userDefaultsGet(PREMIUM_EXCEPTIONS_KEY)
@@ -74,7 +74,7 @@ function persistLedger(ledger: PremiumExceptionLedger): void {
     throw new Error("iOS could not confirm removal of a completed app exception.");
   }
 }
-function closeReblockMonitor(entry: PremiumExceptionEntry): void {
+export function closePremiumReblockMonitor(entry: PremiumExceptionEntry): void {
   const previousAction = [{
     type: "blockSelection" as const, familyActivitySelectionId: entry.selectionId,
   }];
@@ -173,10 +173,10 @@ export function reconcilePremiumAppExceptions(now = new Date()): number {
     }
     // If the old cutoff already passed or the scheduled selection changed,
     // do not apply stale protection to an app from yesterday.
-    closeReblockMonitor(entry);
+    closePremiumReblockMonitor(entry);
     const next = { ...current };
     delete next[entry.activityName];
-    persistLedger(next);
+    persistPremiumExceptionLedger(next);
     recovered++;
   }
   return recovered;

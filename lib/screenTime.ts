@@ -9,6 +9,10 @@
 // has this native module compiled in — it is a no-op-shaped API surface on
 // the JS side, but nothing here functions in Expo Go or the iOS Simulator
 // (Apple's Screen Time frameworks don't run in Simulator at all).
+import { beginProtectionOperation, protectionOperationPending } from "@/lib/protectionOperation";
+import { refreshPremiumEntitlement } from "@/lib/premiumStore";
+import { readPremiumLedger, stopPremiumExceptionsBeforeDaily, cancelPremiumExceptionsAfterScheduleChange,
+  restorePremiumExceptions, reconcilePremiumProtectedSelection } from "@/lib/premiumProtection";
 import * as DeviceActivity from "react-native-device-activity";
 import { normalizeActivitySelectionMetadata, selectionIssueForEntitlement } from "@/lib/premiumPolicy";
 import { assertMonitorableBedtimeSchedule, currentBedtimeWindow, nativeDateComponents } from "@/lib/bedtimeWindow";
@@ -260,7 +264,25 @@ async function restorePreviousBedtimeMonitor({
   }
 }
 
-export async function configureBedtimeBlocking({
+export async function configureBedtimeBlocking(input: {
+  bedtime: string; wakeTime: string; mode: BlockModeId; now?: Date; draftSelectionId?: string;
+}): Promise<void> {
+  if (freeExceptionGrantInProgress) throw new Error("Curfy is still preparing a temporary app unlock. Finish that request before changing protection.");
+  const finish = beginProtectionOperation();
+  try {
+    const pendingId = input.draftSelectionId ?? selectionIdForMode(input.mode);
+    const metadata = DeviceActivity.activitySelectionMetadata({ activitySelectionId: pendingId });
+    const count = normalizeActivitySelectionMetadata(metadata)?.applicationCount ?? 0;
+    const entitlement = count > 1 ? await refreshPremiumEntitlement() : "free";
+    const issue = selectionIssueForEntitlement(metadata, entitlement);
+    if (issue) throw new Error(count > 1
+      ? "Verified Curfy Premium is required for multiple individual apps. Categories and websites aren't supported."
+      : "Select one individual app to protect.");
+    await configureVerifiedBedtimeBlocking(input);
+  } finally { finish(); }
+}
+
+async function configureVerifiedBedtimeBlocking({
   bedtime,
   wakeTime,
   mode,
@@ -284,7 +306,10 @@ export async function configureBedtimeBlocking({
   currentBedtimeWindow(now, bedtime, wakeTime);
   const selectionId = selectionIdForMode(mode);
   const pendingId = draftSelectionId ?? selectionId;
-  assertOneFreeAppSelected(pendingId);
+  // Selection was checked against a fresh StoreKit entitlement by the public wrapper.
+  if (selectionIssueForEntitlement(DeviceActivity.activitySelectionMetadata({ activitySelectionId: pendingId }), "owned")) {
+    throw new Error("Choose individual apps only.");
+  }
   if (draftSelectionId && draftSelectionId !== draftSelectionIdForMode(mode)) {
     throw new Error("Unexpected app selection draft. Open the picker and try again.");
   }
@@ -296,7 +321,8 @@ export async function configureBedtimeBlocking({
   const previousClockWindow = DeviceActivity.userDefaultsGet<BedtimeClockWindow>(BEDTIME_CLOCK_KEY);
   const previouslyMonitored = DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME);
   const previousTokens = DeviceActivity.getFamilyActivitySelectionId(selectionId);
-  const previousException = readException();
+  const previousException = readException(true);
+  const previousPremiumExceptions = readPremiumLedger();
   let blocksChanged = false;
   let nativeScheduleTouched = false;
 
@@ -339,11 +365,15 @@ export async function configureBedtimeBlocking({
       DeviceActivity.blockSelection(
         { activitySelectionId: selectionId }, "curfy-schedule-change-current-window"
       );
-      if (!DeviceActivity.isShieldActive()) {
+      const appliedMetadata = normalizeActivitySelectionMetadata(DeviceActivity.activitySelectionMetadata({ activitySelectionId: selectionId }));
+      if (!DeviceActivity.isShieldActive() ||
+          (appliedMetadata && appliedMetadata.applicationCount > 1 &&
+           selectedAppShieldCount(selectionId) !== appliedMetadata.applicationCount)) {
         throw new Error("iOS did not apply the selected app restrictions. Please retry.");
       }
     }
     DeviceActivity.userDefaultsSet(SCHEDULED_SELECTION_ID_KEY, selectionId);
+    cancelPremiumExceptionsAfterScheduleChange();
     cancelExceptionForScheduleChange();
   } catch (error) {
     if (draftSelectionId) restoreSelection(selectionId, previousTokens);
@@ -393,6 +423,11 @@ export async function configureBedtimeBlocking({
       }
     }
 
+    if (blocksChanged && !rollbackError) {
+      try { await restorePremiumExceptions(previousPremiumExceptions, now); }
+      catch (restoreError) { rollbackError = restoreError; }
+    }
+
     // Do not report normal "save failed" if old protections may have been
     // lost. State exactly what must be checked on the phone.
     if (rollbackError) {
@@ -432,6 +467,12 @@ export function refreshBedtimeShieldAppearance(): void {
 }
 
 export function stopBedtimeBlocking(now = new Date()): void {
+  if (freeExceptionGrantInProgress) throw new Error("Curfy is still preparing a temporary app unlock. Retry stopping protection when the request finishes.");
+  const finish = beginProtectionOperation();
+  try { stopVerifiedBedtimeBlocking(now); } finally { finish(); }
+}
+
+function stopVerifiedBedtimeBlocking(now: Date): void {
   if (freeExceptionGrantInProgress) {
     // The native startMonitoring promise may not have committed its App Group
     // recovery record yet. Stopping the daily monitor meanwhile could let it
@@ -446,6 +487,8 @@ export function stopBedtimeBlocking(now = new Date()): void {
     BEDTIME_CLOCK_KEY
   );
   const dailyIsRunning = DeviceActivity.getActivities().includes(BEDTIME_ACTIVITY_NAME);
+  // All app-specific monitors must retire while the daily cutoff still exists.
+  stopPremiumExceptionsBeforeDaily(now);
 
   // Stop the one-shot exception FIRST. In the former order, stopping the
   // recurring monitor succeeded and a refused exception stop left a still-
@@ -553,7 +596,7 @@ export function clearCurfyOnboardingSelectionsAfterAccountDeletion(): void {
   const saved = DeviceActivity.userDefaultsGet<unknown>(key);
   const isOwnedSelection = (id: string) =>
     /^curfy-(?:block|draft)-(?:social|most|custom)$/.test(id) ||
-    id.startsWith("curfy-single-app-");
+    id.startsWith("curfy-single-app-") || id === "curfy-premium-recovery-selection";
 
   if (saved !== null && saved !== undefined) {
     if (typeof saved !== "object" || Array.isArray(saved)) {
@@ -703,7 +746,7 @@ export type BedtimeProtectionStatus =
  */
 export function getBedtimeProtectionStatus(mode: BlockModeId): BedtimeProtectionStatus {
   if (getScreenTimeAccessStatus() !== "authorized") return "permission-required";
-  if (freeSelectionIssue(mode)) return "selection-required";
+  if (selectionIssueForEntitlement(selectionMetadata(mode), "owned")) return "selection-required";
   try {
     if (DeviceActivity.isShieldActive()) return "shield-active";
     if (selectedAppShieldCount(selectionIdForMode(mode)) > 0) return "shield-active";
@@ -795,6 +838,7 @@ export async function grantBedtimeException({
   if (freeExceptionGrantInProgress) {
     throw new Error("Another Curfy app unlock is already being prepared.");
   }
+  const finishOperation = beginProtectionOperation();
   freeExceptionGrantInProgress = true;
   try {
   if (getScreenTimeAccessStatus() !== "authorized") {
@@ -970,6 +1014,7 @@ export async function grantBedtimeException({
   }
   } finally {
     freeExceptionGrantInProgress = false;
+    finishOperation();
   }
 }
 
@@ -988,7 +1033,7 @@ export function reconcileProtectionWindow(
   mode: BlockModeId,
   now = new Date()
 ): void {
-  if (getScreenTimeAccessStatus() !== "authorized") return;
+  if (protectionOperationPending() || getScreenTimeAccessStatus() !== "authorized") return;
   // Never manually shield apps unless iOS confirms a recurring monitor that
   // can release them at the user's chosen cutoff, even with Curfy closed.
   // A lost monitor after an OS update/restart must fail OPEN, not turn the
@@ -1011,6 +1056,12 @@ export function reconcileProtectionWindow(
     if (DeviceActivity.isShieldActive()) {
       throw new Error("iOS still reports Curfy app restrictions after the window ended.");
     }
+    return;
+  }
+  const meta = normalizeActivitySelectionMetadata(selectionMetadata(mode));
+  if (meta && meta.applicationCount > 1 && !selectionIssueForEntitlement(meta, "owned")) {
+    if (previousScheduledSelectionId() !== selectionIdForMode(mode)) throw new Error("The protected selection no longer matches the daily schedule.");
+    reconcilePremiumProtectedSelection(selectionIdForMode(mode), now);
     return;
   }
   if (freeSelectionIssue(mode)) return;
@@ -1037,7 +1088,7 @@ export function reconcileBedtimeException(
   if (!state || now.getTime() < state.expiresAt) return;
 
   const withinBedtime = currentBedtimeWindow(now, bedtime, wakeTime) !== null;
-  if (getScreenTimeAccessStatus() !== "authorized") return;
+  if (protectionOperationPending() || getScreenTimeAccessStatus() !== "authorized") return;
 
   // An expired exception must not resurrect a shield when the daily iOS
   // monitor has disappeared: there would be no reliable end-of-window

@@ -1,11 +1,11 @@
 /**
- * Dormant Premium per-app exception coordinator. Intentionally NOT mounted
- * in the escape route and NOT reachable from checkout until native iPhone
- * evidence proves exact one-app reblock and permission/cutoff behavior.
+ * Premium per-app exception coordinator. Native iPhone acceptance remains
+ * required: source tests cannot prove shielding or callback timing.
  *
  * Caller must gate this behind a completed uninterrupted 120-second HoldButton.
  * No app identity or Screen Time token crosses this React Native boundary.
  */
+import { beginProtectionOperation } from "@/lib/protectionOperation";
 import * as DeviceActivity from "react-native-device-activity";
 import { validateProtectedAppChoice } from "@/modules/curfy-protected-apps";
 import { reconcilePremiumAppExceptions } from "@/lib/premiumExceptionRecovery";
@@ -84,7 +84,7 @@ function clearEndAction(activityName: string): void {
 }
 
 /**
- * Internal-only post-hold function. Assumes a genuinely completed 120-second
+ * Post-hold function. Requires a genuinely completed 120-second
  * gesture; never bind this to a simple press, shield button or payment action.
  * The returned timestamp is a planned native cutoff, NOT proof of
  * instantaneous callback delivery while the phone is idle.
@@ -99,6 +99,7 @@ export async function grantPremiumAppException({
   now?: Date;
 }): Promise<number> {
   if (grantInProgress) throw new Error("Another Curfy app unlock is already being prepared.");
+  const finishOperation = beginProtectionOperation();
   grantInProgress = true;
   try {
     if (getScreenTimeAccessStatus() !== "authorized") {
@@ -121,7 +122,7 @@ export async function grantPremiumAppException({
     // A legacy free-tier exception unshields the WHOLE selected group.
     // Never mix that behavior with isolated Premium exceptions.
     const old = DeviceActivity.userDefaultsGet<{ expiresAt: number }>("curfy-active-exception");
-    if (old && typeof old.expiresAt === "number" && old.expiresAt > now.getTime()) {
+    if (old != null) {
       throw new Error("Finish the existing app exception before choosing another app.");
     }
     nativeOneAppSelection(ticketId);
@@ -249,6 +250,7 @@ export async function grantPremiumAppException({
     }
   } finally {
     grantInProgress = false;
+    finishOperation();
   }
 }
 

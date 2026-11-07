@@ -24,7 +24,7 @@ function fixture({
   failOnStartCalls = [], failAfterOverwriteStartCalls = [],
   ignoreBlockOnCalls = [], ignoreResetOnCalls = [],
   ignoreStopOnCalls = [], failOnActionCalls = [],
-  waitForStart = null,
+  waitForStart = null, entitlement = "free",
 } = {}) {
   const storage = new Map();
   const selections = new Map();
@@ -107,12 +107,19 @@ function fixture({
       }
     },
   };
-  const screenTime = loadTS("lib/screenTime.ts", moduleName => {
+  const loaded = new Map();
+  function requireLocal(moduleName) {
     if (moduleName === "react-native-device-activity") return native;
     if (moduleName === "@/lib/bedtimeWindow") return time;
     if (moduleName === "@/lib/premiumPolicy") return premiumPolicy;
+    if (moduleName === "@/lib/premiumStore") return { refreshPremiumEntitlement: async () => entitlement };
+    if (moduleName.startsWith("@/lib/")) {
+      if (!loaded.has(moduleName)) loaded.set(moduleName, loadTS(moduleName.slice(2) + ".ts", requireLocal));
+      return loaded.get(moduleName);
+    }
     throw Error("Unexpected import " + moduleName);
-  });
+  }
+  const screenTime = requireLocal("@/lib/screenTime");
   return {
     native, screenTime, storage, selections, calls, monitorSchedules,
     isBlocked: () => blocked,
@@ -632,7 +639,7 @@ test("real iOS 0.6.1 saved-selection metadata still rejects two Free apps before
     f.screenTime.configureBedtimeBlocking({
       bedtime: "22:00", wakeTime: "06:00", mode: "custom",
       now: new Date("2026-10-31T23:00:00"),
-    }), /one individual app/
+    }), /Premium/
   );
   assert.equal(f.monitorSchedules.has("curfy-bedtime"), false);
 });
@@ -640,8 +647,8 @@ test("real iOS 0.6.1 saved-selection metadata still rejects two Free apps before
 test("MVP free tier requires exactly one individually selected app", async () => {
   const at = new Date("2026-10-31T23:00:00");
   for (const [opts, expected] of [
-    [{ selectionCount: 0 }, /Select one app/],
-    [{ selectionCount: 2 }, /one individual app/],
+    [{ selectionCount: 0 }, /one individual app/],
+    [{ selectionCount: 2 }, /Premium/],
     [{ selectionCount: 0, categoryCount: 1 }, /one individual app/],
     [{ selectionCount: 1, webDomainCount: 1 }, /one individual app/],
     [{ selectionCount: 1, includeEntireCategory: true }, /one individual app/],
@@ -671,9 +678,9 @@ test("invalid multi-app selection also cannot gain a temporary exception", async
   assert.equal(f.isBlocked(), true);
 });
 
-test("only single-app selection receives the positive dashboard shield status", () => {
+test("existing individual-app selections receive shield status without granting purchase rights", () => {
   assert.equal(fixture({ selectionCount: 1 }).screenTime.getBedtimeProtectionStatus("custom"), "shield-active");
-  assert.equal(fixture({ selectionCount: 2 }).screenTime.getBedtimeProtectionStatus("custom"), "selection-required");
+  assert.equal(fixture({ selectionCount: 2 }).screenTime.getBedtimeProtectionStatus("custom"), "shield-active");
   assert.equal(fixture({ selectionCount: 0, categoryCount: 1 }).screenTime.getBedtimeProtectionStatus("custom"), "selection-required");
 });
 

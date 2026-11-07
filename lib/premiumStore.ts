@@ -47,8 +47,8 @@ export async function fetchPremiumProduct(): Promise<PremiumProduct> {
 }
 
 /**
- * Internal purchase plumbing only. Do NOT expose a Buy button until actual
- * multi-app shielding and per-app exceptions both pass release checks.
+ * Purchase plumbing for the optional Settings control. Signed-device StoreKit
+ * and per-app shielding tests remain mandatory release gates.
  * Purchase dispatch or a "purchased" message does NOT grant ownership.
  */
 export async function purchasePremium(): Promise<PremiumPurchaseOutcome> {

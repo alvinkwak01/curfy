@@ -1,5 +1,5 @@
 import { LockScreen } from "@/components/LockScreen";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import React from "react";
 
 /**
@@ -7,5 +7,8 @@ import React from "react";
  * Users open Curfy from their iPhone Home Screen, then use this route.
  */
 export default function Escape() {
-  return <LockScreen mode="escape" onExit={() => router.replace("/(tabs)")} />;
+  const { appIndex, revision } = useLocalSearchParams<{ appIndex?: string; revision?: string }>();
+  const choice = typeof appIndex === "string" && /^\d+$/.test(appIndex) && typeof revision === "string"
+    ? { index: Number(appIndex), revision } : undefined;
+  return <LockScreen choice={choice} mode="escape" onExit={() => router.replace("/(tabs)")} />;
 }

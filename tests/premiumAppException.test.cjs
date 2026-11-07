@@ -70,7 +70,9 @@ function fixture({
       tokensFor(id).forEach(v => blocked.add(v));
     },
   };
+  const operation = loadTS("lib/protectionOperation.ts", require);
   const mod = loadTS("lib/premiumAppException.ts", name => {
+    if (name === "@/lib/protectionOperation") return operation;
     if (name === "react-native-device-activity") return native;
     if (name === "@/modules/curfy-protected-apps") return {
       validateProtectedAppChoice: () => {

@@ -1,3 +1,7 @@
+import { LeaderboardSettings } from "@/components/LeaderboardConsent";
+import { PremiumSettings } from "@/components/PremiumSettings";
+import { usePremium } from "@/context/PremiumContext";
+import { allPremiumAppsHaveActiveExceptions } from "@/lib/premiumProtection";
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
 import { ProtectionRoutine, cutoffDayLabel, clockLabel, inferRoutineFromStart } from "@/lib/protectionRoutine";
@@ -11,14 +15,12 @@ import {
   draftSelectionIdForMode,
   prepareSelectionDraft,
   selectionDraftChanged,
-  freeSelectionIssue,
-  freeSelectionIssueForMetadata,
-  FreeSelectionIssue,
+  selectionIdForMode,
   activeExceptionExpiresAt,
   getScreenTimeAccessStatus,
 } from "@/lib/screenTime";
 import { isBedtimeWindowActive } from "@/lib/bedtimeWindow";
-import { normalizeActivitySelectionMetadata } from "@/lib/premiumPolicy";
+import { normalizeActivitySelectionMetadata, selectionIssueForEntitlement, type SelectionPolicyIssue } from "@/lib/premiumPolicy";
 import { waitForPersistedPickerCommit } from "@/lib/pickerSettlement";
 import { allowProtectionReconfiguration, protectionSettingsChanged } from "@/lib/protectionSettingsPolicy";
 import { Ionicons } from "@expo/vector-icons";
@@ -44,6 +46,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Settings() {
+  const { entitlement } = usePremium();
+  const selectionIssue = (metadata: ActivitySelectionMetadata | null | undefined) => selectionIssueForEntitlement(metadata, entitlement);
   const {
     bedtime,
     setBedtime,
@@ -79,7 +83,7 @@ export default function Settings() {
   const sawNativeSelectionEvent = useRef(false);
   const pickerIsClosing = useRef(false);
   const [stagedMode, setStagedMode] = useState<BlockModeId | null>(null);
-  const [pickerIssue, setPickerIssue] = useState<FreeSelectionIssue | null>(null);
+  const [pickerIssue, setPickerIssue] = useState<SelectionPolicyIssue | null>(null);
   // Read once on mount from the native side (not persisted app state) —
   // this is what actually lets the UI show "N apps blocked" without
   // reopening the picker. Refreshed locally after any picker session.
@@ -109,10 +113,10 @@ export default function Settings() {
         return;
       }
     }
-    let confirmedPickerIssue: FreeSelectionIssue | null = null;
+    let confirmedPickerIssue: SelectionPolicyIssue | null = null;
     try {
       confirmedPickerIssue = stagedMode === localBlockMode
-        ? freeSelectionIssue(draftSelectionIdForMode(localBlockMode))
+        ? selectionIssue(activitySelectionMetadata({ activitySelectionId: draftSelectionIdForMode(localBlockMode) }))
         : null;
     } catch (error) {
       console.warn("[Curfy] Couldn't verify saved Settings app choice", error);
@@ -122,10 +126,11 @@ export default function Settings() {
     }
     setPickerIssue(confirmedPickerIssue);
     if (confirmedPickerIssue) {
-      Alert.alert("Start with one app",
-        confirmedPickerIssue === "too-many-apps-or-categories"
-          ? "Free protection covers one individual app. Return to the picker and remove extra apps, categories and websites. Premium purchases aren't available yet."
-          : "Choose one individual app before saving.");
+      Alert.alert("Check your app selection",
+        confirmedPickerIssue === "categories-and-websites-not-supported"
+          ? "Choose individual apps only. Categories and websites aren't supported."
+          : confirmedPickerIssue === "choose-one-app" ? "Choose at least one individual app."
+          : "Verify or restore Curfy Premium to protect multiple apps. Free protects one app.");
       return;
     }
     const pickerEdited = stagedMode === localBlockMode &&
@@ -140,11 +145,12 @@ export default function Settings() {
       insideCurrentBedtime: isBedtimeWindowActive(new Date(), bedtime, wakeTime),
       authorized: getScreenTimeAccessStatus() === "authorized",
       hasConfiguredApp: blockMode === "custom" || blockMode === "social" || blockMode === "most",
-      activeException: activeExceptionExpiresAt() !== null,
+      activeException: activeExceptionExpiresAt() !== null ||
+        (!!blockMode && allPremiumAppsHaveActiveExceptions(selectionIdForMode(blockMode as BlockModeId))),
     })) {
       Alert.alert(
         "Your bedtime boundary is active",
-        "To change protected apps or your protection hours, complete the 120-second hold from Curfy Home first, or wait until this window ends. Name and motivation remain editable."
+        "To change protected apps or your protection hours, complete the 120-second hold for each protected app from Curfy Home first, or wait until this window ends. Name and motivation remain editable."
       );
       return;
     }
@@ -192,7 +198,7 @@ export default function Settings() {
       pendingPickerCommit.current = null;
       sawNativeSelectionEvent.current = false;
       pickerIsClosing.current = false;
-      setPickerIssue(freeSelectionIssue(draftSelectionIdForMode(mode)));
+      setPickerIssue(selectionIssue(activitySelectionMetadata({ activitySelectionId: draftSelectionIdForMode(mode) })));
       setStagedMode(mode);
       setLocalBlockMode(mode);
       setPickerMode(mode);
@@ -213,7 +219,7 @@ export default function Settings() {
       }
       return next;
     });
-    setPickerIssue(freeSelectionIssueForMetadata(metadata));
+    setPickerIssue(selectionIssue(metadata));
   };
 
   const handleSelectionChange = (event: NativeSyntheticEvent<ActivitySelectionMetadata>) => {
@@ -284,6 +290,8 @@ export default function Settings() {
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Settings</Text>
+        <PremiumSettings />
+        <LeaderboardSettings />
 
         <View style={styles.section}>
           <Text style={styles.label}>YOUR NAME</Text>
@@ -315,7 +323,7 @@ export default function Settings() {
 
         <View style={styles.section}>
           <Text style={styles.label}>BLOCKED APPS</Text>
-          <Text style={styles.hint}>Free protects one individual app. Categories, websites and multiple apps aren't available yet.</Text>
+          <Text style={styles.hint}>Free protects one individual app. Premium protects multiple individual apps. Categories and websites aren't supported.</Text>
           <View style={{ gap: 8, marginTop: 12 }}>
             {BLOCK_MODE_PRESETS.filter((preset) => preset.id === "custom").map((preset) => {
               const isSelected = localBlockMode === preset.id;
@@ -338,7 +346,7 @@ export default function Settings() {
                     <Text style={styles.presetTitle}>{preset.title}</Text>
                     <Text style={styles.presetDesc}>
                       {count != null
-                        ? `${count} selection${count === 1 ? "" : "s"} — free protects one app`
+                        ? `${count} selection${count === 1 ? "" : "s"}${entitlement === "owned" ? "" : " — free protects one app"}`
                         : "Tap to choose apps"}
                     </Text>
                   </View>
@@ -350,13 +358,13 @@ export default function Settings() {
             })}
           </View>
 
-          {stagedMode && pickerIssue === "too-many-apps-or-categories" && (
+          {stagedMode && pickerIssue && pickerIssue !== "choose-one-app" && (
             <View style={styles.freeLimitNotice}>
-              <Text style={styles.freeLimitTitle}>One app is included free</Text>
+              <Text style={styles.freeLimitTitle}>{pickerIssue === "categories-and-websites-not-supported" ? "Choose individual apps" : "One app is included free"}</Text>
               <Text style={styles.hint}>
-                Your current selection includes more than one app, a category, or a website.
-                Keep just one individual app to save. Premium multi-app protection will
-                require an App Store purchase; purchasing isn't available yet.
+                {pickerIssue === "categories-and-websites-not-supported"
+                  ? "Remove categories and websites before saving. Choose apps individually."
+                  : "Keep one individual app, or verify Curfy Premium to save multiple apps."}
               </Text>
             </View>
           )}
@@ -381,9 +389,9 @@ export default function Settings() {
                     throw new Error("iOS did not provide a saved app selection.");
                   }
                   applySelectionMetadata(closingMode, metadata);
-                  if (freeSelectionIssueForMetadata(metadata) === "too-many-apps-or-categories") {
-                    Alert.alert("Free protects one app",
-                      "Apple's picker allows multiple selections. Remove extra apps, categories or websites before saving Curfy protection.");
+                  if (selectionIssue(metadata) === "categories-and-websites-not-supported") {
+                    Alert.alert("Choose individual apps",
+                      "Remove categories and websites before saving Curfy protection.");
                   }
                 })();
                 pendingPickerCommit.current = commit;
