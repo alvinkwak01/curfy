@@ -29,7 +29,7 @@ function fixture({
 } = {}) {
   const storage = new Map();
   const blocked = new Set(["A", "B", "C"]);
-  const activities = new Set();
+  const activities = new Set(["curfy-bedtime"]);
   const calls = [];
   const tokensFor = (sel) => sel === group ? ["A","B","C"] :
     scope[sel] ? [scope[sel]] : [];
@@ -116,7 +116,7 @@ test("verified Premium installs one native reblock before releasing only the int
   // DeviceActivity accepts its minimum interval. Access itself is <=15m.
   assert.equal(end, now.getTime() + 900000);
   assert.deepEqual([...f.blocked].sort(), ["B","C"]);
-  assert.equal(f.activities.size, 1);
+  assert.equal(f.activities.size, 2);
   const start = f.calls.findIndex(x => x[0] === "start");
   const unshield = f.calls.findIndex(x => x[0] === "unblock");
   const action = f.calls.findIndex(x => x[0] === "action" && x[1].actions.length);
@@ -131,7 +131,7 @@ test("two different protected apps receive two independent monitors and keep the
   await f.grant(t1);
   await f.grant(t2);
   assert.deepEqual([...f.blocked], ["C"]);
-  assert.equal(f.activities.size, 2);
+  assert.equal(f.activities.size, 3);
   assert.equal(Object.keys(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY)).length, 2);
   assert.equal(f.calls.filter(x => x[0] === "unblock").length, 2);
 });
@@ -141,7 +141,7 @@ test("a second ticket for an already unlocked app never installs another monitor
   const f = fixture({ scope: { [t1]: "A", [duplicate]: "A" } });
   await f.grant(t1);
   await assert.rejects(() => f.grant(duplicate), /already temporarily unlocked/);
-  assert.equal(f.activities.size, 1);
+  assert.equal(f.activities.size, 2);
 });
 
 test("premium purchase is checked by StoreKit before touching native blocking", async () => {
@@ -161,7 +161,7 @@ test("revoked Screen Time permission cannot start an exception", async () => {
 test("changed native app ticket refuses to unshield or schedule", async () => {
   const f = fixture({ validateFails: true });
   await assert.rejects(() => f.grant(), /saved app choice changed/);
-  assert.equal(f.activities.size, 0);
+  assert.equal(f.activities.size, 1);
   assert.equal(f.storage.has(policy.PREMIUM_EXCEPTIONS_KEY), false);
 });
 
@@ -170,7 +170,7 @@ test("monitor setup failure never releases an app; native ledger rolls back", as
   await assert.rejects(() => f.grant(), /native failed to start monitor/);
   assert.deepEqual([...f.blocked].sort(), ["A","B","C"]);
   assert.deepEqual(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY), {});
-  assert.equal(f.activities.size, 0);
+  assert.equal(f.activities.size, 1);
   assert.equal(f.calls.some(x => x[0] === "unblock"), false);
 });
 
@@ -179,7 +179,7 @@ test("native unshield refusal restores the previous ledger and protection", asyn
   await assert.rejects(() => f.grant(), /release exactly the chosen app/);
   assert.deepEqual([...f.blocked].sort(), ["A","B","C"]);
   assert.deepEqual(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY), {});
-  assert.equal(f.activities.size, 0);
+  assert.equal(f.activities.size, 1);
 });
 
 test("a native bug that also removes another app shield cannot be counted as recovery", async () => {
@@ -187,7 +187,7 @@ test("a native bug that also removes another app shield cannot be counted as rec
   await assert.rejects(() => f.grant(), /could not confirm recovery/);
   assert.equal(f.blocked.has("A"), true);
   assert.equal(f.blocked.has("B"), false);
-  assert.equal(f.activities.size, 1);
+  assert.equal(f.activities.size, 2);
   assert.equal(Object.keys(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY)).length, 1);
 });
 
@@ -195,7 +195,7 @@ test("close to the cutoff delegates release to the existing recurring schedule",
   const f = fixture({ cutoffMinutes: 8 });
   const ends = await f.grant();
   assert.equal(ends, now.getTime() + 8*60_000);
-  assert.equal(f.activities.size, 0);
+  assert.equal(f.activities.size, 1);
   assert.equal(f.calls.filter(x => x[0] === "unblock").length, 1);
 });
 
@@ -218,7 +218,7 @@ test("next app hold first re-shields only the previous expired app and safely re
   const ledger = f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY);
   assert.equal(Object.keys(ledger).length, 1);
   assert.equal(Object.values(ledger)[0].selectionId, t2);
-  assert.equal(f.activities.size, 1);
+  assert.equal(f.activities.size, 2);
   assert.equal(f.calls.filter(x=>x[0]==="block").length, 1);
 });
 
@@ -227,3 +227,51 @@ test("foreground native recovery is included independently of the Free hold path
   assert.match(context, /reconcilePremiumAppExceptions\(\)/);
   assert.match(context, /reconcileBedtimeException\(bedtime, wakeTime\)/);
 });
+
+for (const failurePoint of ["stop", "readback", "clear"]) {
+  test(`failed Premium rollback restores callback after ${failurePoint} throws`, async () => {
+    const f = fixture({ silentlyFailUnblock: true });
+    if (failurePoint === "stop") {
+      f.native.stopMonitoring = () => { throw Error("stop unavailable"); };
+    } else if (failurePoint === "readback") {
+      f.native.stopMonitoring = names => {
+        // iOS refuses removal, then readback also fails.
+        f.native.getActivities = () => { throw Error("readback unavailable"); };
+      };
+    } else {
+      const configure = f.native.configureActions;
+      f.native.configureActions = action => {
+        configure(action); // write can succeed before its bridge reports failure
+        if (!action.actions.length) throw Error("clear failed after write");
+      };
+    }
+    await assert.rejects(() => f.grant(), /could not confirm recovery/);
+    assert.equal(f.activities.size, 2);
+    assert.equal(Object.keys(f.storage.get(policy.PREMIUM_EXCEPTIONS_KEY)).length, 1);
+    const actions = f.calls.filter(call => call[0] === "action");
+    assert.deepEqual(actions.at(-1)[1].actions, [
+      { type: "blockSelection", familyActivitySelectionId: t1 },
+    ]);
+  });
+}
+
+for (const changed of ["monitor", "selection", "clock"]) {
+  for (const duringStart of [false, true]) {
+    test(`Premium rejects changed ${changed} ${duringStart ? "during registration" : "before grant"}`, async () => {
+      const f = fixture();
+      const change = () => {
+        if (changed === "monitor") f.activities.delete("curfy-bedtime");
+        if (changed === "selection") f.storage.set("curfy-scheduled-selection-id", "curfy-block-social");
+        if (changed === "clock") f.storage.set("curfy-bedtime-clock-window", { startMinute: 23*60, endMinute: 7*60 });
+      };
+      if (duringStart) {
+        const start = f.native.startMonitoring;
+        f.native.startMonitoring = async name => { await start(name); change(); };
+      } else change();
+      await assert.rejects(() => f.grant(), /schedule is missing or changed/);
+      assert.equal(f.calls.some(call => call[0] === "unblock"), false);
+      assert.equal([...f.activities].some(name => name.startsWith("curfy-premium-exception-")), false);
+      assert.deepEqual([...f.blocked].sort(), ["A", "B", "C"]);
+    });
+  }
+}
