@@ -81,11 +81,11 @@ function closeReblockMonitor(entry: PremiumExceptionEntry): void {
   // Clearing actions first is vital: stopMonitoring may itself trigger
   // intervalDidEnd. If stop fails while a monitor survives, restore the
   // callback or the app could remain exposed after Curfy quits.
-  DeviceActivity.configureActions({
-    activityName: entry.activityName, callbackName: "intervalDidEnd", actions: [],
-  });
   let stopped = false;
   try {
+    DeviceActivity.configureActions({
+      activityName: entry.activityName, callbackName: "intervalDidEnd", actions: [],
+    });
     if (DeviceActivity.getActivities().includes(entry.activityName)) {
       DeviceActivity.stopMonitoring([entry.activityName]);
     }
@@ -131,6 +131,11 @@ export function reconcilePremiumAppExceptions(now = new Date()): number {
     );
     if (!current[entry.activityName]) continue;
     if (isSameOriginalWindow(now, entry)) {
+      // A singleton re-shield without the daily monitor could outlive the
+      // chosen cutoff. Preserve recovery state and never create that shield.
+      if (!DeviceActivity.getActivities().includes("curfy-bedtime")) {
+        throw new Error("Curfy's recurring protection monitor is missing. Restore protection in Settings before recovering app exceptions.");
+      }
       const belongs = assertNativeSingleton(entry);
       if (!belongs) {
         throw new Error("A protected-app selection changed before recovery. Check Curfy Settings.");
