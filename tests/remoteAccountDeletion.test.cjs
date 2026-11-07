@@ -11,7 +11,7 @@ const compiled = ts.transpileModule(source, {
   compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.CommonJS },
 }).outputText;
 
-function endpoint({ authenticated = true, deleteFails = false } = {}) {
+function endpoint({ authenticated = true, deleteFails = false, invalidateOnDelete = false } = {}) {
   const calls = { getUser: 0, delete: [], createdClients: [] };
   let handler;
   const createClient = (url, key, options) => {
@@ -32,6 +32,7 @@ function endpoint({ authenticated = true, deleteFails = false } = {}) {
       auth: { admin: {
         deleteUser: async id => {
           calls.delete.push(id);
+          if (invalidateOnDelete && !deleteFails) authenticated = false;
           return deleteFails
             ? { error: { message: "Server declined deletion" } }
             : { error: null };
@@ -113,4 +114,16 @@ test("server rejection cannot masquerade as a successful remote deletion", async
   assert.ok(body.error);
   assert.equal(body.success, undefined);
   assert.deepEqual(f.calls.delete, ["verified-caller-id"]);
+});
+
+test('lost-success-response release gate: a removed caller cannot authenticate the current endpoint retry',async()=>{
+ const f=endpoint({invalidateOnDelete:true});
+ // The server commits deletion, but the client never receives this response.
+ const lost=await f.handler(request('POST','Bearer formerly-valid-token'));
+ assert.equal(lost.status,200);
+ const retry=await f.handler(request('POST','Bearer formerly-valid-token'));
+ assert.equal(retry.status,401);
+ assert.deepEqual(f.calls.delete,['verified-caller-id']);
+ // This documents an OPEN release blocker, not successful recovery. Do not
+ // change 401 to success without independently authenticated deletion proof.
 });

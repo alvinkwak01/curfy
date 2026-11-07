@@ -67,7 +67,7 @@ test("optional leaderboard sync repairs missing profiles and never caches an unc
   assert.match(root, /void syncProfile\([\s\S]*?\)\.catch/);
   assert.match(root, /void ensureAnonymousProfile\(userName\)\.catch/);
   assert.match(auth, /Could not restore leaderboard session/);
-  assert.match(auth, /\.finally\(\(\) => \{\s*if \(active\) setIsAuthLoading\(false\)/);
+  assert.match(auth, /\.finally\(\(\) => \{\s*if \(active\) \{ authReady\.current = true; setIsAuthLoading\(false\)/);
 });
 
 test("local storage read failures never silently restart onboarding or discard native shields", () => {

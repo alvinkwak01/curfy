@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // written only after Supabase's deletion endpoint confirms success.
   const remoteDeletedUserId = useRef<string | null>(null);
   const authRecoveryFailed = useRef(false);
+  const authReady = useRef(false);
   // Avoids pushing a redundant identical update on every streak render.
   const lastSynced = useRef<{
     userId: string;
@@ -108,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
   const queueProfileWork = (work: () => Promise<void>): Promise<void> => {
     const next = profileWork.current.then(async () => {
-      if (consentRef.current !== "joined" || deletionInProgress.current) return;
+      if (!authReady.current || consentRef.current !== "joined" || deletionInProgress.current) return;
       await work();
     });
     profileWork.current = next.catch(() => {});
@@ -121,6 +122,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // https://placeholder.supabase.co. Auth just stays permanently
     // "loaded, signed out" until real keys land in .env.
     if (!isSupabaseConfigured) {
+      authReady.current = true;
       setIsAuthLoading(false);
       return;
     }
@@ -159,7 +161,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         console.warn("[Curfy] Could not restore leaderboard session or deletion receipt", error);
       })
       .finally(() => {
-        if (active) setIsAuthLoading(false);
+        if (active) { authReady.current = true; setIsAuthLoading(false); }
       });
     const { data: sub } = supabase.auth.onAuthStateChange((_event, newSession) => {
       if (active) { sessionRef.current = newSession; setSession(newSession); }
@@ -198,6 +200,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await supabase.auth.signOut();
   };
 
+  const persistDeletionReceipt = async (userId: string) => {
+    await AsyncStorage.setItem(REMOTE_DELETION_CONFIRMED_KEY, userId);
+    if (await AsyncStorage.getItem(REMOTE_DELETION_CONFIRMED_KEY) !== userId) {
+      throw new Error("Curfy couldn't confirm its deletion receipt. Retry Delete Account.");
+    }
+  };
+
   const deleteRemoteAccount = async () => {
     if (!isSupabaseConfigured) return;
     await profileWork.current;
@@ -212,7 +221,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
       // Reassert the receipt before continuing. A previous attempt may have
       // confirmed the server deletion but failed its first disk write.
-      await AsyncStorage.setItem(REMOTE_DELETION_CONFIRMED_KEY, confirmedId);
+      await persistDeletionReceipt(confirmedId);
       const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
       if (signOutError) {
         throw new Error("Curfy couldn't clear its local cloud session. Retry Delete Account.");
@@ -244,7 +253,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Persist the server-confirmed result before local sign-out. If signOut
       // fails, the user can retry deletion without reusing an invalid JWT.
       remoteDeletedUserId.current = session.user.id;
-      await AsyncStorage.setItem(REMOTE_DELETION_CONFIRMED_KEY, session.user.id);
+      await persistDeletionReceipt(session.user.id);
       const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
       if (signOutError) {
         throw new Error("Curfy couldn't clear its local cloud session. Retry Delete Account.");
@@ -262,9 +271,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const finishAccountDeletion = async () => {
-    // Called only after protection, native tickets, journal, and all local
-    // preferences have been removed. If this write fails, keep the receipt
-    // so a retry does not call the now-invalid remote account again.
+    // Persist a non-uploading, retryable consent state BEFORE retiring the
+    // receipt. If the final declined write fails (or the process exits), a
+    // restart still shows Finish leaving and cannot recreate a public identity.
+    // Delete Everything calls this after local cleanup; Leave calls it after
+    // cloud-only removal, preserving native protection and local history.
+    await persistConsent("leaving");
     await AsyncStorage.removeItem(REMOTE_DELETION_CONFIRMED_KEY);
     if (await AsyncStorage.getItem(REMOTE_DELETION_CONFIRMED_KEY) != null) {
       throw new Error("Curfy could not clear the confirmed deletion receipt.");

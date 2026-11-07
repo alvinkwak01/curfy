@@ -304,6 +304,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   const [todayUnlocks, setTodayUnlocks] = useState(0);
   const [longestStreak, setLongestStreak] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
+  const [isClearingLocalData, setIsClearingLocalData] = useState(false);
   const [storageError, setStorageError] = useState<string | null>(null);
   const [devSkipLock, setDevSkipLockState] = useState(false);
   const cooldownUntil = useRef<number>(0);
@@ -393,7 +394,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => { userNameRef.current = userName; }, [userName]);
 
   const checkLock = useCallback(() => {
-    if (isLoading || storageError || protectionOperationPending() || !isOnboardingComplete) return;
+    if (isLoading || storageError || isClearingLocalData || protectionOperationPending() || !isOnboardingComplete) return;
     // Dev-only escape hatch so the real bedtime window doesn't lock you
     // out of testing other screens. `__DEV__` is compiled to `false` in
     // every production/release bundle, so this branch is dead code in the
@@ -445,7 +446,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       const streak = computeStreak(currentLog);
       sendMorningSummary(userNameRef.current, escapes, streak);
     }
-  }, [bedtime, wakeTime, isOnboardingComplete, devSkipLock, isLoading, storageError]);
+  }, [bedtime, wakeTime, isOnboardingComplete, devSkipLock, isLoading, storageError, isClearingLocalData]);
 
   useEffect(() => {
     checkLock();
@@ -456,7 +457,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   // DeviceActivity callbacks can be deferred until the user next uses
   // the device. Reconcile missed exception expiry whenever Curfy reopens.
   useEffect(() => {
-    if (isLoading || storageError || !isOnboardingComplete) return;
+    if (isLoading || storageError || isClearingLocalData || !isOnboardingComplete) return;
     try {
       // Updating an installed preview does not automatically replace native
       // shield actions stored in the shared app-group UserDefaults.
@@ -465,32 +466,33 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       console.warn("[Curfy] Could not refresh native shield appearance", error);
     }
     reconcileNativeProtection(bedtime, wakeTime, blockMode);
-  }, [isLoading, storageError, isOnboardingComplete, bedtime, wakeTime, blockMode]);
+  }, [isLoading, storageError, isClearingLocalData, isOnboardingComplete, bedtime, wakeTime, blockMode]);
 
   // Foreground-only safety net. The real re-shield is in iOS's native
   // extension, so this interval is not required for a closed app to work.
   useEffect(() => {
-    if (isLoading || storageError || !isOnboardingComplete) return;
+    if (isLoading || storageError || isClearingLocalData || !isOnboardingComplete) return;
     const id = setInterval(() => {
       if (AppState.currentState !== "active") return;
       reconcileNativeProtection(bedtime, wakeTime, blockMode);
     }, 30000);
     return () => clearInterval(id);
-  }, [isLoading, storageError, isOnboardingComplete, bedtime, wakeTime, blockMode]);
+  }, [isLoading, storageError, isClearingLocalData, isOnboardingComplete, bedtime, wakeTime, blockMode]);
 
   useEffect(() => {
     const sub = AppState.addEventListener("change", (state) => {
       if (state === "active") {
         checkLock();
-        if (!isLoading && !storageError && isOnboardingComplete) {
+        if (!isLoading && !storageError && !isClearingLocalData && isOnboardingComplete) {
           reconcileNativeProtection(bedtime, wakeTime, blockMode);
         }
       }
     });
     return () => sub.remove();
-  }, [checkLock, isLoading, storageError, isOnboardingComplete, bedtime, wakeTime, blockMode]);
+  }, [checkLock, isLoading, storageError, isClearingLocalData, isOnboardingComplete, bedtime, wakeTime, blockMode]);
 
   const saveSettings = async (settings: SavedSettings, protectionChanged: boolean, draftSelectionId?: string) => {
+    if (isClearingLocalData) throw new Error("Finish Delete Account before saving new Settings.");
     try {
       const committed = await saveSettingsTransaction(settings, protectionChanged, draftSelectionId, configureBedtimeBlocking);
       setBedtimeState(committed.bedtime);
@@ -624,6 +626,7 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   // leaderboard every time someone uses this button. Leaving the session
   // alone means redoing onboarding just keeps updating the same row.
   const signOut = async () => {
+    if (isClearingLocalData) throw new Error("Finish Delete Account before restarting setup.");
     // Prevent a one-tap bypass: restarting setup would stop the native
     // schedule. During active protection it requires the same 120-second
     // exception as any other temporary access. Permission-denied users and
@@ -640,10 +643,10 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
       throw new Error("During bedtime, complete the 120-second hold from Curfy Home before restarting setup, or wait until your morning end time.");
     }
     stopBedtimeBlocking();
+    await AsyncStorage.setItem(ONBOARDING_KEY, "false");
     setIsLocked(false);
     lockedToday.current = false;
     setIsOnboardingComplete(false);
-    await AsyncStorage.setItem(ONBOARDING_KEY, "false");
     if (Platform.OS !== "web") {
       try {
         await Notifications.cancelAllScheduledNotificationsAsync();
@@ -667,12 +670,20 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     // A successful Delete Everything must not carry the previous native
     // app picker tokens into a fresh account's onboarding.
     clearCurfyOnboardingSelectionsAfterAccountDeletion();
+    // Pause local background writers only for Delete Everything, never for
+    // optional leaderboard withdrawal. Keep them paused if cleanup needs retry.
+    setIsClearingLocalData(true);
     // Personal journal entries are deliberately LOCAL. A failed wipe must
     // never report "account deleted" while leaving private thoughts behind.
     // Preserve the loaded settings screen until storage confirms both wipes.
     // If either operation fails, Settings can display the failure for retry.
     await clearJournal();
     await AsyncStorage.multiRemove(ALL_STORAGE_KEYS);
+    // Release the remote-deletion receipt only AFTER native shields,
+    // private tokens, journal, and every local preference have been cleared.
+    // Until this succeeds the AuthProvider suppresses creation of a new
+    // anonymous leaderboard profile (including after an interrupted retry).
+    await finishAccountDeletion();
     setIsLocked(false);
     lockedToday.current = false;
     cooldownUntil.current = 0;
@@ -687,16 +698,12 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
     setTodayUnlocks(0);
     setLongestStreak(0);
     setDevSkipLockState(false);
+    setIsClearingLocalData(false);
     if (Platform.OS !== "web") {
       try {
         await Notifications.cancelAllScheduledNotificationsAsync();
       } catch (_) {}
     }
-    // Release the remote-deletion receipt only AFTER native shields,
-    // private tokens, journal, and every local preference have been cleared.
-    // Until this succeeds the AuthProvider suppresses creation of a new
-    // anonymous leaderboard profile (including after an interrupted retry).
-    await finishAccountDeletion();
   };
 
   const streak = computeStreak(sleepLog);
@@ -704,11 +711,11 @@ export function SleepProvider({ children }: { children: React.ReactNode }) {
   // Longest-ever streak never decreases, even when the current one
   // breaks — this is what the "All-Time Best" leaderboard sorts on.
   useEffect(() => {
-    if (streak > longestStreak) {
+    if (!isClearingLocalData && !isLoading && !storageError && streak > longestStreak) {
       setLongestStreak(streak);
       AsyncStorage.setItem(LONGEST_STREAK_KEY, streak.toString());
     }
-  }, [streak, longestStreak]);
+  }, [streak, longestStreak, isClearingLocalData, isLoading, storageError]);
 
   return (
     <SleepContext.Provider

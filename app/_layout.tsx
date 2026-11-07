@@ -71,17 +71,17 @@ export default function RootLayout() {
 
 // Participation syncs automatically only after the approved first-upload disclosure.
 function EnsureLeaderboardIdentity() {
-  const { userName, isOnboardingComplete, storageError } = useSleep();
+  const { userName, isOnboardingComplete, isLoading, storageError } = useSleep();
   const { isSignedIn, isAuthLoading, isDeletingAccount, leaderboardConsent, ensureAnonymousProfile } = useAuth();
 
   useEffect(() => {
     if (leaderboardConsent !== "joined") return;
-    if (storageError || !isOnboardingComplete || isAuthLoading || isSignedIn || isDeletingAccount) return;
+    if (isLoading || storageError || !isOnboardingComplete || isAuthLoading || isSignedIn || isDeletingAccount) return;
     void ensureAnonymousProfile(userName).catch((error) => {
       // A cloud leaderboard failure must not interrupt native protection.
       console.warn("[Curfy] Online leaderboard profile creation failed", error);
     });
-  }, [isOnboardingComplete, isAuthLoading, isSignedIn, isDeletingAccount, userName, storageError, leaderboardConsent, ensureAnonymousProfile]);
+  }, [isLoading, isOnboardingComplete, isAuthLoading, isSignedIn, isDeletingAccount, userName, storageError, leaderboardConsent, ensureAnonymousProfile]);
 
   return null;
 }
@@ -92,18 +92,18 @@ function EnsureLeaderboardIdentity() {
 // something changed. Renders nothing — it only needs both contexts in
 // scope, which requires it to sit inside both providers (see above).
 function StreakSync() {
-  const { bedtime, streak, longestStreak, userName, storageError } = useSleep();
-  const { isSignedIn, isDeletingAccount, leaderboardConsent, syncProfile } = useAuth();
+  const { bedtime, streak, longestStreak, userName, isLoading, storageError } = useSleep();
+  const { isSignedIn, isAuthLoading, isDeletingAccount, leaderboardConsent, syncProfile } = useAuth();
 
   useEffect(() => {
     if (leaderboardConsent !== "joined") return;
-    if (storageError || !isSignedIn || isDeletingAccount) return;
+    if (isLoading || isAuthLoading || storageError || !isSignedIn || isDeletingAccount) return;
     void syncProfile(bedtime, streak, longestStreak, userName).catch((error) => {
       // Do not silently discard failed cloud writes. The local history and
       // the iOS Screen Time schedule are independent from this optional sync.
       console.warn("[Curfy] Online leaderboard sync failed", error);
     });
-  }, [isSignedIn, isDeletingAccount, bedtime, streak, longestStreak, userName, storageError, leaderboardConsent, syncProfile]);
+  }, [isLoading, isAuthLoading, isSignedIn, isDeletingAccount, bedtime, streak, longestStreak, userName, storageError, leaderboardConsent, syncProfile]);
 
   return null;
 }

@@ -23,8 +23,9 @@ async function fixture({
   receipt = null, initialSession = true, failSignOut = false,
   signOutReturnsError = false, failRemote = false, failRead = false,
   restoreError = false, consent = null, waitForSignIn = null, failConsentWrite = false,
+  persistedStorage = null, failConsentValue = null, ignoreReceiptWrite = false, waitForSession = null, failReceiptRemove = false,
 } = {}) {
-  const storage = new Map(receipt ? [[KEY, receipt]] : []);
+  const storage = persistedStorage ?? new Map(receipt ? [[KEY, receipt]] : []);
   if (consent) storage.set("@curfy/leaderboard_consent_v1", consent);
   const stats = { profileWrites: 0, invokes: 0, signOuts: 0, signIns: 0, writes: 0, removes: 0 };
   let signOutFails = failSignOut;
@@ -36,10 +37,10 @@ async function fixture({
 
   const supabase = {
     auth: {
-      getSession: async () => ({
+      getSession: async () => { if (waitForSession) await waitForSession; return {
         data: { session: restoreError ? null : currentSession },
         error: restoreError ? Error("Auth session could not be restored") : null,
-      }),
+      }; },
       onAuthStateChange: callback => {
         listeners.add(callback);
         return { data: { subscription: { unsubscribe: () => listeners.delete(callback) } } };
@@ -77,8 +78,8 @@ async function fixture({
       if (diskReadsFail) throw Error("AsyncStorage unavailable");
       return storage.get(key) ?? null;
     },
-    setItem: async (key, value) => { if (failConsentWrite && key === "@curfy/leaderboard_consent_v1") throw Error("consent storage failed"); stats.writes++; storage.set(key, value); },
-    removeItem: async key => { stats.removes++; storage.delete(key); },
+    setItem: async (key, value) => { if (ignoreReceiptWrite && key === KEY) return; if ((failConsentWrite || value === failConsentValue) && key === "@curfy/leaderboard_consent_v1") throw Error("consent storage failed"); stats.writes++; storage.set(key, value); },
+    removeItem: async key => { if (failReceiptRemove && key === KEY) throw Error("receipt removal failed"); stats.removes++; storage.delete(key); },
   };
   const mod = { exports: {} };
   new Function("require", "module", "exports", compiled)(
@@ -102,6 +103,7 @@ async function fixture({
   return {
     get api() { return api; },
     storage, stats,
+    allowConsentWrites: () => { failConsentWrite = false; failConsentValue = null; },
     allowSignOut: () => { signOutFails = false; signOutReportsError = false; },
     allowRemote: () => { remoteFails = false; },
     allowReads: () => { diskReadsFail = false; },
@@ -267,4 +269,41 @@ test("withdrawal waits for in-flight anonymous signup, then removes that exact n
   assert.equal(f.stats.signIns, 1); assert.equal(f.stats.profileWrites, 0);
   assert.equal(f.stats.invokes, 1); assert.equal(f.api.isSignedIn, false);
   assert.equal(f.api.leaderboardConsent, "declined"); await f.unmount();
+});
+
+test('failed final consent write cannot re-enroll a deleted account after restart',async()=>{
+ const disk=new Map();const f=await fixture({consent:'joined',persistedStorage:disk,failConsentValue:'declined'});
+ await act(async()=>{await f.api.deleteRemoteAccount();await assert.rejects(f.api.finishAccountDeletion(),/consent storage/);});
+ await f.unmount();const restarted=await fixture({initialSession:false,persistedStorage:disk});
+ await act(async()=>{await restarted.api.ensureAnonymousProfile('Must stay deleted');});
+ assert.equal(restarted.stats.signIns,0);
+ assert.equal(restarted.api.leaderboardConsent,'leaving','existing Settings must still show the retry action');
+ await act(async()=>{await restarted.api.setLeaderboardParticipation(false);});
+ assert.equal(restarted.api.leaderboardConsent,'declined');assert.equal(restarted.stats.invokes,0);await restarted.unmount();
+});
+test('failure to persist leaving keeps the server-confirmed receipt for restart',async()=>{
+ const f=await fixture({consent:'joined',failConsentValue:'leaving'});
+ await act(async()=>{await f.api.deleteRemoteAccount();await assert.rejects(f.api.finishAccountDeletion(),/consent storage/);});
+ assert.equal(f.storage.get(KEY),'test-user-id');assert.equal(f.api.isDeletingAccount,true);
+ f.allowConsentWrites();await act(async()=>f.api.finishAccountDeletion());assert.equal(f.storage.has(KEY),false);await f.unmount();
+});
+test('unconfirmed deletion receipt write never clears the recoverable local session',async()=>{
+ const f=await fixture({consent:'joined',ignoreReceiptWrite:true});
+ await act(async()=>{await assert.rejects(f.api.deleteRemoteAccount(),/confirm.*deletion receipt/);});
+ assert.equal(f.stats.signOuts,0);assert.equal(f.api.isDeletingAccount,true);await f.unmount();
+});
+test('profile work waits until auth and deletion-receipt restoration complete',async()=>{
+ let release;const wait=new Promise(resolve=>release=resolve);const f=await fixture({consent:'joined',waitForSession:wait});
+ assert.equal(f.api.isAuthLoading,true);
+ await act(async()=>{await f.api.ensureAnonymousProfile('Do not create another');});
+ assert.equal(f.stats.signIns,0);release();await act(async()=>{await wait;});await f.unmount();
+});
+
+test('receipt removal failure leaves a restart-safe Finish leaving path',async()=>{
+ const disk=new Map();const f=await fixture({consent:'joined',persistedStorage:disk,failReceiptRemove:true});
+ await act(async()=>{await f.api.deleteRemoteAccount();await assert.rejects(f.api.finishAccountDeletion(),/receipt removal/);});
+ assert.equal(disk.get(KEY),'test-user-id');assert.equal(f.api.leaderboardConsent,'leaving');await f.unmount();
+ const restarted=await fixture({initialSession:false,persistedStorage:disk});
+ await act(async()=>{await restarted.api.setLeaderboardParticipation(false);});
+ assert.equal(restarted.api.leaderboardConsent,'declined');assert.equal(restarted.stats.invokes,0);await restarted.unmount();
 });

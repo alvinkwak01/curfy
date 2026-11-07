@@ -6,12 +6,14 @@ const React=require('react');
 const {act,create}=require('react-test-renderer');
 global.IS_REACT_ACT_ENVIRONMENT=true;
 const next={bedtime:'21:00',wakeTime:'08:00',blockMode:'custom',routine:'evening',userName:'New name',motivation:'New reason'};
-async function fixture() {
+async function fixture({failFinish=false}={}) {
  const disk=new Map([['@dusk/bedtime','23:00'],['@dusk/wake_time','06:00'],['@dusk/block_mode','custom'],['@dusk/username','Old name'],['@dusk/onboarding_complete','true']]);
  let failKey=null,receipt=null,api,root;const calls=[];let foreground;
- const storage={getItem:async k=>disk.get(k)??null,setItem:async(k,v)=>{if(k===failKey)throw Error('disk full');disk.set(k,v);},removeItem:async k=>disk.delete(k)};
+ const storage={getItem:async k=>disk.get(k)??null,setItem:async(k,v)=>{if(k===failKey)throw Error('disk full');disk.set(k,v);},removeItem:async k=>disk.delete(k),multiRemove:async keys=>{keys.forEach(k=>disk.delete(k));calls.push(["local-wipe"]);}};
  const modules=new Map();
  const native={configureBedtimeBlocking:async input=>{if(receipt!==input.settingsTransactionId){calls.push(['configure']);receipt=input.settingsTransactionId;}},
+ stopBedtimeBlocking:()=>calls.push(['stop']),clearCurfyOnboardingSelectionsAfterAccountDeletion:()=>calls.push(['clear-tokens']),
+ getScreenTimeAccessStatus:()=> 'authorized',activeExceptionExpiresAt:()=>null,selectionIdForMode:()=> 'curfy-block-custom',
  refreshBedtimeShieldAppearance:()=>{},reconcileBedtimeException:()=>{},reconcileProtectionWindow:(...args)=>calls.push(['reconcile',...args])};
  function load(file) {
   const js=ts.transpileModule(readFileSync(file,'utf8'),{compilerOptions:{target:ts.ScriptTarget.ES2020,module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
@@ -22,11 +24,11 @@ async function fixture() {
   if(name.includes('async-storage'))return storage;
   if(name==='expo-notifications')return {setNotificationHandler(){},cancelAllScheduledNotificationsAsync:async()=>{},getPermissionsAsync:async()=>({status:'denied'})};
   if(name==='react-native')return {Platform:{OS:'ios'},AppState:{currentState:'active',addEventListener:(_,fn)=>{foreground=fn;return {remove(){}};}}};
-  if(name==='./AuthContext')return {useAuth:()=>({})};
-  if(name==='./JournalContext')return {useJournal:()=>({})};
+  if(name==='./AuthContext')return {useAuth:()=>({deleteRemoteAccount:async()=>calls.push(['remote-delete']),finishAccountDeletion:async()=>{calls.push(['finish-delete']);if(failFinish)throw Error('consent cleanup failed');}})};
+  if(name==='./JournalContext')return {useJournal:()=>({clearAll:async()=>calls.push(['clear-journal'])})};
   if(name==='@/lib/screenTime')return native;
   if(name==='@/lib/premiumExceptionRecovery')return {reconcilePremiumAppExceptions(){}};
-  if(name==='@/lib/premiumAppException'||name==='@/lib/premiumProtection')return {};
+  if(name==='@/lib/premiumAppException'||name==='@/lib/premiumProtection')return {allPremiumAppsHaveActiveExceptions:()=>false};
   if(name==='@/lib/bedtimeWindow')return {isBedtimeWindowActive:()=>false,bedtimeNightKey:()=> '2026-11-07'};
   if(name.startsWith('@/lib/')||name.startsWith('./')){
    const file=name.startsWith('@/')?name.slice(2)+'.ts':'lib/'+name.slice(2)+'.ts';
@@ -37,7 +39,7 @@ async function fixture() {
  async function mount(){const mod=load('context/SleepContext.tsx');function Probe(){api=mod.useSleep();return null;}
   await act(async()=>{root=create(React.createElement(mod.SleepProvider,null,React.createElement(Probe)));});}
  await mount();return {get api(){return api;},disk,calls,fail:k=>failKey=k,
- foreground:()=>foreground('active'),restart:async()=>{await act(async()=>root.unmount());await mount();},close:async()=>act(async()=>root.unmount())};
+ allowFinish:()=>{failFinish=false;},foreground:()=>foreground('active'),restart:async()=>{await act(async()=>root.unmount());await mount();},close:async()=>act(async()=>root.unmount())};
 }
 test('provider publishes all Settings only after journal commit',async()=>{
  const f=await fixture();await act(async()=>{await f.api.saveSettings(next,true);});
@@ -65,3 +67,17 @@ for(const [method,key,value,field,old] of [['setWakeTime','@dusk/wake_time','09:
   const f=await fixture();f.fail(key);await act(async()=>{await assert.rejects(f.api[method](value));});assert.equal(f.api[field],old);await f.close();
  });
 }
+
+test('failed deletion finalization keeps Settings mounted for an in-session retry',async()=>{
+ const f=await fixture({failFinish:true});await act(async()=>{await assert.rejects(f.api.deleteAccount(),/consent cleanup/);});
+ assert.equal(f.api.isOnboardingComplete,true);assert.equal(f.api.userName,'Old name');
+ await act(async()=>{await assert.rejects(f.api.saveSettings(next,true),/Finish Delete Account/);await assert.rejects(f.api.signOut(),/Finish Delete Account/);});
+ assert.equal(f.disk.has('@dusk/onboarding_complete'),false,'local wipe completed before finalization');
+ const calls=f.calls.length;await act(async()=>f.foreground());assert.equal(f.calls.length,calls,'local repair stays paused until deletion finalization');
+ f.allowFinish();await act(async()=>f.api.deleteAccount());assert.equal(f.api.isOnboardingComplete,false);
+ assert.equal(f.api.userName,'Sleeper');await f.close();
+});
+test('failed Restart Setup preference write does not announce completed onboarding reset',async()=>{
+ const f=await fixture();f.fail('@dusk/onboarding_complete');await act(async()=>{await assert.rejects(f.api.signOut(),/disk full/);});
+ assert.equal(f.api.isOnboardingComplete,true);assert.equal(f.disk.get('@dusk/onboarding_complete'),'true');await f.close();
+});
