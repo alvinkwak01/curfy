@@ -61,6 +61,22 @@ function nativeOneAppSelection(ticketId: string): void {
     throw new Error("iOS could not verify a single selected app.");
   }
 }
+
+function assertScheduledProtection(committedId: string, bedtime: string, wakeTime: string): void {
+  const clock = DeviceActivity.userDefaultsGet<{ startMinute: number; endMinute: number }>(
+    "curfy-bedtime-clock-window"
+  );
+  const minutes = (time: string) => {
+    const [hour, minute] = time.split(":").map(Number);
+    return hour * 60 + minute;
+  };
+  if (!DeviceActivity.getActivities().includes("curfy-bedtime") ||
+      DeviceActivity.userDefaultsGet("curfy-scheduled-selection-id") !== committedId ||
+      clock?.startMinute !== minutes(bedtime) || clock?.endMinute !== minutes(wakeTime)) {
+    throw new Error("Curfy's recurring iOS protection schedule is missing or changed. Restore protection before requesting an app exception.");
+  }
+}
+
 function clearEndAction(activityName: string): void {
   DeviceActivity.configureActions({
     activityName, callbackName: "intervalDidEnd", actions: [],
@@ -96,6 +112,7 @@ export async function grantPremiumAppException({
       throw new Error("Curfy Premium ownership has not been verified by Apple.");
     }
     const committedId = selectionIdForMode(mode);
+    assertScheduledProtection(committedId, bedtime, wakeTime);
     const selected = DeviceActivity.activitySelectionMetadata({ activitySelectionId: committedId });
     if (selectionIssueForEntitlement(selected, "owned") !== null ||
         !selected || selected.applicationCount < 2) {
@@ -161,6 +178,7 @@ export async function grantPremiumAppException({
       }
       // A changed committed picker selection must never turn a stored row
       // into a different app while the Xcode monitor is being installed.
+      assertScheduledProtection(committedId, bedtime, wakeTime);
       nativeOneAppSelection(ticketId);
       if (exactOverlap(ticketId, { currentBlocklist: true }) !== 1 ||
           exactOverlap(committedId, { currentBlocklist: true }) !== groupBefore) {
@@ -200,16 +218,22 @@ export async function grantPremiumAppException({
           clearEndAction(entry.activityName);
           DeviceActivity.stopMonitoring([entry.activityName]);
           stopped = !DeviceActivity.getActivities().includes(entry.activityName);
-          if (!stopped) {
-            // Reinstall callback action on a still-live monitor so it can
-            // restore this single app at expiry, even if Curfy is killed.
+        } catch { stopped = false; }
+        if (!stopped) {
+          // A throwing stop/readback (or partially successful action clear)
+          // is just as uncertain as a silently refused stop. Preserve the
+          // reblock action and ledger unless removal was positively verified.
+          try {
             DeviceActivity.configureActions({
               activityName: entry.activityName,
               callbackName: "intervalDidEnd",
               actions: [{ type: "blockSelection", familyActivitySelectionId: ticketId }],
             });
+          } catch {
+            // Keep recovery metadata and report failure even if iOS also
+            // refuses the compensating callback write.
           }
-        } catch { stopped = false; }
+        }
       }
       // Keep the native ledger and reblock callback if rollback cannot be
       // verified. Never erase the only record for an potentially unshielded app.
