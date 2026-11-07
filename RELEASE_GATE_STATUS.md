@@ -1,6 +1,11 @@
 # Curfy — release blockers and proof gates
 Updated 2026-11-04. Branch: feat/ios-shield-from-august (draft PR #2). The canonical product decisions are in CURRENT_HANDOFF.md. Historical IOS_DEVICE_ACCEPTANCE.md contains superseded onboarding details.
 
+## 2026-11-07 engineering checkpoint
+- Code checkpoint `25e9305`: Premium rollback restores reblock callbacks even on thrown native errors; grants require matching daily monitor/selection/hours before and after registration; foreground recovery cannot newly shield without the daily cutoff monitor.
+- Local verification: **273/273 tests**, TypeScript, production iOS JS export and diff checks PASS. Three new tests demonstrated the rollback defect before fixing it. Swift unchanged from `15f4d17`; no new native/device/signing evidence.
+- User explicitly authorized adding missing Premium Settings purchase/restore and per-app Home controls while preserving existing onboarding/hold/branding designs. Full multi-app integration is still in progress, not release-ready.
+
 ## Proven so far
 - Source code implements Free one-individually-selected-app shielding, Apple's native app identity label, a real 120-second native long-press, DeviceActivity scheduling, and a planned 15-minute exception.
 - The user saw the actual protected Instagram icon/name on an installed iPhone build. That does NOT prove closed-app shielding, exception or reblocking.
