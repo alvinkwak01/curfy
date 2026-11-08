@@ -4,9 +4,9 @@ This register separates current source/mocked tests from actual service/device p
 
 ## Current access and missing inputs
 - GitHub: live PR #2 head/base/draft verified. The original local checkout is preserved; continuation is in `curfy-settings-recovery/`.
-- Supabase: a relevant plugin is available but NOT installed/connected in this session. Install/connect the account that owns the actual Curfy project before inspecting deployed configuration. Do not create a second project, upgrade a plan, deploy, or delete real users as a substitute for verification.
+- Supabase: plugin installed/connected. Verified project inventory exposes only Link App and refu. `get_project` for recorded Curfy reference `xcngywlufixnctvblsid` returned permission denied. Neither unrelated project was queried. Reconnect/select the Supabase account/organization that owns Curfy, or confirm a replacement project reference. No SQL, schema changes, deployment or account deletion performed.
 - Apple: plugin discovery did not return a relevant App Store Connect/Developer integration. Actual portal/project access and four distribution profiles are still UNKNOWN. More integrations may be available in the plugin directory; no account was accessed here.
-- Privacy-policy URL, support URL/contact: not yet supplied/verified. A text request is pending; never invent a customer-facing destination.
+- Privacy/support: owner has no domain or dedicated email yet and requested a recommendation plus continued preparation. Recommend free public website hosting and an existing monitored inbox initially. Drafts are in `docs/public-drafts/`; no URL, mailbox or publication is claimed. Actual support email/operator identity and deployed retention details remain required.
 
 ## Verified client findings and fixes in this continuation
 1. `AuthContext.finishAccountDeletion` removed its confirmed receipt before persisting `declined`. A failed final write left `joined` on disk and no receipt; a real React-provider restart test reproduced an unwanted new anonymous signup. It now first persists/readbacks `leaving`, then retires the receipt, then writes `declined`. Any failure preserves either the receipt or the existing Finish leaving path.

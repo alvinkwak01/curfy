@@ -10,6 +10,12 @@ Updated 2026-11-07. This replaces the long, contradictory historical handoff; pr
 - Integrated engineering checkpoint: **`a1a400b324bf244f0d6b2fe336647cad0a60bb5f`**, `feat(ios): integrate per-app Premium and consented leaderboard participation`. Later documentation/disclosure clarification commits may follow; re-fetch live HEAD.
 - **NOT App Store-ready. No signed candidate built, no EAS initiated, no paid cloud build, no device/purchase/backend claims.**
 
+## Connected-service check and public pages (2026-11-07)
+- Supabase is now installed/connected, but its project inventory exposes only Link App and refu. Direct read of the historical Curfy reference `xcngywlufixnctvblsid` returns permission denied. No SQL ran and neither unrelated project was queried. User was given reconnect/account-selection guidance; actual Curfy access remains required.
+- User has not bought a domain or established a support mailbox; asked us to recommend and continue independent preparation. Recommend a separate website-only public GitHub Pages repository/free HTTPS URL and an existing monitored inbox initially. No app source should be made public for hosting. No domain purchase, mailbox creation, site publication or paid action occurred.
+- Prepared `docs/public-drafts/README.md`, `privacy.draft.md`, `support.draft.md`. Explicitly not publishable yet: operator identity/contact, real backend/retention/SDK details, and final deployment verification are missing. No placeholder URL entered the app. `RELEASE_PREFLIGHT_EVIDENCE.md` updated with actual access results.
+- Documentation only; code/test checkpoint remains `da55a2b` with 340/340 tests and CI PASS. No new test or signed-device claim. Resume the deletion-recovery protocol after resolving project access; public-page drafts can be finalized once a real support inbox and missing data practices are confirmed.
+
 ## Latest continuation — deletion and startup review (2026-11-07)
 - Code checkpoint **`da55a2b35b7c4a87b2685eec7ec343cc00dbb40a`**. [GitHub CI `42427615913`](https://github.com/alvinkwak01/curfy/actions/runs/42427615913) PASS: tests, TypeScript, iOS export, autolinking, Doctor, prebuild and four-target entitlement configuration. Native compilation intentionally skipped. Later documentation-only commits may follow; verify live HEAD.
 - Started from verified live **`68911c81b3a3a799b14efad92fee7ac2ad4ad705`**. Same draft PR #2/head/base; original dirty `curfy/` preserved. Work remains in `curfy-settings-recovery/`.

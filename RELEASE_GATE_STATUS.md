@@ -16,7 +16,7 @@ Updated 2026-11-07. Draft PR #2, branch `feat/ios-shield-from-august`. Canonical
 | Public profile data | Source RLS allows public profile rows including start time/ID; disclosure says start time is public | Verify deployed schema; final data minimization/retention/App Privacy review |
 | Distribution approval | UNKNOWN for main + three extensions | Apple's assigned Family Controls DISTRIBUTION capability and matching profiles for each target |
 | StoreKit configuration | UNKNOWN; proposed ID `com.alvinkwak.curfy.premium`, approved $5.99 USD non-consumable | Actual product configuration, commerce agreements, sandbox readiness |
-| Privacy/support | OPEN; no verified URLs/contact supplied | Public policy, accessible in-app policy link, support destination, final provider/SDK disclosures |
+| Privacy/support | OPEN; public-page drafts prepared, no domain/mailbox/publication yet | Public policy, accessible in-app policy link, support destination, final provider/SDK disclosures |
 | Accessibility | OPEN | VoiceOver/native labels, large text, Reduce Motion, explicitly approved continuous-hold accommodation |
 | Submission | Draft package prepared; NOT submitted | Real screenshots, age rating/territories, name clearance, signed device acceptance, TestFlight/App Review |
 
@@ -29,3 +29,5 @@ Main `com.alvinkwak.curfy`; extensions `com.alvinkwak.curfy.ShieldConfiguration`
 Current test package: `CONSOLIDATED_DEVICE_ACCEPTANCE.md`. Submission draft: `APP_STORE_SUBMISSION_PACKAGE.md`. Handoff has exact changed files/checks/limitations and local log locations.
 
 Latest review: `RELEASE_PREFLIGHT_EVIDENCE.md` contains access state, exact open deletion-recovery failure, source references and preflight steps. Metadata-only `supabase/preflight/release-readonly.sql` is prepared but NOT run against a deployed database.
+
+Supabase connection check: installed/connected, but only Link App/refu visible; recorded Curfy project `xcngywlufixnctvblsid` explicitly denies access. Reconnect the owning account/organization before deployed inspection. See `docs/public-drafts/README.md` for the no-purchase public-page recommendation and remaining publication inputs.
