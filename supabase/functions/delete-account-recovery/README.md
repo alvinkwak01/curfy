@@ -40,7 +40,7 @@ expiry; it cannot read a profile, sign in, or delete a different user.
 
 ## Required verification before release
 
-Run Deno type checking and deploy in the correct project only after secret
+Deno type checking passed locally on 2026-11-09. Deploy in the correct project only after secret
 provisioning. Use identified disposable identities A/B, never a real user's
 session. Check method/auth rejection; preparation without deletion; journal
 write failure before commit; successful deletion and profile cascade; dropped
