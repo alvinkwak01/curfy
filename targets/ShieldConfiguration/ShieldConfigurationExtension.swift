@@ -93,7 +93,12 @@ func buildShield(placeholders: [String: String?], config: [String: Any]?)
     let primaryButtonBackgroundColor = getColor(
       color: config["primaryButtonBackgroundColor"] as? [String: Double])
 
-    let secondaryButtonLabel = config["secondaryButtonLabel"] as? String
+    var secondaryButtonLabel = config["secondaryButtonLabel"] as? String
+    // iOS 26.5 added a supported handoff to the controlling app. Keep the
+    // existing primary dismissal and all existing branding/copy unchanged.
+    if #available(iOS 26.5, *), title == "Blocked by Curfy" {
+      secondaryButtonLabel = "Open Curfy"
+    }
     let secondaryButtonLabelColor = getColor(
       color: config["secondaryButtonLabelColor"] as? [String: Double]
     )

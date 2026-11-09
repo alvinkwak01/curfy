@@ -429,3 +429,16 @@ test("Settings and onboarding wait for native picker persistence and validate Fr
   assert.ok(settings.includes("selectionIssue(activitySelectionMetadata({ activitySelectionId: draftSelectionIdForMode(localBlockMode) }))"));
   assert.ok(settings.includes("includeEntireCategory={false}"));
 });
+
+test("shield offers native controlling-app handoff only on supported iOS without granting access", () => {
+  const fs = require("node:fs"), path = require("node:path");
+  const action = fs.readFileSync(path.join(__dirname,"../targets/ShieldAction/ShieldActionExtension.swift"),"utf8");
+  const config = fs.readFileSync(path.join(__dirname,"../targets/ShieldConfiguration/ShieldConfigurationExtension.swift"),"utf8");
+  assert.match(config, /if #available\(iOS 26\.5, \*\), title == "Blocked by Curfy"/);
+  assert.match(config, /secondaryButtonLabel = "Open Curfy"/);
+  const handoff = action.slice(action.indexOf("if action == .secondaryButtonPressed"), action.indexOf("if let shieldActionConfig"));
+  assert.match(handoff, /if #available\(iOS 26\.5, \*\)/);
+  assert.match(handoff, /completionHandler\(\.openParentalControlsApp\)/);
+  assert.match(handoff, /completionHandler\(\.none\)/);
+  assert.doesNotMatch(handoff, /unblock|Whitelist|resetBlocks|openUrl/);
+});

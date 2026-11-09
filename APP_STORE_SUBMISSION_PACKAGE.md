@@ -24,7 +24,7 @@ An optional public leaderboard lets you share your display name and streaks afte
 Do not use this text to imply exact-second iOS callback guarantees. Review final claims against signed-device observations.
 
 ## Review Notes draft
-Curfy requests individual Family Controls authorization to shield only applications selected by the user. Onboarding selects one individual app. Schedule times are configurable. The native shield does not automatically launch Curfy; manually open Curfy from the Home Screen to access the hold screen.
+Curfy requests individual Family Controls authorization to shield only applications selected by the user. Onboarding selects one individual app. Schedule times are configurable. On iOS 26.5+, the native shield offers Open Curfy using Apple’s supported controlling-app response. On older supported iOS, follow the shield’s instruction to open Curfy manually from the Home Screen. In Curfy, use Home and tap the protected app’s row to access its hold screen. Opening Curfy alone never unlocks the protected app. This journey requires signed-device verification before these review notes are finalized.
 
 The uninterrupted 120-second hold is intentional. Releasing or backgrounding before completion resets it. For Premium, tap the individual app's Home row; the hold releases only that application, up to 15 minutes and no later than the selected window end. Other apps remain restricted. Settings offers a one-time non-consumable purchase and Restore purchases.
 

@@ -4,7 +4,7 @@ Updated 2026-11-07. Draft PR #2, branch `feat/ios-shield-from-august`. Canonical
 | Gate | Evidence / status | Still required |
 |---|---|---|
 | Settings persistence | IMPLEMENTED / mocked tests PASS: write-ahead journal, native commit/abort receipts, verified local writes, startup/retry recovery, stale-state guards | Signed process-kill/reboot and real storage/permission failure recovery; native disk durability not proven |
-| Code tests | Latest local **373/373 PASS**, TypeScript PASS; React provider/hold-route tests plus native mocks | [GitHub CI `42427615913`](https://github.com/alvinkwak01/curfy/actions/runs/42427615913) PASS at `da55a2b`; integration review continues; no mock proves iPhone behavior |
+| Code tests | Latest local **374/374 PASS**, TypeScript PASS; React provider/hold-route tests plus native mocks | [GitHub CI `42427615913`](https://github.com/alvinkwak01/curfy/actions/runs/42427615913) PASS at `da55a2b`; integration review continues; no mock proves iPhone behavior |
 | Production JS | iOS Hermes export PASS | Signed binary using same reviewed source |
 | Expo/native config | Latest CI Doctor, prebuild/autolinking, app + 3 entitlement-config checks PASS (prior local Doctor **18/18 PASS**) | Actual distribution profiles/capabilities |
 | Swift compilation | Local Xcode 26.6, Simulator SDK 26.5, unsigned Debug app + 3 extensions **BUILD SUCCEEDED**; final callback source compiled arm64/x86_64 | Signed archive/real-device behavior; simulator compilation is not Screen Time proof |
@@ -46,3 +46,6 @@ Expiry/rotation code checkpoint `68e57ff760e3ab165a0f57147c221cc6a2afe81b`: [Git
 
 ## Actual backend deployment — 2026-11-09
 Recovery v1 ACTIVE with handler-managed auth; legacy delete-account v3 ACTIVE with JWT gateway and POST-only safeguard. Deployed source matches repository. User-provisioned signing secret verified by live prepare without reading its value. 18 checks passed on two newly created disposable identities, both removed with their profiles. Sanitized evidence: docs/release-evidence/deletion-live-2026-11-09.json. Supersedes earlier NOT DEPLOYED/secret-pending entries; device integration and exceptional recovery remain open. Legacy pinned server dependency: targeted 5/5 tests and Deno check passed.
+
+## Shield handoff — 2026-11-09
+New secondary Open Curfy uses official ShieldActionResponse.openParentalControlsApp on iOS26.5+. Older iOS retains explicit manual Home Screen route. Source test, Swift simulator compilation for both changed extensions, TypeScript/export and four-target configuration pass; physical shield→Curfy→chosen-app hold→exception→reblock still NOT TESTED and blocks release. SDK26.5+ needed to build; runtime remains guarded for older iOS. Existing installed binary is not updated by these source changes.

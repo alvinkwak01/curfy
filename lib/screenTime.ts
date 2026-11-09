@@ -491,7 +491,8 @@ async function configureVerifiedBedtimeBlocking({
 /**
  * Applied during setup AND on subsequent app launches, since the native
  * shield configuration is persisted between preview build installations.
- * Existing installs must not keep the old broken "Open Curfy" button.
+ * Older iOS installs must not keep the old URL-based "Open Curfy" action.
+ * Native shield extensions add the supported handoff on iOS 26.5+.
  */
 export function refreshBedtimeShieldAppearance(): void {
   // A ShieldAction extension on iOS 18 cannot reliably launch Curfy.
