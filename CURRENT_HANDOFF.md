@@ -138,3 +138,5 @@ Updated 2026-11-07. This replaces the long, contradictory historical handoff; pr
 This session completed three substantial batches. Checkpoint before further scope expansion. The next chat should read this file and live source/CI, not assume dormant Premium from older docs. Roll back integrated work by reverting `a1a400b` (and any follow-up code fixes) on this branch; never reset main. No background work is promised after the chat ends.
 
 Expiry/rotation code checkpoint `68e57ff760e3ab165a0f57147c221cc6a2afe81b`: [GitHub CI 42662147000](https://github.com/alvinkwak01/curfy/actions/runs/42662147000) SUCCESS. Supabase secret entry/save remains pending with user; no deployment occurred.
+
+Shield follow-up: Open Curfy explicitly uses the existing cyan iconTint (white fallback) so it stays visible on the fixed dark shield in light/dark appearance. 33 architecture tests and corrected ShieldConfiguration simulator compilation PASS after this adjustment. Standard local provisioning-profile locations both contain zero profiles; that is not evidence about Apple portal approval. Code checkpoint 79080b8 precedes this contrast follow-up.

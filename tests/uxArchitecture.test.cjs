@@ -436,6 +436,7 @@ test("shield offers native controlling-app handoff only on supported iOS without
   const config = fs.readFileSync(path.join(__dirname,"../targets/ShieldConfiguration/ShieldConfigurationExtension.swift"),"utf8");
   assert.match(config, /if #available\(iOS 26\.5, \*\), title == "Blocked by Curfy"/);
   assert.match(config, /secondaryButtonLabel = "Open Curfy"/);
+  assert.match(config, /secondaryButtonLabelColor = getColor\(color: config\["iconTint"\]/);
   const handoff = action.slice(action.indexOf("if action == .secondaryButtonPressed"), action.indexOf("if let shieldActionConfig"));
   assert.match(handoff, /if #available\(iOS 26\.5, \*\)/);
   assert.match(handoff, /completionHandler\(\.openParentalControlsApp\)/);
