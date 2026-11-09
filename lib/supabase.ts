@@ -1,3 +1,4 @@
+import type { DeletionTransport } from "./remoteDeletionTransaction";
 import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
@@ -42,4 +43,31 @@ export interface LeaderboardProfile {
   display_name: string;
   current_streak: number;
   longest_streak: number;
+}
+
+// Raw transport deliberately avoids functions.invoke's session refresh on
+// recovery calls. A deleted/expired session must not prevent proof verification.
+export const remoteDeletionTransport: DeletionTransport = {
+  prepare: async () => {
+    const { data, error } = await supabase.auth.getSession();
+    if (error || !data.session?.access_token) throw new Error("Curfy couldn't verify your session. Please retry.");
+    return deletionRequest({ action: "prepare" }, data.session.access_token);
+  },
+  status: async intent => (await deletionRequest({ action: "status", proof: intent.proof })).status,
+  commit: async intent => (await deletionRequest({ action: "commit", proof: intent.proof })).status,
+};
+async function deletionRequest(body: object, token?: string) {
+  if (!isSupabaseConfigured) throw new Error("Leaderboard is unavailable.");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/delete-account-recovery`, {
+      method: "POST", signal: controller.signal,
+      headers: { "Content-Type": "application/json", apikey: supabaseAnonKey!,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) throw new Error("Curfy couldn't confirm online account deletion. Please retry.");
+    return await response.json();
+  } finally { clearTimeout(timeout); }
 }

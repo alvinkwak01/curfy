@@ -31,3 +31,9 @@ Current test package: `CONSOLIDATED_DEVICE_ACCEPTANCE.md`. Submission draft: `AP
 Latest review: `RELEASE_PREFLIGHT_EVIDENCE.md` contains access state, exact open deletion-recovery failure, source references and preflight steps. Metadata-only `supabase/preflight/release-readonly.sql` is prepared but NOT run against a deployed database.
 
 Supabase connection check: installed/connected, but only Link App/refu visible; recorded Curfy project `xcngywlufixnctvblsid` explicitly denies access. Reconnect the owning account/organization before deployed inspection. See `docs/public-drafts/README.md` for the no-purchase public-page recommendation and remaining publication inputs.
+
+## Live inspection — 2026-11-08
+Supabase access is RESOLVED; Curfy reports ACTIVE_HEALTHY. Metadata-only inspection confirmed RLS, owner-write predicates, public full-profile SELECT and auth-user deletion cascade. Deployed delete-account v1 has JWT gateway verification enabled but lacks the PR's POST-only safeguard and any lost-response recovery. Deployment parity and recovery remain OPEN. Security advisors flag intentional anonymous access and disabled leaked-password protection; broad anon/authenticated table grants need least-privilege review. No real account deletion or backend change occurred. Details: CURRENT_HANDOFF.md and RELEASE_PREFLIGHT_EVIDENCE.md. Earlier access-denied/not-inspected statements are historical.
+
+## Implementation checkpoint — 2026-11-09
+Deletion prepare/proof journal/status/commit is implemented in source with 367 local passing tests, app and server-protocol TypeScript, and production iOS export. It is NOT deployed; signing-secret provisioning, Deno/gateway/disposable-user acceptance and expired/revoked-proof recovery remain OPEN. New app deletion requires the new endpoint; no legacy fallback. See supabase/functions/delete-account-recovery/README.md. Existing signed-device/store/accessibility/public-page gates remain open.

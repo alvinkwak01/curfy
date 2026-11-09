@@ -1,4 +1,5 @@
-import { isSupabaseConfigured, LeaderboardProfile, supabase } from "@/lib/supabase";
+import { createDeletionTransaction, readDeletionIntent } from "@/lib/remoteDeletionTransaction";
+import { isSupabaseConfigured, LeaderboardProfile, remoteDeletionTransport, supabase } from "@/lib/supabase";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import type { Session } from "@supabase/supabase-js";
 import React, {
@@ -78,6 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const remoteDeletedUserId = useRef<string | null>(null);
   const authRecoveryFailed = useRef(false);
   const authReady = useRef(false);
+  const deletionTransaction = useRef(createDeletionTransaction(AsyncStorage, remoteDeletionTransport));
+  const pendingDeletion = useRef(false);
+  const deletionCallPending = useRef(false);
   // Avoids pushing a redundant identical update on every streak render.
   const lastSynced = useRef<{
     userId: string;
@@ -133,8 +137,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void Promise.all([
       supabase.auth.getSession(),
       AsyncStorage.getItem(REMOTE_DELETION_CONFIRMED_KEY),
+      readDeletionIntent(AsyncStorage),
     ])
-      .then(([{ data, error }, confirmedId]) => {
+      .then(([{ data, error }, confirmedId, pending]) => {
         if (!active) return;
         if (error) {
           // An unsuccessful session read is not evidence that a remote
@@ -143,6 +148,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           deletionInProgress.current = true;
           setIsDeletingAccount(true);
           console.warn("[Curfy] Could not restore leaderboard session", error);
+        }
+        if (pending) {
+          pendingDeletion.current = true;
+          deletionInProgress.current = true;
+          setIsDeletingAccount(true);
         }
         if (confirmedId) {
           remoteDeletedUserId.current = confirmedId;
@@ -229,44 +239,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       lastSynced.current = null;
       return;
     }
-    // Without a deletion receipt, a failed session/receipt read cannot
-    // distinguish an empty account from a hidden, still-live online user.
-    if (authRecoveryFailed.current) {
+    // A pending proof can recover without a normal session. Storage/auth
+    // restoration failures still fail closed unless the journal is readable.
+    const pending = await readDeletionIntent(AsyncStorage).catch(() => {
+      throw new Error("Curfy couldn't verify your online account or a previous deletion. Reopen Curfy when local storage is available.");
+    });
+    if (authRecoveryFailed.current && !pending) {
       throw new Error("Curfy couldn't verify your online account or a previous deletion. Reopen Curfy when local storage is available.");
     }
-    if (!session?.user) return;
-    if (deletionInProgress.current) {
-      throw new Error("Curfy is already processing an account deletion.");
-    }
+    if (!session?.user && !pending) return;
+    if (deletionCallPending.current) throw new Error("Curfy is already processing an account deletion.");
+    deletionCallPending.current = true;
     deletionInProgress.current = true;
     setIsDeletingAccount(true);
     try {
-      // Authenticated POST to the deployed server, which must prove caller
-      // identity independently. A response or network failure is NOT proof.
-      const { data, error } = await supabase.functions.invoke<{ success?: boolean; error?: string }>(
-        "delete-account", { method: "POST" }
-      );
-      if (error) throw new Error("Curfy couldn't delete your online account. Check your connection and retry.");
-      if (data?.success !== true) {
-        throw new Error(data?.error || "Online account deletion wasn't confirmed. Please retry.");
-      }
-      // Persist the server-confirmed result before local sign-out. If signOut
-      // fails, the user can retry deletion without reusing an invalid JWT.
-      remoteDeletedUserId.current = session.user.id;
-      await persistDeletionReceipt(session.user.id);
-      const { error: signOutError } = await supabase.auth.signOut({ scope: "local" });
-      if (signOutError) {
-        throw new Error("Curfy couldn't clear its local cloud session. Retry Delete Account.");
-      }
-      lastSynced.current = null;
+      await deletionTransaction.current.run(session?.user.id ?? null, async userId => {
+        remoteDeletedUserId.current = userId;
+        await persistDeletionReceipt(userId);
+        const { error } = await supabase.auth.signOut({ scope: "local" });
+        if (error) throw new Error("Curfy couldn't clear its local cloud session. Retry Delete Account.");
+        lastSynced.current = null;
+      });
     } catch (error) {
-      if (remoteDeletedUserId.current === null) {
-        // Only a genuinely unconfirmed remote deletion may allow future
-        // anonymous profile operations.
+      if (remoteDeletedUserId.current) throw error;
+      throw new Error("Curfy couldn't delete your online account. Check your connection and retry.");
+    } finally {
+      deletionCallPending.current = false;
+      // Even a failed request may already have deleted the server identity.
+      // Keep uploads paused whenever a journal exists or cannot be read.
+      try { pendingDeletion.current = !!await readDeletionIntent(AsyncStorage); }
+      catch { pendingDeletion.current = true; }
+      if (!pendingDeletion.current && remoteDeletedUserId.current === null) {
         deletionInProgress.current = false;
         setIsDeletingAccount(false);
       }
-      throw error;
     }
   };
 
@@ -277,6 +283,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Delete Everything calls this after local cleanup; Leave calls it after
     // cloud-only removal, preserving native protection and local history.
     await persistConsent("leaving");
+    // Retire the pending proof while the stronger confirmed receipt remains.
+    if (remoteDeletedUserId.current) {
+      await deletionTransaction.current.finish(remoteDeletedUserId.current);
+    } else if (await readDeletionIntent(AsyncStorage)) {
+      throw new Error("Online account deletion is not confirmed. Please retry.");
+    }
+    pendingDeletion.current = false;
     await AsyncStorage.removeItem(REMOTE_DELETION_CONFIRMED_KEY);
     if (await AsyncStorage.getItem(REMOTE_DELETION_CONFIRMED_KEY) != null) {
       throw new Error("Curfy could not clear the confirmed deletion receipt.");

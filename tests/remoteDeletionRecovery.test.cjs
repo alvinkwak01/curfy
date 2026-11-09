@@ -23,7 +23,7 @@ async function fixture({
   receipt = null, initialSession = true, failSignOut = false,
   signOutReturnsError = false, failRemote = false, failRead = false,
   restoreError = false, consent = null, waitForSignIn = null, failConsentWrite = false,
-  persistedStorage = null, failConsentValue = null, ignoreReceiptWrite = false, waitForSession = null, failReceiptRemove = false,
+  persistedStorage = null, failConsentValue = null, ignoreReceiptWrite = false, waitForSession = null, failReceiptRemove = false, serverDeleted = false, loseCommitResponse = false,
 } = {}) {
   const storage = persistedStorage ?? new Map(receipt ? [[KEY, receipt]] : []);
   if (consent) storage.set("@curfy/leaderboard_consent_v1", consent);
@@ -85,10 +85,28 @@ async function fixture({
   new Function("require", "module", "exports", compiled)(
     name => {
       if (name === "@/lib/supabase") {
-        return { isSupabaseConfigured: true, supabase };
+        return { isSupabaseConfigured: true, supabase, remoteDeletionTransport: {
+          prepare: async () => {
+            if (remoteFails) { stats.invokes++; throw Error("server unavailable"); }
+            return { userId: currentSession.user.id, requestId: "r", proof: "p" };
+          },
+          status: async () => serverDeleted ? "deleted" : "pending",
+          commit: async () => {
+            const {error} = await supabase.functions.invoke("delete-account-recovery", {method:"POST"});
+            if (error) throw error;
+            serverDeleted = true;
+            if (loseCommitResponse) throw Error("response lost");
+            return "deleted";
+          },
+        } };
       }
       if (name === "@react-native-async-storage/async-storage") {
         return { __esModule: true, default: asyncStorage };
+      }
+      if (name === "@/lib/remoteDeletionTransaction") {
+        const tx = {exports:{}};
+        new Function("module","exports",ts.transpileModule(readFileSync(join(__dirname,"../lib/remoteDeletionTransaction.ts"),"utf8"),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText)(tx,tx.exports);
+        return tx.exports;
       }
       return require(name);
     },
@@ -306,4 +324,22 @@ test('receipt removal failure leaves a restart-safe Finish leaving path',async()
  const restarted=await fixture({initialSession:false,persistedStorage:disk});
  await act(async()=>{await restarted.api.setLeaderboardParticipation(false);});
  assert.equal(restarted.api.leaderboardConsent,'declined');assert.equal(restarted.stats.invokes,0);await restarted.unmount();
+});
+
+test("lost commit response keeps uploads paused and restart recovers with no session", async () => {
+ const f=await fixture({consent:"joined",loseCommitResponse:true});
+ await act(async()=>{await assert.rejects(f.api.deleteRemoteAccount());});
+ assert.equal(f.api.isDeletingAccount,true);
+ assert.ok(f.storage.has("@curfy/remote_deletion_pending_v1"));
+ assert.equal(f.storage.has(KEY),false);
+ await act(async()=>{await f.api.ensureAnonymousProfile("No upload");});
+ assert.equal(f.stats.signIns,0);
+ const disk=f.storage;await f.unmount();
+ const restarted=await fixture({persistedStorage:disk,initialSession:false,serverDeleted:true});
+ assert.equal(restarted.api.isDeletingAccount,true);
+ await act(async()=>{await restarted.api.deleteRemoteAccount();await restarted.api.finishAccountDeletion();});
+ assert.equal(restarted.stats.invokes,0);
+ assert.equal(restarted.api.leaderboardConsent,"declined");
+ assert.equal(disk.has("@curfy/remote_deletion_pending_v1"),false);
+ await restarted.unmount();
 });

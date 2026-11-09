@@ -50,3 +50,17 @@ Confirm actual public privacy/support destinations and owner contact, App Privac
 - Apple privacy policy, consent withdrawal and account-deletion requirements: https://developer.apple.com/app-store/review/guidelines/#privacy
 
 The lost-response conclusion is an inference from current source, independently reproduced with mocks; it is NOT a claim about an observed production incident.
+
+## Actual read-only inspection — 2026-11-08
+This supersedes the access gap above. Correct Curfy project xcngywlufixnctvblsid is accessible and ACTIVE_HEALTHY. PR head verified as 08d72585bee8ec1dea2396349a95d00fa0728a32. A single aggregated equivalent of the preflight metadata query ran inside BEGIN TRANSACTION READ ONLY / ROLLBACK; no user rows were fetched.
+
+Confirmed profiles has six expected columns (id, display_name, current_streak, longest_streak, bedtime, updated_at), RLS enabled (not forced), public SELECT true, own-ID INSERT, own-ID UPDATE with USING and WITH CHECK, and FOREIGN KEY id REFERENCES auth.users(id) ON DELETE CASCADE. anon and authenticated have SELECT/INSERT/UPDATE/DELETE/TRUNCATE/REFERENCES/TRIGGER grants; RLS restricts row operations but does not replace least-privilege grants. Prepare a reviewed grant reduction; no privileges changed in this inspection. Public SELECT includes all six columns.
+
+Retrieved live delete-account source: ACTIVE v1, verify_jwt=true, bundle hash 2273fd936f1d7e8298e8b37b8646d9d7c0752c6d50c954e186d2a210f438cae0. It checks presence of Authorization, authenticates getUser, and calls admin.deleteUser; unlike current PR it has no POST-only guard or Bearer-format check. It has no independent recovery proof. A gateway-compatible recovery endpoint is needed before ordinary auth expiry can be tolerated. No destructive endpoint request was made.
+
+Security advisors returned anonymous access policies and disabled leaked-password protection. Anonymous identity is part of the approved leaderboard architecture; enabled password-provider settings were not inspected. Remediation references: https://supabase.com/docs/guides/database/database-advisors?queryGroups=lint&lint=0012_auth_allow_anonymous_sign_ins and https://supabase.com/docs/guides/auth/password-security#password-strength-and-leaked-password-protection .
+
+No live mutation or deployment. This proves schema/configuration inspection only, not actual deletion, isolation under disposable credentials, consent behavior, or completed release acceptance.
+
+## Source recovery protocol — 2026-11-09
+Implemented new delete-account-recovery and app journal/transport/provider integration. A 30-day project/user-bound HMAC capability is persisted before commit; status can confirm absence without a normal session. Explicit user_not_found alone establishes absence. Mocked lost-response/restart, forgery, wrong project, expiry, rotation, failed persistence, duplicate requests and identity mismatch are covered. Actual suite 367/367 PASS; TypeScript and iOS export PASS. No Deno check/deployment. Secret provisioning and expired/revoked-proof recovery remain release blockers; details and deployment sequence in the endpoint README. No actual account deletion, schema modification or paid action.
