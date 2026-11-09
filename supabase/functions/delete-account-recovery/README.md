@@ -1,6 +1,8 @@
 # Curfy deletion recovery — deployment gate
 
-Source implemented; NOT deployed or verified on Supabase. The app now requires
+Deployed v1 on 2026-11-09; 18 live backend checks passed with disposable identities.
+See docs/release-evidence/deletion-live-2026-11-09.json and CURRENT_HANDOFF.md.
+The app now requires
 this endpoint and deliberately does not fall back to one-shot deletion.
 
 ## Protocol and authentication

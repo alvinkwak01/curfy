@@ -11,7 +11,7 @@
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are
 // auto-injected into every Edge Function by the platform; nothing to
 // configure manually for this to run once deployed.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.7";
 
 Deno.serve(async (req: Request) => {
   // Account deletion is a destructive command, never a cacheable/readable
