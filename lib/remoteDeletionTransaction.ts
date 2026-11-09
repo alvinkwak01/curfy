@@ -14,6 +14,8 @@ interface Storage {
   setItem(key: string, value: string): Promise<void>;
   removeItem(key: string): Promise<void>;
 }
+export class DeletionProofRejected extends Error {}
+
 export interface DeletionTransport {
   // Must authenticate using the live session; server derives userId itself.
   prepare(): Promise<Omit<DeletionIntent, "version">>;
@@ -65,7 +67,22 @@ export function createDeletionTransaction(storage: Storage, transport: DeletionT
         // using a proof it cannot read back before a process exit.
         const saved = await readDeletionIntent(storage);
         if (!saved || JSON.stringify(saved) !== JSON.stringify(intent)) throw failure();
-        const status = await transport.status(intent);
+        let status: "pending" | "deleted";
+        try {
+          status = await transport.status(intent);
+        } catch (error) {
+          // Only an explicit proof rejection permits renewal, and only via
+          // fresh server authentication of the SAME account. Never replace a
+          // journal after a timeout or with a newly created anonymous identity.
+          if (!(error instanceof DeletionProofRejected) || !currentUserId) throw error;
+          const prepared = { ...await transport.prepare(), version: 1 as const };
+          if (!valid(prepared) || prepared.userId !== intent.userId || prepared.userId !== currentUserId) throw failure();
+          const serialized = JSON.stringify(prepared);
+          await storage.setItem(REMOTE_DELETION_PENDING_KEY, serialized);
+          if (await storage.getItem(REMOTE_DELETION_PENDING_KEY) !== serialized) throw failure();
+          intent = prepared;
+          status = await transport.status(intent);
+        }
         if (status !== "deleted") {
           if (status !== "pending" || await transport.commit(intent) !== "deleted") throw failure();
         }

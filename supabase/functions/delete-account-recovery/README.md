@@ -7,7 +7,7 @@ this endpoint and deliberately does not fall back to one-shot deletion.
 
 POST prepare validates the current session with Auth getUser, then issues a
 signed HMAC-SHA256 capability scoped to this project's deletion endpoint, one
-verified user, one random request ID, and 30 days. The app writes/readbacks it
+verified user, one random request ID, and 30 days of destructive authority. The app writes/readbacks it
 before commit. POST status/commit authenticate the capability directly, without
 requiring the deleted user's normal session. Neither trusts body user IDs.
 Only Auth's explicit user_not_found result confirms absence; generic failures
@@ -30,12 +30,19 @@ expiry; it cannot read a profile, sign in, or delete a different user.
   both authentication modes. Keep legacy delete-account verify_jwt=true.
 - Key rotation: move the old key to CURFY_DELETION_RECOVERY_PREVIOUS_KEY, retain
   it for at least 30 days after the last issuance, and do not rotate again until
-  that interval has elapsed. Emergency key revocation intentionally invalidates
-  outstanding proofs; it never implies deletion success.
-- Proofs expire after 30 days. An expired proof returns 410 and preserves local
-  recovery state; it does NOT permit local wipe or automatic re-enrollment.
-  A verified support/re-authentication recovery path for this case remains an
-  OPEN release gate, especially for anonymous identities with no login method.
+  that interval has elapsed. After that interval, move retired keys into the
+  comma-separated CURFY_DELETION_RECOVERY_VERIFICATION_KEYS list. These keys
+  may only confirm already-absent users; they can never authorize deletion of
+  an existing account. Retain this verification history for long-offline clients.
+  Removing a compromised key entirely invalidates its proofs; that incident
+  requires verified recovery and must never imply deletion success.
+- After 30 days, a verified proof still confirms an already-absent user. If the
+  user exists, it returns 410 without deletion. The client renews only through
+  fresh authentication of the SAME identity and readbacks the replacement
+  journal before committing. No session means no renewal; state is retained.
+  A lost anonymous session with an undeleted account or fully revoked key
+  still requires verified support recovery. Never sign up a replacement user
+  or accept a body-supplied ID as proof. This exceptional recovery remains open.
 - No change to the existing live endpoint or database was made by this slice.
 
 ## Required verification before release
@@ -49,8 +56,8 @@ expired, retired-key and wrong-project proofs; transient Auth failure; duplicate
 commit; local receipt/signout failure; full Delete Everything and cloud-only
 withdrawal. Check the actual platform gateway lets recovery reach the handler.
 
-Node WebCrypto/mocked Auth tests do not prove deployed behavior. The capability
-expiry/support path and deployed acceptance block release even when tests pass.
+Node WebCrypto/mocked Auth tests do not prove deployed behavior. The lost-session/revoked-key
+support path and deployed acceptance block release even when tests pass.
 Rollback both app and endpoint changes together only after pending journals have
 been resolved; a prior app does not understand the pending recovery key.
 

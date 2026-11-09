@@ -1,4 +1,4 @@
-import type { DeletionTransport } from "./remoteDeletionTransaction";
+import { DeletionProofRejected, type DeletionTransport } from "./remoteDeletionTransaction";
 import "react-native-url-polyfill/auto";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createClient } from "@supabase/supabase-js";
@@ -67,6 +67,7 @@ async function deletionRequest(body: object, token?: string) {
         ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify(body),
     });
+    if (response.status === 401 || response.status === 410) throw new DeletionProofRejected("Curfy needs to verify your deletion request again.");
     if (!response.ok) throw new Error("Curfy couldn't confirm online account deletion. Please retry.");
     return await response.json();
   } finally { clearTimeout(timeout); }

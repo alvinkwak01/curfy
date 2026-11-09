@@ -4,7 +4,7 @@ Updated 2026-11-07. Draft PR #2, branch `feat/ios-shield-from-august`. Canonical
 | Gate | Evidence / status | Still required |
 |---|---|---|
 | Settings persistence | IMPLEMENTED / mocked tests PASS: write-ahead journal, native commit/abort receipts, verified local writes, startup/retry recovery, stale-state guards | Signed process-kill/reboot and real storage/permission failure recovery; native disk durability not proven |
-| Code tests | Latest local **340/340 PASS**, TypeScript PASS; React provider/hold-route tests plus native mocks | [GitHub CI `42427615913`](https://github.com/alvinkwak01/curfy/actions/runs/42427615913) PASS at `da55a2b`; integration review continues; no mock proves iPhone behavior |
+| Code tests | Latest local **373/373 PASS**, TypeScript PASS; React provider/hold-route tests plus native mocks | [GitHub CI `42427615913`](https://github.com/alvinkwak01/curfy/actions/runs/42427615913) PASS at `da55a2b`; integration review continues; no mock proves iPhone behavior |
 | Production JS | iOS Hermes export PASS | Signed binary using same reviewed source |
 | Expo/native config | Latest CI Doctor, prebuild/autolinking, app + 3 entitlement-config checks PASS (prior local Doctor **18/18 PASS**) | Actual distribution profiles/capabilities |
 | Swift compilation | Local Xcode 26.6, Simulator SDK 26.5, unsigned Debug app + 3 extensions **BUILD SUCCEEDED**; final callback source compiled arm64/x86_64 | Signed archive/real-device behavior; simulator compilation is not Screen Time proof |
@@ -12,7 +12,7 @@ Updated 2026-11-07. Draft PR #2, branch `feat/ios-shield-from-august`. Canonical
 | Free native flow | Source/tests present; old device picker/icon observations only | Current signed closed-app shield/hold/reblock/cutoff, denial/revocation/reboot/time-zone matrix |
 | Premium integration | NOW wired in code: StoreKit Settings purchase/restore; fresh entitlement-gated multi-selection; private per-app Home/hold; independent monitor recovery/stop/rollback | StoreKit product setup and signed sandbox purchase/pending/cancel/restore/refund/offline; per-app closed-app reblocking |
 | Leaderboard consent | Interrupted finalization stays `leaving` and cannot auto-rejoin; USER APPROVED: disclosure before first upload, then automatic sync, Settings leave. Source and React provider tests PASS incl. leave during signup | Real deployed backend verification, legacy-account migration behavior and privacy-policy wording |
-| Remote deletion | Client finalization/receipt readback/startup gates repaired and tested. **OPEN CODE/BACKEND BLOCKER:** lost success response leaves deleted caller unable to authenticate retry | Implement authenticated prepare/commit/status recovery, then deployed Edge Function/auth/RLS/cascade test; see `RELEASE_PREFLIGHT_EVIDENCE.md` |
+| Remote deletion | Prepare/journal/status/commit plus expired-proof and retired-key absence reconciliation implemented; mocked tests PASS | Server secret, deployed Edge Function/auth/RLS/cascade verification, and exceptional lost-session/revoked-key recovery; see `RELEASE_PREFLIGHT_EVIDENCE.md` |
 | Public profile data | Source RLS allows public profile rows including start time/ID; disclosure says start time is public | Verify deployed schema; final data minimization/retention/App Privacy review |
 | Distribution approval | UNKNOWN for main + three extensions | Apple's assigned Family Controls DISTRIBUTION capability and matching profiles for each target |
 | StoreKit configuration | UNKNOWN; proposed ID `com.alvinkwak.curfy.premium`, approved $5.99 USD non-consumable | Actual product configuration, commerce agreements, sandbox readiness |
@@ -39,3 +39,5 @@ Supabase access is RESOLVED; Curfy reports ACTIVE_HEALTHY. Metadata-only inspect
 Deletion prepare/proof journal/status/commit is implemented in source with 367 local passing tests, app and server-protocol TypeScript, and production iOS export. It is NOT deployed; signing-secret provisioning, gateway/disposable-user acceptance and expired/revoked-proof recovery remain OPEN. New app deletion requires the new endpoint; no legacy fallback. See supabase/functions/delete-account-recovery/README.md. Existing signed-device/store/accessibility/public-page gates remain open.
 
 Code checkpoint edbb91a: Deno endpoint type check PASS; [CI 42640853050](https://github.com/alvinkwak01/curfy/actions/runs/42640853050) SUCCESS. No deployment proof.
+
+Latest expiry/rotation slice: 373 tests, app TypeScript, Deno check and iOS export PASS. Same-user authenticated proof renewal and verification-only historical keys implemented. Dashboard secret form prepared; user must enter/save secret under browser credential rules. No backend deployment/mutation occurred.

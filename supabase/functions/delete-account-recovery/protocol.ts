@@ -6,6 +6,8 @@ interface Dependencies {
   audience: string;
   currentKey: string;
   previousKey?: string;
+  // Retained solely for reconciliation; never grants destructive authority.
+  verificationOnlyKeys?: string[];
   now(): number;
   authenticate(bearer: string): Promise<string | null>;
   exists(userId: string): Promise<boolean>;
@@ -58,13 +60,19 @@ export function deletionHandler(deps: Dependencies) {
       if (input.action !== "status" && input.action !== "commit") return reply(400, { error: "Invalid action" });
       if (typeof input.proof !== "string" || input.proof.length > 4096) return reply(401, { error: "Invalid recovery proof" });
       let payload: Capability;
+      let destructiveAuthority = false;
       try {
         const parts = input.proof.split(".");
         if (parts.length !== 2 || parts.some((s: string) => !/^[A-Za-z0-9_-]+$/.test(s))) throw Error();
         const [encoded, signature] = parts;
         let verified = false;
-        for (const secret of [deps.currentKey, deps.previousKey].filter(Boolean) as string[]) {
-          if (await crypto.subtle.verify("HMAC", await key(secret), decode(signature), enc.encode(encoded))) { verified = true; break; }
+        const activeKeys = [deps.currentKey, deps.previousKey].filter(Boolean) as string[];
+        for (const secret of [...activeKeys, ...(deps.verificationOnlyKeys ?? [])]) {
+          if (await crypto.subtle.verify("HMAC", await key(secret), decode(signature), enc.encode(encoded))) {
+            verified = true;
+            destructiveAuthority = activeKeys.includes(secret);
+            break;
+          }
         }
         if (!verified) throw Error();
         payload = JSON.parse(new TextDecoder().decode(decode(encoded)));
@@ -72,9 +80,12 @@ export function deletionHandler(deps: Dependencies) {
           typeof payload.requestId !== "string" || !payload.requestId || !Number.isSafeInteger(payload.issued) ||
           payload.issued > deps.now() || payload.expires !== payload.issued + TTL) throw Error();
       } catch { return reply(401, { error: "Invalid recovery proof" }); }
-      if (payload.expires <= deps.now()) return reply(410, { error: "Recovery proof expired; deletion is not confirmed" });
+      // Expiry removes destructive authority, not the ability to reconcile a
+      // deletion that already finished. Signature and project binding remain
+      // mandatory even for this read-only absence check.
       // Only the verified signed subject is ever used; ignore body IDs entirely.
       if (!await deps.exists(payload.userId)) return reply(200, { status: "deleted" });
+      if (!destructiveAuthority || payload.expires <= deps.now()) return reply(410, { error: "Recovery proof expired; deletion is not confirmed" });
       if (input.action === "status") return reply(200, { status: "pending" });
       try { await deps.deleteUser(payload.userId); } catch {
         // Concurrent valid retries may both observe an existing user, then one

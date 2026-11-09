@@ -9,3 +9,26 @@ test('Auth lookup failure and deletion failure never return success',async()=>{c
 test('concurrent duplicate commit reconciles verified absence',async()=>{const f=fixture(),p=await f.prepare();const results=await Promise.all([f.call('commit',{proof:p.proof}),f.call('commit',{proof:p.proof})]);assert.ok(results.every(r=>r.status===200));assert.ok(f.calls.every(id=>id==='A'));assert.ok(f.users.has('B'))});
 test('method, malformed and oversized bodies are rejected without deletion',async()=>{const f=fixture(),h=m.exports.deletionHandler(f.deps);assert.equal((await h(new Request('https://example.invalid'))).status,405);for(const [body,status]of [['{',400],['x'.repeat(8193),413],['null',400]])assert.equal((await h(new Request('https://example.invalid',{method:'POST',body}))).status,status);assert.deepEqual(f.calls,[])});
 test('missing signing secret cannot issue a recovery capability',async()=>{const f=fixture();f.deps.currentKey='';assert.equal((await f.call('prepare',{},'Bearer valid')).status,503);assert.deepEqual(f.calls,[])});
+
+test('expired proof reconciles completed deletion after a long-offline restart',async()=>{
+ const f=fixture(),p=await f.prepare();
+ assert.equal((await f.call('commit',{proof:p.proof})).status,200);
+ f.advance();
+ assert.deepEqual(await(await f.call('status',{proof:p.proof})).json(),{status:'deleted'});
+ assert.deepEqual(await(await f.call('commit',{proof:p.proof})).json(),{status:'deleted'});
+ assert.deepEqual(f.calls,['A']);assert.ok(f.users.has('B'));
+});
+test('expired proof never deletes an existing account or masks an Auth failure',async()=>{
+ const f=fixture(),p=await f.prepare();f.advance();
+ assert.equal((await f.call('commit',{proof:p.proof})).status,410);
+ assert.ok(f.users.has('A'));assert.deepEqual(f.calls,[]);
+ f.deps.exists=async()=>{throw Error('service unavailable')};
+ assert.equal((await f.call('status',{proof:p.proof})).status,503);
+});
+
+test('archived verification keys reconcile absence but cannot authorize deletion',async()=>{
+ const f=fixture(),p=await f.prepare();f.deps.verificationOnlyKeys=[f.deps.currentKey];f.deps.currentKey='ef'.repeat(32);
+ assert.equal((await f.call('commit',{proof:p.proof})).status,410);assert.deepEqual(f.calls,[]);
+ f.users.delete('A');f.advance();
+ assert.deepEqual(await(await f.call('status',{proof:p.proof})).json(),{status:'deleted'});
+});

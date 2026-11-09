@@ -53,3 +53,22 @@ test('overlapping commands cannot commit or erase an in-flight journal',async()=
 test('failed journal removal remains retryable',async()=>{
  const f=fixture();await f.tx().run('A',f.confirm);f.storage.removeItem=async()=>{};await assert.rejects(f.tx().finish('A'));assert.ok(f.disk.has(KEY));
 });
+
+test('expired proof renews only through authenticated preparation and saves before commit',async()=>{
+ const f=fixture();f.disk.set(KEY,JSON.stringify({version:1,userId:'A',requestId:'old',proof:'expired'}));
+ f.transport.status=async intent=>{if(intent.proof==='expired')throw new mod.exports.DeletionProofRejected();return 'pending'};
+ await f.tx().run('A',f.confirm);assert.deepEqual(f.calls,['prepare','commit','confirm']);
+ assert.equal(JSON.parse(f.disk.get(KEY)).proof,'secret-proof-A');
+});
+test('proof rejection without a session cannot renew or discard journal',async()=>{
+ const f=fixture();f.disk.set(KEY,JSON.stringify({version:1,userId:'A',requestId:'old',proof:'expired'}));
+ f.transport.status=async()=>{throw new mod.exports.DeletionProofRejected()};
+ await assert.rejects(f.tx().run(null,f.confirm));assert.deepEqual(f.calls,[]);assert.equal(JSON.parse(f.disk.get(KEY)).proof,'expired');
+});
+test('renewal identity mismatch and failed renewal persistence prevent commit',async()=>{
+ for(const mode of ['identity','storage']){const f=fixture();f.disk.set(KEY,JSON.stringify({version:1,userId:'A',requestId:'old',proof:'expired'}));
+ f.transport.status=async()=>{throw new mod.exports.DeletionProofRejected()};
+ if(mode==='identity')f.transport.prepare=async()=>({userId:'B',requestId:'r',proof:'p'});
+ else f.storage.setItem=async()=>{};
+ await assert.rejects(f.tx().run('A',f.confirm));assert.ok(!f.calls.includes('commit'));assert.equal(JSON.parse(f.disk.get(KEY)).proof,'expired');}
+});

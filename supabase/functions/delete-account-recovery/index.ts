@@ -12,6 +12,7 @@ Deno.serve(deletionHandler({
   audience: `${url}/delete-account-recovery/v1`,
   currentKey: Deno.env.get("CURFY_DELETION_RECOVERY_KEY") ?? "",
   previousKey: Deno.env.get("CURFY_DELETION_RECOVERY_PREVIOUS_KEY"),
+  verificationOnlyKeys: (Deno.env.get("CURFY_DELETION_RECOVERY_VERIFICATION_KEYS") ?? "").split(",").map(key => key.trim()).filter(Boolean),
   now: () => Date.now(),
   authenticate: async bearer => {
     const { data, error } = await admin.auth.getUser(bearer.replace(/^Bearer\s+/i, ""));
