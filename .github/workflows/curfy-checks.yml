@@ -80,6 +80,8 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - name: Verify selected Xcode supports the shield handoff API
+        run: node scripts/verify-ios-sdk.cjs iphonesimulator
       - name: Generate iOS target and extensions
         run: npx expo prebuild --platform ios --no-install
         env:

@@ -11,8 +11,8 @@ The user requested our recommendation and authorized continuing independent prep
 
 ## Required before publication
 - Supply/confirm the actual operator name and monitored email, including whether that inbox may be public.
-- Verify the deployed Supabase project, public profile columns, auth/deletion behavior, providers, operational logging, regions and retention. Current plugin connection cannot access recorded Curfy project `xcngywlufixnctvblsid`.
-- Resolve the lost-deletion-response code/backend gate in `RELEASE_PREFLIGHT_EVIDENCE.md` and verify deployed behavior with disposable identities.
+- Verify the deployed Supabase project, public profile columns, auth/deletion behavior, providers, operational logging, regions and retention. Curfy access, public profile columns, ownership policies and deletion cascade were verified on 2026-11-09; operational logging/retention remain unverified.
+- Lost-response backend recovery passed 18 live checks with disposable identities; signed app integration and exceptional lost-session/revoked-key handling remain open in `RELEASE_PREFLIGHT_EVIDENCE.md`.
 - Review final iOS SDK privacy manifests, local backup behavior, age/territory decisions and App Privacy responses. These drafts do not establish legal compliance or an App Review outcome.
 - Insert real contact information and effective date. Complete the retention/provider details; remove the editorial draft notices only after verification.
 - Publish only the approved public content. Verify HTTPS, phone readability and the actual final URLs before adding links inside Curfy or App Store Connect.

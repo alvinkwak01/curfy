@@ -1,51 +1,30 @@
-# Curfy — release gate register
-Updated 2026-11-07. Draft PR #2, branch `feat/ios-shield-from-august`. Canonical decisions: `CURRENT_HANDOFF.md`. Latest code checkpoint `da55a2b35b7c4a87b2685eec7ec343cc00dbb40a` (client deletion/startup recovery); prior native integrated checkpoint `a1a400b324bf244f0d6b2fe336647cad0a60bb5f`.
+# Curfy — current release gates
+Updated 2026-11-09. Draft PR #2, `feat/ios-shield-from-august` → `backup/local-curfy-august`. Read CURRENT_HANDOFF.md first. Historical checkpoints remain in Git and the handoff; this register describes current evidence only.
 
-| Gate | Evidence / status | Still required |
+**NOT App Store-ready. No signed candidate has been requested.**
+
+| Gate | Verified evidence | Remaining work |
 |---|---|---|
-| Settings persistence | IMPLEMENTED / mocked tests PASS: write-ahead journal, native commit/abort receipts, verified local writes, startup/retry recovery, stale-state guards | Signed process-kill/reboot and real storage/permission failure recovery; native disk durability not proven |
-| Code tests | Latest local **374/374 PASS**, TypeScript PASS; React provider/hold-route tests plus native mocks | [GitHub CI `42427615913`](https://github.com/alvinkwak01/curfy/actions/runs/42427615913) PASS at `da55a2b`; integration review continues; no mock proves iPhone behavior |
-| Production JS | iOS Hermes export PASS | Signed binary using same reviewed source |
-| Expo/native config | Latest CI Doctor, prebuild/autolinking, app + 3 entitlement-config checks PASS (prior local Doctor **18/18 PASS**) | Actual distribution profiles/capabilities |
-| Swift compilation | Local Xcode 26.6, Simulator SDK 26.5, unsigned Debug app + 3 extensions **BUILD SUCCEEDED**; final callback source compiled arm64/x86_64 | Signed archive/real-device behavior; simulator compilation is not Screen Time proof |
-| Existing design | Onboarding and HoldButton files unchanged; source regressions PASS | New Premium/consent controls visually reviewed on small iPhone, large text and VoiceOver |
-| Free native flow | Source/tests present; old device picker/icon observations only | Current signed closed-app shield/hold/reblock/cutoff, denial/revocation/reboot/time-zone matrix |
-| Premium integration | NOW wired in code: StoreKit Settings purchase/restore; fresh entitlement-gated multi-selection; private per-app Home/hold; independent monitor recovery/stop/rollback | StoreKit product setup and signed sandbox purchase/pending/cancel/restore/refund/offline; per-app closed-app reblocking |
-| Leaderboard consent | Interrupted finalization stays `leaving` and cannot auto-rejoin; USER APPROVED: disclosure before first upload, then automatic sync, Settings leave. Source and React provider tests PASS incl. leave during signup | Real deployed backend verification, legacy-account migration behavior and privacy-policy wording |
-| Remote deletion | Prepare/journal/status/commit plus expired-proof and retired-key absence reconciliation implemented; mocked tests PASS | 18 live backend checks PASS incl. own-profile RLS/cascade, no-session retry and identity isolation; signed app integration and exceptional lost-session/revoked-key recovery remain; see `RELEASE_PREFLIGHT_EVIDENCE.md` |
-| Public profile data | Source RLS allows public profile rows including start time/ID; disclosure says start time is public | Verify deployed schema; final data minimization/retention/App Privacy review |
-| Distribution approval | UNKNOWN for main + three extensions | Apple's assigned Family Controls DISTRIBUTION capability and matching profiles for each target |
-| StoreKit configuration | UNKNOWN; proposed ID `com.alvinkwak.curfy.premium`, approved $5.99 USD non-consumable | Actual product configuration, commerce agreements, sandbox readiness |
-| Privacy/support | OPEN; public-page drafts prepared, no domain/mailbox/publication yet | Public policy, accessible in-app policy link, support destination, final provider/SDK disclosures |
-| Accessibility | OPEN | VoiceOver/native labels, large text, Reduce Motion, explicitly approved continuous-hold accommodation |
-| Submission | Draft package prepared; NOT submitted | Real screenshots, age rating/territories, name clearance, signed device acceptance, TestFlight/App Review |
+| Code checks | 374/374 tests, TypeScript, iOS production export PASS; CI 42667878535 SUCCESS on 1a3bf11 | Recheck changes as needed; mocks do not prove iPhone behavior |
+| Settings persistence | Recovery journal, native commit/abort receipt, verified local writes and restart tests | Real storage/process-kill/reboot/permission recovery |
+| Native configuration | Prebuild/autolinking, four-target entitlement configuration PASS | Signed matching profiles and installed binary |
+| Native compilation | Earlier full unsigned app/three-extension build; latest ShieldAction/ShieldConfiguration compiled as unsigned simulator libraries with SDK26.5 | Current signed archive/device proof; SDK26.5+ is required and now has a read-only preflight script |
+| Shield → Curfy → hold | Open Curfy uses official API on iOS26.5+; older iOS retains explicit manual-open route; no shield mutation on handoff | Physical modern/older-iOS journey, foreground/background/terminated app, chosen-app hold, reblocking; existing download does not contain native changes |
+| Free/Premium protection | One individual app in onboarding; StoreKit one-time purchase/restore; multiple private app rows and independent holds/monitor recovery in source | Signed sandbox purchase/pending/cancel/restore/refund/offline and per-app protection matrix |
+| Backend deletion | Recovery v1 and legacy safeguards v3 deployed; source match; 18 live checks PASS on two disposable identities, both cleaned up | Signed app integration; exceptional lost anonymous session/fully revoked verification material; live rotation operating procedure |
+| Leaderboard consent | Disclosure before uploads, leave/retry preserves local protection/history, provider tests PASS | Actual signed app consent/leave/rejoin and legacy-state matrix |
+| Public profile privacy | Deployed RLS and own-write predicates, full-profile public SELECT, auth→profile cascade verified | Least-privilege grants and final retention/App Privacy review |
+| Family Controls distribution | Apple portal shows Distribution ENABLED for main, ShieldAction, ShieldConfiguration and ActivityMonitor under team H735Q3WW8K | Portal has Ad Hoc profiles for four targets; main active through 2027/01/07 with capability. No Curfy App Store profile visible. Verify all signed entitlements/App Group and prepare correct distribution profiles |
+| App Store record/name | Curfy is absent from current team app list. Creation attempt rejected: name “Curfy” already in use | Owner choice of listing-title alternative or ownership investigation; no app record/product created by failed attempt |
+| Apple agreements | Updated Developer Program agreement notice observed | Account Holder review/acceptance; commerce/tax/banking readiness still unverified |
+| StoreKit setup | Source ID com.alvinkwak.curfy.premium; approved $5.99 USD non-consumable | Create/verify product after app record; localized metadata, price, review screenshot and sandbox test |
+| Privacy/support | Draft pages prepared; verified backend facts updated | Real monitored public contact, operator confirmation, retention details, public URLs and in-app policy link |
+| Accessibility/design | Existing Welcome + nine steps, ring, branding and 120-second hold preserved | VoiceOver, large text, Reduce Motion, small iPhone; explicit hold accommodation decision |
+| Submission | Draft package and consolidated device matrix maintained | Final screenshots, name clearance, age/territory decisions, actual acceptance, TestFlight/App Review |
 
-## Cost and release control
-No EAS build or paid cloud action during development. No main merge. Finish code review/checks and external preflight first; then obtain explicit approval for ONE consolidated signed candidate. The release gate is not passed by TypeScript, mocked tests, native source entitlements, or unsigned compilation.
+## Controls
+No EAS development builds, paid action, main merge or submission without the required explicit authorization. Complete applicable code and external preflight first, then propose ONE consolidated signed candidate. No unsigned/mocked result passes a signed-device gate.
 
-## Apple identities
-Main `com.alvinkwak.curfy`; extensions `com.alvinkwak.curfy.ShieldConfiguration`, `com.alvinkwak.curfy.ShieldAction`, `com.alvinkwak.curfy.ActivityMonitor`; group `group.com.alvinkwak.curfy`; team `H735Q3WW8K`.
+Team H735Q3WW8K. App `com.alvinkwak.curfy`; extensions `.ShieldConfiguration`, `.ShieldAction`, `.ActivityMonitor`. App Group `group.com.alvinkwak.curfy` (observed assigned to ActivityMonitor; all four show App Groups enabled, remaining exact assignments require verification).
 
-Current test package: `CONSOLIDATED_DEVICE_ACCEPTANCE.md`. Submission draft: `APP_STORE_SUBMISSION_PACKAGE.md`. Handoff has exact changed files/checks/limitations and local log locations.
-
-Latest review: `RELEASE_PREFLIGHT_EVIDENCE.md` contains access state, exact open deletion-recovery failure, source references and preflight steps. Metadata-only `supabase/preflight/release-readonly.sql` is prepared but NOT run against a deployed database.
-
-Supabase connection check: installed/connected, but only Link App/refu visible; recorded Curfy project `xcngywlufixnctvblsid` explicitly denies access. Reconnect the owning account/organization before deployed inspection. See `docs/public-drafts/README.md` for the no-purchase public-page recommendation and remaining publication inputs.
-
-## Live inspection — 2026-11-08
-Supabase access is RESOLVED; Curfy reports ACTIVE_HEALTHY. Metadata-only inspection confirmed RLS, owner-write predicates, public full-profile SELECT and auth-user deletion cascade. Deployed delete-account v1 has JWT gateway verification enabled but lacks the PR's POST-only safeguard and any lost-response recovery. Deployment parity and recovery remain OPEN. Security advisors flag intentional anonymous access and disabled leaked-password protection; broad anon/authenticated table grants need least-privilege review. No real account deletion or backend change occurred. Details: CURRENT_HANDOFF.md and RELEASE_PREFLIGHT_EVIDENCE.md. Earlier access-denied/not-inspected statements are historical.
-
-## Implementation checkpoint — 2026-11-09
-Deletion prepare/proof journal/status/commit is implemented in source with 367 local passing tests, app and server-protocol TypeScript, and production iOS export. It is NOT deployed; signing-secret provisioning, gateway/disposable-user acceptance and expired/revoked-proof recovery remain OPEN. New app deletion requires the new endpoint; no legacy fallback. See supabase/functions/delete-account-recovery/README.md. Existing signed-device/store/accessibility/public-page gates remain open.
-
-Code checkpoint edbb91a: Deno endpoint type check PASS; [CI 42640853050](https://github.com/alvinkwak01/curfy/actions/runs/42640853050) SUCCESS. No deployment proof.
-
-Latest expiry/rotation slice: 373 tests, app TypeScript, Deno check and iOS export PASS. Same-user authenticated proof renewal and verification-only historical keys implemented. Dashboard secret form prepared; user must enter/save secret under browser credential rules. No backend deployment/mutation occurred.
-
-Expiry/rotation code checkpoint `68e57ff760e3ab165a0f57147c221cc6a2afe81b`: [GitHub CI 42662147000](https://github.com/alvinkwak01/curfy/actions/runs/42662147000) SUCCESS. Supabase secret entry/save remains pending with user; no deployment occurred.
-
-## Actual backend deployment — 2026-11-09
-Recovery v1 ACTIVE with handler-managed auth; legacy delete-account v3 ACTIVE with JWT gateway and POST-only safeguard. Deployed source matches repository. User-provisioned signing secret verified by live prepare without reading its value. 18 checks passed on two newly created disposable identities, both removed with their profiles. Sanitized evidence: docs/release-evidence/deletion-live-2026-11-09.json. Supersedes earlier NOT DEPLOYED/secret-pending entries; device integration and exceptional recovery remain open. Legacy pinned server dependency: targeted 5/5 tests and Deno check passed.
-
-## Shield handoff — 2026-11-09
-New secondary Open Curfy uses official ShieldActionResponse.openParentalControlsApp on iOS26.5+. Older iOS retains explicit manual Home Screen route. Source test, Swift simulator compilation for both changed extensions, TypeScript/export and four-target configuration pass; physical shield→Curfy→chosen-app hold→exception→reblock still NOT TESTED and blocks release. SDK26.5+ needed to build; runtime remains guarded for older iOS. Existing installed binary is not updated by these source changes.
+Evidence: `docs/release-evidence/deletion-live-2026-11-09.json`, `RELEASE_PREFLIGHT_EVIDENCE.md`, current `CURRENT_HANDOFF.md`. Device test package: `CONSOLIDATED_DEVICE_ACCEPTANCE.md`; submission draft: `APP_STORE_SUBMISSION_PACKAGE.md`.

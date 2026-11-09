@@ -13,7 +13,7 @@ Curfy's local history records app-protection activity. It is not a measurement o
 ## Optional public leaderboard
 You can use app protection and Curfy Premium without joining the leaderboard. Before joining, Curfy explains the information that becomes public and asks for your choice.
 
-If you join, Curfy creates a cloud identity and sends your display name, protection start time and streak information to Supabase. Participation then updates automatically. The source schema also includes a profile identifier and update timestamp; the final policy must reflect exactly which fields the deployed service makes publicly accessible. Do not put private information in your display name.
+If you join, Curfy creates a cloud identity and sends your display name, protection start time and streak information to Supabase. Participation then updates automatically. The deployed public profile also exposes a profile identifier and update timestamp. Do not put private information in your display name.
 
 You can leave from Settings. Leaving pauses new uploads and requests removal of your cloud identity and public profile. It preserves your on-device history, journal, app protection and Premium. If removal cannot be confirmed, Curfy keeps a retry path rather than reporting completion.
 
@@ -31,7 +31,7 @@ Supabase provides the optional cloud identity and leaderboard service. Apple pro
 If these pages are hosted on GitHub Pages, GitHub logs visitors' IP addresses for website security. The website-host disclosure must match the hosting service actually used.
 
 ## Deletion and retention
-Settings includes controls to leave the leaderboard or request Delete Everything. Delete Everything requests cloud-account removal, then stops Curfy protection and clears local history, journal entries and preferences. Failed steps remain retryable. The known server-success/response-loss recovery gap must be fixed and verified before this policy is published.
+Settings includes controls to leave the leaderboard or request Delete Everything. Delete Everything requests cloud-account removal, then stops Curfy protection and clears local history, journal entries and preferences. Failed steps remain retryable. Backend response-loss recovery has passed disposable-identity tests; the complete signed-app deletion flow and exceptional lost-session recovery must still be verified before publication.
 
 Exact retention periods for support correspondence, service logs and backups must be confirmed and included in the final policy. Do not promise immediate erasure from all backups or providers without evidence.
 
