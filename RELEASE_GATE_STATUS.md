@@ -41,3 +41,5 @@ Deletion prepare/proof journal/status/commit is implemented in source with 367 l
 Code checkpoint edbb91a: Deno endpoint type check PASS; [CI 42640853050](https://github.com/alvinkwak01/curfy/actions/runs/42640853050) SUCCESS. No deployment proof.
 
 Latest expiry/rotation slice: 373 tests, app TypeScript, Deno check and iOS export PASS. Same-user authenticated proof renewal and verification-only historical keys implemented. Dashboard secret form prepared; user must enter/save secret under browser credential rules. No backend deployment/mutation occurred.
+
+Expiry/rotation code checkpoint `68e57ff760e3ab165a0f57147c221cc6a2afe81b`: [GitHub CI 42662147000](https://github.com/alvinkwak01/curfy/actions/runs/42662147000) SUCCESS. Supabase secret entry/save remains pending with user; no deployment occurred.
