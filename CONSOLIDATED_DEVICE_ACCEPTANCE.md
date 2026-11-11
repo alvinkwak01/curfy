@@ -2,7 +2,7 @@
 Updated 2026-11-07. ALL rows below are NOT TESTED on the new code. Source mocks and unsigned simulator compilation do not pass these gates.
 
 ## Before authorizing a signed build
-Run `node scripts/verify-ios-sdk.cjs` on the selected Xcode (SDK26.5+ required). This read-only check does not authorize a build. Record exact Git SHA, version/build, iPhone model/iOS, Apple Team, four approved distribution entitlements/profiles, App Group, configured non-consumable product, verified test backend, policy/support URL and tester. Keep PR #2 draft. No EAS request until code checks and external preflight are complete; explicit user approval required.
+After prebuild, run `node scripts/verify-ios-privacy.cjs` and inspect the signed archive privacy report. Run `node scripts/verify-ios-sdk.cjs` on the selected Xcode (SDK26.5+ required). This read-only check does not authorize a build. Record exact Git SHA, version/build, iPhone model/iOS, Apple Team, four approved distribution entitlements/profiles, App Group, configured non-consumable product, verified test backend, policy/support URL and tester. Keep PR #2 draft. No EAS request until code checks and external preflight are complete; explicit user approval required.
 
 ## Single candidate test order
 | Area | Required observed result |

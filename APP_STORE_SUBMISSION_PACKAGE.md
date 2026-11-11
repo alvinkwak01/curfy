@@ -37,7 +37,7 @@ Supply review instructions with exact test window and current build; do not prov
 - App Store Connect app record, product type/ID/localized name/description/$5.99 US tier, agreements/tax/banking, sandbox tester.
 - Public privacy-policy URL, in-app accessible link, support URL and real contact. None supplied or verified; no placeholder URL should ship.
 - Supabase deployment/RLS/cascade/deletion verified, including 18 live checks. Finish provider retention/processors and least-privilege review. Public profiles expose start time and ID as well as displayed name/streaks.
-- App Privacy answers based on final binary/backend. No advertising/tracking SDK found in focused source review, but full SDK/provider audit remains required.
+- App Privacy answers based on final binary/backend. No advertising/tracking SDK found in focused source review, but reviewed SDK reason inventory and data mapping are in docs/release-evidence/app-privacy-mapping.md; signed archive validation and provider retention remain required.
 - Age rating, territorial availability, branding clearance, accessible hold accommodation, real iPhone screenshots and metadata review.
 - Consolidated signed iPhone acceptance PASS, sandbox purchase/restore/refund evidence, TestFlight acceptance and Apple review outcome.
 
@@ -49,3 +49,6 @@ Supply review instructions with exact test window and current build; do not prov
 - Expo module linking: https://docs.expo.dev/modules/autolinking/
 
 No EAS build, store upload, paid action or publication was performed by this preparation.
+
+## November 11 preflight evidence
+Full unsigned simulator app + three extensions compiled; required-reason manifests and linked/nontracking data disclosures inspected in built bundles. Client profile privileges narrowed in deployed backend without data or RLS changes. These do not pass physical-iPhone, StoreKit or App Store validation gates. Apple session now requires owner sign-in. Public support/privacy contact still not supplied.

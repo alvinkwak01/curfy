@@ -1,6 +1,6 @@
 # Curfy — current handoff (read first)
 
-Updated 2026-11-09. This replaces the long, contradictory historical handoff; prior versions remain in Git history. Do not restart or redesign the app.
+Updated 2026-11-11. This replaces the long, contradictory historical handoff; prior versions remain in Git history. Do not restart or redesign the app.
 
 ## Branch and checkpoint
 - Repository: `alvinkwak01/curfy`; draft [PR #2](https://github.com/alvinkwak01/curfy/pull/2).
@@ -9,6 +9,17 @@ Updated 2026-11-09. This replaces the long, contradictory historical handoff; pr
 - First safety checkpoint: `25e9305d1bbecad0bdd0e031079817989fd3eafc` (273 local tests).
 - Integrated engineering checkpoint: **`a1a400b324bf244f0d6b2fe336647cad0a60bb5f`**, `feat(ios): integrate per-app Premium and consented leaderboard participation`. Later documentation/disclosure clarification commits may follow; re-fetch live HEAD.
 - **NOT App Store-ready. No signed candidate built, no EAS initiated, no paid cloud build, no device/purchase/backend claims.**
+
+## SDK privacy and backend permissions — 2026-11-11 (current)
+- Started from live ddfd951faa1554aac3d8cb792970c7f8de4a57d4; that checkpoint's GitHub CI 43067653944 passed.
+- app.json now includes the reason union from ten installed SDK manifests plus app-group defaults. Added linked/nontracking app-functionality disclosures for Name, User ID, Other User Content, Product Interaction and Other Data Types (service metadata). No new collection or runtime behavior added. See docs/release-evidence/app-privacy-mapping.md and sdk-privacy-inventory.json for evidence and limitations.
+- Verifier checks reviewed SDK files for drift, source declarations, generated app disclosures/reasons and four-target resource membership. Positive check and deliberately omitted generated SDK reason negative check passed.
+- ACTUAL: 374/374 tests, TypeScript, production iOS JS export, CocoaPods, prebuild/config checks PASS. Full unsigned Debug simulator app + three-extension Xcode build PASS. Inspected all four manifests inside final local Curfy.app/PlugIns bundles. No signed archive, iPhone or App Store validator proof.
+- Applied two reversible permission migrations to Curfy project xcngywlufixnctvblsid: restrict_profile_client_privileges and restrict_profile_maintenance_privilege. Effective privileges verified live: anon SELECT only; authenticated SELECT/INSERT/UPDATE only; service_role unchanged. Existing ownership RLS/cascade unchanged. No user rows read/changed. Zero-row public SELECT/authenticated UPDATE and EXPLAIN upsert passed; not fresh full identity/deletion acceptance. Security advisors still warn about intentional anonymous access and disabled leaked-password protection (no password flow in this app). See profile-privileges-2026-11-11.md.
+- Project ACTIVE_HEALTHY, region us-west-2, Postgres 17.6.1.147. Exact provider log/backup retention remains unverified. No paid settings changed.
+- Apple session expired; opened Developer sign-in tab and asked owner to sign in. Exact remaining App Group assignments and agreement notice clearance require this. Asked for monitored PUBLIC support/privacy email and operator confirmation. No inbox, domain or public policy URL invented.
+- Remaining work needing external input: Apple name support case 30000010262818 (or explicit alternative-title decision); Apple sign-in; public contact/operator and retention decisions; then product/profile setup and one approved signed candidate for physical tests. Accessibility hold alternative needs explicit decision only if device accessibility proof demonstrates the existing uninterrupted gesture cannot work; no tap bypass added.
+- Rollback: revert client manifest/verifier changes together if needed. For permissions, restore only specifically required privileges after review, never blanket client grants. No data migration/rollback needed. Source screens, approved copy, onboarding/ring and 120-second mechanic unchanged.
 
 ## Privacy required-reason implementation — 2026-11-11
 - Added app-group UserDefaults reason 1C8F.1 through app.json and each extension's root PrivacyInfo.xcprivacy. No screen, hold, native runtime, or entitlement change.

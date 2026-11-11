@@ -13,6 +13,8 @@ Curfy's local history records app-protection activity. It is not a measurement o
 ## Optional public leaderboard
 You can use app protection and Curfy Premium without joining the leaderboard. Before joining, Curfy explains the information that becomes public and asks for your choice.
 
+The current service is hosted in the United States (Supabase project region us-west-2). Service providers process request metadata, such as IP addresses, for operation and security; final log and backup retention details still require confirmation.
+
 If you join, Curfy creates a cloud identity and sends your display name, protection start time and streak information to Supabase. Participation then updates automatically. The deployed public profile also exposes a profile identifier and update timestamp. Do not put private information in your display name.
 
 You can leave from Settings. Leaving pauses new uploads and requests removal of your cloud identity and public profile. It preserves your on-device history, journal, app protection and Premium. If removal cannot be confirmed, Curfy keeps a retry path rather than reporting completion.
