@@ -1,15 +1,15 @@
 # Curfy — App Store submission preparation
-Updated 2026-11-07. Draft package, NOT approved/submitted/published.
+Updated 2026-11-09. Draft package, NOT approved/submitted/published.
 
 ## Confirmed inputs
 - Name/brand: Curfy; “Bedtime. For real.”; iPhone first.
 - Bundle ID `com.alvinkwak.curfy`, Team `H735Q3WW8K`, App Group `group.com.alvinkwak.curfy`.
 - Extensions: `com.alvinkwak.curfy.ShieldConfiguration`, `com.alvinkwak.curfy.ShieldAction`, `com.alvinkwak.curfy.ActivityMonitor`.
 - Source version 1.0.0. Production build number is remotely managed in EAS; actual next build number UNKNOWN.
-- Premium: non-consumable; proposed product ID `com.alvinkwak.curfy.premium`; US price $5.99 once; localized StoreKit pricing elsewhere. Product availability/approval and commerce agreements UNKNOWN.
+- Premium: non-consumable; proposed product ID `com.alvinkwak.curfy.premium`; US price $5.99 once; localized StoreKit pricing elsewhere. Product not yet configured because app-record creation hit a name conflict. Paid Apps, banking, tax and DSA verified Active; owner reports accepting updated Developer Program agreement.
 
 ## Listing draft (owner approval and actual screenshots still required)
-Name: Curfy
+Name: Curfy (creation blocked; Apple support case 30000010262818 pending, no alternative approved)
 Subtitle: Bedtime. For real.
 
 Description draft:
@@ -28,15 +28,15 @@ Curfy requests individual Family Controls authorization to shield only applicati
 
 The uninterrupted 120-second hold is intentional. Releasing or backgrounding before completion resets it. For Premium, tap the individual app's Home row; the hold releases only that application, up to 15 minutes and no later than the selected window end. Other apps remain restricted. Settings offers a one-time non-consumable purchase and Restore purchases.
 
-Leaderboard participation requires a disclosure/confirmation after setup and can be withdrawn in Settings. App protection and Premium do not require a Curfy cloud account. Delete Everything is available in Settings; the deployed deletion endpoint must be verified before submitting these notes.
+Leaderboard participation requires a disclosure/confirmation after setup and can be withdrawn in Settings. App protection and Premium do not require a Curfy cloud account. Delete Everything is available in Settings; backend deletion recovery passed 18 live checks; signed-app integration still requires acceptance before submitting these notes.
 
 Supply review instructions with exact test window and current build; do not provide fabricated account credentials or claim unverified entitlement approval.
 
 ## External items still required
-- Distribution capability assigned for main app AND all three extensions; actual signed archive entitlement/provisioning inspection.
+- Distribution capability verified enabled for main app AND all three extensions; actual signed archive entitlement/provisioning inspection remains.
 - App Store Connect app record, product type/ID/localized name/description/$5.99 US tier, agreements/tax/banking, sandbox tester.
 - Public privacy-policy URL, in-app accessible link, support URL and real contact. None supplied or verified; no placeholder URL should ship.
-- Actual Supabase deployment/RLS/cascade/deletion verification; provider retention/processors and public profile data documented. Source schema exposes profile start time and ID as well as displayed name/streaks.
+- Supabase deployment/RLS/cascade/deletion verified, including 18 live checks. Finish provider retention/processors and least-privilege review. Public profiles expose start time and ID as well as displayed name/streaks.
 - App Privacy answers based on final binary/backend. No advertising/tracking SDK found in focused source review, but full SDK/provider audit remains required.
 - Age rating, territorial availability, branding clearance, accessible hold accommodation, real iPhone screenshots and metadata review.
 - Consolidated signed iPhone acceptance PASS, sandbox purchase/restore/refund evidence, TestFlight acceptance and Apple review outcome.

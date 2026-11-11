@@ -1,6 +1,6 @@
 # Curfy — current handoff (read first)
 
-Updated 2026-11-07. This replaces the long, contradictory historical handoff; prior versions remain in Git history. Do not restart or redesign the app.
+Updated 2026-11-09. This replaces the long, contradictory historical handoff; prior versions remain in Git history. Do not restart or redesign the app.
 
 ## Branch and checkpoint
 - Repository: `alvinkwak01/curfy`; draft [PR #2](https://github.com/alvinkwak01/curfy/pull/2).
@@ -9,6 +9,26 @@ Updated 2026-11-07. This replaces the long, contradictory historical handoff; pr
 - First safety checkpoint: `25e9305d1bbecad0bdd0e031079817989fd3eafc` (273 local tests).
 - Integrated engineering checkpoint: **`a1a400b324bf244f0d6b2fe336647cad0a60bb5f`**, `feat(ios): integrate per-app Premium and consented leaderboard participation`. Later documentation/disclosure clarification commits may follow; re-fetch live HEAD.
 - **NOT App Store-ready. No signed candidate built, no EAS initiated, no paid cloud build, no device/purchase/backend claims.**
+
+## Privacy required-reason implementation — 2026-11-11
+- Added app-group UserDefaults reason 1C8F.1 through app.json and each extension's root PrivacyInfo.xcprivacy. No screen, hold, native runtime, or entitlement change.
+- scripts/verify-ios-privacy.cjs checks parsed generated project resource membership and all four manifests; standard CI invokes it after prebuild. Wrong-reason negative check was actually run and rejected as expected.
+- Actual checks: Expo iOS prebuild PASS; four-target entitlement verifier PASS; privacy verifier PASS; 374/374 tests PASS; TypeScript PASS. Xcode Release simulator build of all three extensions PASS without signing; each built .appex contains the expected root manifest. Main app verified at generated resource phase, not recompiled in this slice.
+- This only closes the specific app-group defaults declaration gap. Full SDK-required-reason aggregation, data collection disclosures (Expo emits an empty default collection array), final app archive and App Store validation remain OPEN. Never describe the leaderboard app as collecting no data.
+- Rollback: revert this manifest/config/verification slice together; no persisted user-data migration. Previous owner-follow-up docs are included in this checkpoint. No EAS/paid build/main merge.
+
+## Independent release review — 2026-11-11
+- Owner reports no known Apple response yet; case 30000010262818 remains pending. Inbox not checked by agent.
+- Live branch remains 71e58f19e87b2e38cca334b3ba3d6a1f32d81d05. November 9 owner-follow-up documentation changes remain local and uncommitted; do not assume published to GitHub.
+- Focused privacy-manifest review found app-group UserDefaults access in first-party native code without a manifest in current app configuration/generated iOS or checked-in extensions. See docs/release-evidence/privacy-manifest-review-2026-11-11.md. Next implementation: accurate manifest declarations and resource packaging verification, then full SDK/data review. Not fixed or archive-verified yet.
+
+## Current owner follow-up — 2026-11-09
+- Apple name-conflict support request successfully submitted by the owner; screenshot confirms case **30000010262818**. Await Apple's response. Do not rename Curfy or create an alternative-title record without approval.
+- Owner reports accepting the updated Developer Program agreement. Acceptance is user-confirmed; portal notice clearance has not yet been rechecked. Paid Apps, banking, tax and DSA were already verified Active.
+- Live branch head verified as `71e58f19e87b2e38cca334b3ba3d6a1f32d81d05` before this documentation update.
+- Public name searches found no matching Curfy listing in US/UK/Canada. Current App Store Connect account showed five records, no Curfy, one available account/team and no Removed Apps option. These checks do not establish name ownership or worldwide absence.
+- Independent next work: finish privacy/SDK and backend least-privilege review, verify exact App Group assignments for remaining targets, prepare public support/privacy content with a confirmed public contact, and resolve the accessibility acceptance decision. App record and StoreKit product setup await name resolution. No candidate request until consolidated preflight is complete.
+- Older dated sections below are historical evidence; RELEASE_GATE_STATUS.md is the current gate register. Deletion recovery is deployed and tested; do not repeat obsolete deployment/secret tasks.
 
 ## Apple portal and SDK preflight — 2026-11-09 (in progress)
 - User signed into App Store Connect. Verified team H735Q3WW8K in Developer portal and all FOUR exact current bundle IDs have Family Controls (Distribution) enabled plus App Groups enabled. Portal IDs: main DM86GUN7Y2, ShieldAction XVST8L7MR5, ShieldConfiguration YUD5458PDG, ActivityMonitor C7498828M9. ActivityMonitor's App Group assignment explicitly shows group.com.alvinkwak.curfy selected. Remaining exact group/profile inspection continues. No capability changes made.
@@ -132,14 +152,13 @@ Updated 2026-11-07. This replaces the long, contradictory historical handoff; pr
 `app/(tabs)/index.tsx`, `app/_layout.tsx`, `app/escape.tsx`, `app/settings.tsx`; `components/LockScreen.tsx`, new `components/PremiumSettings.tsx`, new `components/LeaderboardConsent.tsx`; `context/AuthContext.tsx`, `context/PremiumContext.tsx`, `context/SleepContext.tsx`; `lib/screenTime.ts`, `lib/premiumAppException.ts`, `lib/premiumExceptionRecovery.ts`, `lib/premiumStore.ts`, new `lib/premiumProtection.ts`, new `lib/protectionOperation.ts`; `targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift`; tests `premiumAppException`, `premiumExceptionRecovery`, `protectedAppChoices`, `remoteDeletionRecovery`, `screenTimeException`, `uxArchitecture`, and new `premiumHoldRoute`, `premiumProtection`, `premiumProvider`.
 
 ## Remaining release blockers / next work
-1. **Next code task: loss-tolerant remote deletion.** Implement the authenticated prepare/commit/status recovery described in `RELEASE_PREFLIGHT_EVIDENCE.md`, including process exit before local confirmation and invalidated auth. Settings persistence and client deletion-finalization fixes are covered by mocks; their signed-device gates remain open. Do not request a candidate before this code/backend gap and external preflight are resolved.
-2. Validate all four Family Controls DISTRIBUTION approvals/profiles: `com.alvinkwak.curfy`, `.ShieldConfiguration`, `.ShieldAction`, `.ActivityMonitor`; group `group.com.alvinkwak.curfy`, team `H735Q3WW8K`.
-3. Verify App Store Connect product ID/type/$5.99 price, contracts/tax/banking and sandbox readiness. No purchase was made.
-4. Verify deployed Supabase schema/RLS/cascade/delete-account on a dedicated test identity, including leave/rejoin and failed withdrawal. No Supabase connector or production credentials were used; no backend deployed.
-5. Obtain actual public privacy policy/support destinations and owner contact. Add in-app policy link only with real URL; complete App Privacy against actual shipped SDK/backend data. No invented URLs.
-6. Explicit accessibility accommodation decision and VoiceOver/Dynamic Type/Reduce Motion testing remain open. Do not silently replace or shorten the 120s hold.
-7. Use `CONSOLIDATED_DEVICE_ACCEPTANCE.md` and `APP_STORE_SUBMISSION_PACKAGE.md` as the current test/submission package. Historical `IOS_DEVICE_ACCEPTANCE.md` contains superseded modes/onboarding; use its failure cases only where current.
-8. Only after code review, applicable checks and external preflight are complete, propose ONE signed release candidate. **Explicit user approval required before any EAS build or other paid action.** No main merge or publication without approval/evidence.
+1. Await Apple support case **30000010262818** for listing-name conflict; owner has not approved a rename. Recheck agreement notice after owner-reported acceptance.
+2. Finish exact App Group/profile inspection and signed distribution preparation for all four targets; distribution capabilities already verified enabled.
+3. Complete backend least-privilege and privacy/SDK/retention review. Recovery and legacy deletion endpoints are already deployed with 18 live checks; do not repeat setup.
+4. Confirm a real monitored public contact/operator and publish approved privacy/support pages before adding real in-app links. A paid domain is not required for this preparation.
+5. Resolve explicit accessibility accommodation and test VoiceOver/Dynamic Type/Reduce Motion without silently changing the 120-second mechanic.
+6. Once an app record exists, configure the approved one-time StoreKit product and prepare sandbox acceptance.
+7. Use CONSOLIDATED_DEVICE_ACCEPTANCE.md and APP_STORE_SUBMISSION_PACKAGE.md. Complete applicable preflight before proposing one signed candidate. No EAS/paid action/main merge/publication without required approval.
 
 ## Handoff discipline
 This session completed three substantial batches. Checkpoint before further scope expansion. The next chat should read this file and live source/CI, not assume dormant Premium from older docs. Roll back integrated work by reverting `a1a400b` (and any follow-up code fixes) on this branch; never reset main. No background work is promised after the chat ends.
