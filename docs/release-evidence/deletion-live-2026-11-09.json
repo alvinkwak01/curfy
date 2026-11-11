@@ -1,0 +1,27 @@
+{
+  "checked_at_utc": "2026-11-09T17:28:22.496567+00:00",
+  "project": "xcngywlufixnctvblsid",
+  "checks": [
+    "unauthenticated prepare rejected",
+    "forged proof rejected",
+    "disposable A signup",
+    "A authenticated prepare and signing secret",
+    "A own profile creation",
+    "disposable B signup",
+    "B authenticated prepare and signing secret",
+    "B own profile creation",
+    "authenticated GET cannot delete",
+    "prepare leaves user pending without session",
+    "A cannot update B profile",
+    "commit succeeds with ignored forged body subject",
+    "lost-response reconciliation without session",
+    "duplicate commit safely confirms deletion",
+    "A profile cascade confirmed",
+    "B remains intact",
+    "disposable B cleanup",
+    "B profile cascade confirmed"
+  ],
+  "all_passed": true,
+  "test_identity_count": 2,
+  "cleanup_confirmed": true
+}

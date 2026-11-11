@@ -1,21 +1,36 @@
+import { protectionOperationPending } from "@/lib/protectionOperation";
+import { LeaderboardSettings } from "@/components/LeaderboardConsent";
+import { PremiumSettings } from "@/components/PremiumSettings";
+import { usePremium } from "@/context/PremiumContext";
+import { allPremiumAppsHaveActiveExceptions } from "@/lib/premiumProtection";
 import { StarBackground } from "@/components/StarBackground";
 import { TimePicker } from "@/components/TimePicker";
+import { ProtectionRoutine, cutoffDayLabel, clockLabel, inferRoutineFromStart } from "@/lib/protectionRoutine";
 import { Colors, Fonts, Layout } from "@/constants/theme";
 import { useSleep } from "@/context/SleepContext";
 import {
   BLOCK_MODE_PRESETS,
   BlockModeId,
-  configureBedtimeBlocking,
   getSelectionCount,
+  draftSelectionIdForMode,
+  prepareSelectionDraft,
+  selectionDraftChanged,
   selectionIdForMode,
+  activeExceptionExpiresAt,
+  getScreenTimeAccessStatus,
 } from "@/lib/screenTime";
+import { isBedtimeWindowActive } from "@/lib/bedtimeWindow";
+import { normalizeActivitySelectionMetadata, selectionIssueForEntitlement, type SelectionPolicyIssue } from "@/lib/premiumPolicy";
+import { waitForPersistedPickerCommit } from "@/lib/pickerSettlement";
+import { allowProtectionReconfiguration, protectionSettingsChanged } from "@/lib/protectionSettingsPolicy";
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import {
   ActivitySelectionMetadata,
   DeviceActivitySelectionSheetViewPersisted,
+  activitySelectionMetadata,
 } from "react-native-device-activity";
 import {
   Alert,
@@ -31,17 +46,16 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Settings() {
+  const { entitlement } = usePremium();
+  const selectionIssue = (metadata: ActivitySelectionMetadata | null | undefined) => selectionIssueForEntitlement(metadata, entitlement);
   const {
+    saveSettings,
     bedtime,
-    setBedtime,
     wakeTime,
-    setWakeTime,
+    protectionRoutine,
     blockMode,
-    setBlockMode,
     userName,
-    setUserName,
     motivation,
-    setMotivation,
     signOut,
     deleteAccount,
     devSkipLock,
@@ -49,13 +63,22 @@ export default function Settings() {
   } = useSleep();
   const [localBedtime, setLocalBedtime] = useState(bedtime);
   const [localWakeTime, setLocalWakeTime] = useState(wakeTime);
+  const [localRoutine, setLocalRoutine] = useState<ProtectionRoutine>(protectionRoutine);
   const [localBlockMode, setLocalBlockMode] = useState<BlockModeId | null>(
     (blockMode as BlockModeId) || null
   );
   const [localName, setLocalName] = useState(userName);
   const [localMotivation, setLocalMotivation] = useState(motivation);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const saveInFlight = useRef(false);
+  const [deleting, setDeleting] = useState(false);
   const [pickerMode, setPickerMode] = useState<BlockModeId | null>(null);
+  const pendingPickerCommit = useRef<Promise<void> | null>(null);
+  const sawNativeSelectionEvent = useRef(false);
+  const pickerIsClosing = useRef(false);
+  const [stagedMode, setStagedMode] = useState<BlockModeId | null>(null);
+  const [pickerIssue, setPickerIssue] = useState<SelectionPolicyIssue | null>(null);
   // Read once on mount from the native side (not persisted app state) —
   // this is what actually lets the UI show "N apps blocked" without
   // reopening the picker. Refreshed locally after any picker session.
@@ -68,57 +91,143 @@ export default function Settings() {
     return counts;
   });
 
-  const onSave = async () => {
-    await setBedtime(localBedtime);
-    await setWakeTime(localWakeTime);
-    await setUserName(localName.trim());
-    await setMotivation(localMotivation.trim());
-    if (localBlockMode) {
-      await setBlockMode(localBlockMode);
+  const performSave = async () => {
+    if (!localBlockMode) {
+      Alert.alert("Choose an app", "Select an app to protect before saving.");
+      return;
+    }
+    // The native picker persists with a 100ms debounce; wait before reading
+    // its opaque draft and never trust potentially stale React state.
+    if (pendingPickerCommit.current) {
       try {
-        await configureBedtimeBlocking({
-          bedtime: localBedtime,
-          wakeTime: localWakeTime,
-          mode: localBlockMode,
-        });
-      } catch (_) {
-        // Best-effort, same reasoning as onboarding's next() — a failed
-        // reconfigure (e.g. access was revoked in iOS Settings) shouldn't
-        // block saving everything else.
+        await pendingPickerCommit.current;
+      } catch {
+        Alert.alert("Selection wasn't confirmed",
+          "Curfy couldn't verify Apple's saved app choice. Reopen the picker and try again.");
+        return;
       }
     }
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setSaved(true);
-    setTimeout(() => {
-      router.back();
-    }, 800);
+    let confirmedPickerIssue: SelectionPolicyIssue | null = null;
+    try {
+      confirmedPickerIssue = stagedMode === localBlockMode
+        ? selectionIssue(activitySelectionMetadata({ activitySelectionId: draftSelectionIdForMode(localBlockMode) }))
+        : null;
+    } catch (error) {
+      console.warn("[Curfy] Couldn't verify saved Settings app choice", error);
+      Alert.alert("Can't verify selected app",
+        "iOS couldn't confirm the saved app selection. Reopen Apple's picker and try again.");
+      return;
+    }
+    setPickerIssue(confirmedPickerIssue);
+    if (confirmedPickerIssue) {
+      Alert.alert("Check your app selection",
+        confirmedPickerIssue === "categories-and-websites-not-supported"
+          ? "Choose individual apps only. Categories and websites aren't supported."
+          : confirmedPickerIssue === "choose-one-app" ? "Choose at least one individual app."
+          : "Verify or restore Curfy Premium to protect multiple apps. Free protects one app.");
+      return;
+    }
+    const pickerEdited = stagedMode === localBlockMode &&
+      selectionDraftChanged(localBlockMode);
+    const protectionChanged = protectionSettingsChanged(
+      { bedtime, wakeTime, blockMode, routine: protectionRoutine },
+      { bedtime: localBedtime, wakeTime: localWakeTime, blockMode: localBlockMode, routine: localRoutine },
+      pickerEdited
+    );
+    if (!allowProtectionReconfiguration({
+      changingProtection: protectionChanged,
+      insideCurrentBedtime: isBedtimeWindowActive(new Date(), bedtime, wakeTime),
+      authorized: getScreenTimeAccessStatus() === "authorized",
+      hasConfiguredApp: blockMode === "custom" || blockMode === "social" || blockMode === "most",
+      activeException: activeExceptionExpiresAt() !== null ||
+        (!!blockMode && allPremiumAppsHaveActiveExceptions(selectionIdForMode(blockMode as BlockModeId))),
+    })) {
+      Alert.alert(
+        "Your bedtime boundary is active",
+        "To change protected apps or your protection hours, complete the 120-second hold for each protected app from Curfy Home first, or wait until this window ends. Name and motivation remain editable."
+      );
+      return;
+    }
+    try {
+      await saveSettings({
+        bedtime: localBedtime, wakeTime: localWakeTime, blockMode: localBlockMode,
+        routine: localRoutine, userName: localName.trim(), motivation: localMotivation.trim(),
+      }, protectionChanged, pickerEdited ? draftSelectionIdForMode(localBlockMode) : undefined);
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setSaved(true);
+      setTimeout(() => router.back(), 800);
+    } catch (error) {
+      console.warn("[Curfy] Failed to save Settings", error);
+      Alert.alert("Settings couldn't be fully saved",
+        error instanceof Error ? error.message : "Please try saving again.");
+    }
+  };
+
+  const onSave = async () => {
+    if (saveInFlight.current || protectionOperationPending() || saved || deleting) return;
+    saveInFlight.current = true;
+    setSaving(true);
+    try { await performSave(); }
+    finally { saveInFlight.current = false; setSaving(false); }
   };
 
   const handlePickApps = (mode: BlockModeId) => {
-    setLocalBlockMode(mode);
-    setPickerMode(mode);
+    if (saveInFlight.current || protectionOperationPending() || deleting) return;
+    try {
+      // The picker edits a distinct opaque selection. Leaving Settings
+      // without Save cannot change tokens used by the active iOS monitor.
+      if (stagedMode !== mode) prepareSelectionDraft(mode);
+      pendingPickerCommit.current = null;
+      sawNativeSelectionEvent.current = false;
+      pickerIsClosing.current = false;
+      setPickerIssue(selectionIssue(activitySelectionMetadata({ activitySelectionId: draftSelectionIdForMode(mode) })));
+      setStagedMode(mode);
+      setLocalBlockMode(mode);
+      setPickerMode(mode);
+    } catch (error) {
+      Alert.alert("Couldn't open app picker",
+        error instanceof Error ? error.message : "Please try again.");
+    }
+  };
+
+  const applySelectionMetadata = (mode: BlockModeId, metadata: ActivitySelectionMetadata) => {
+    const counts = normalizeActivitySelectionMetadata(metadata);
+    setAppCounts((prev) => {
+      const next = { ...prev };
+      if (counts) {
+        next[mode] = counts.applicationCount + counts.categoryCount + counts.webDomainCount;
+      } else {
+        delete next[mode]; // Never display NaN as "number of apps".
+      }
+      return next;
+    });
+    setPickerIssue(selectionIssue(metadata));
   };
 
   const handleSelectionChange = (event: NativeSyntheticEvent<ActivitySelectionMetadata>) => {
     if (!pickerMode) return;
-    const { applicationCount, categoryCount } = event.nativeEvent;
-    setAppCounts((prev) => ({ ...prev, [pickerMode]: applicationCount + categoryCount }));
+    sawNativeSelectionEvent.current = true;
+    applySelectionMetadata(pickerMode, event.nativeEvent);
   };
 
   const activePreset = BLOCK_MODE_PRESETS.find((p) => p.id === pickerMode);
 
   const onSignOut = () => {
+    if (saveInFlight.current || deleting) return;
     Alert.alert(
-      "Sign out?",
-      "This just resets setup and takes you back through onboarding. Your streak, sleep history, and leaderboard spot all stay exactly as they are.",
+      "Restart setup?",
+      "This restarts onboarding and ends the current protection schedule. During bedtime, complete the 120-second hold from Home first. Your saved history and online profile remain.",
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Sign Out",
+          text: "Restart Setup",
           style: "default",
           onPress: () => {
             Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-            signOut();
+            signOut().catch((error) => {
+              Alert.alert("Couldn't restart setup",
+                error instanceof Error ? error.message : "Please try again.");
+            });
           },
         },
       ]
@@ -126,9 +235,10 @@ export default function Settings() {
   };
 
   const onDeleteAccount = () => {
+    if (saveInFlight.current || deleting) return;
     Alert.alert(
       "Delete everything?",
-      "This permanently erases your name, bedtime, streak, and full sleep history from this device. This can't be undone.",
+      "Delete your online Curfy account and local history? If online deletion cannot be confirmed, nothing on this device will be erased. This cannot be undone.",
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -136,7 +246,14 @@ export default function Settings() {
           style: "destructive",
           onPress: () => {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
-            deleteAccount();
+            if (deleting) return;
+            setDeleting(true);
+            deleteAccount()
+              .catch((error) => {
+                Alert.alert("Account deletion wasn't completed",
+                  error instanceof Error ? error.message : "Please try again while online.");
+              })
+              .finally(() => setDeleting(false));
           },
         },
       ]
@@ -155,10 +272,12 @@ export default function Settings() {
           <Text style={styles.back}>← Back</Text>
         </TouchableOpacity>
         <Text style={styles.title}>Settings</Text>
+        <PremiumSettings />
+        <LeaderboardSettings />
 
         <View style={styles.section}>
           <Text style={styles.label}>YOUR NAME</Text>
-          <Text style={styles.hint}>Used in your sleep log</Text>
+          <Text style={styles.hint}>Optional display name for your Curfy activity log</Text>
           <TextInput
             style={styles.input}
             value={localName}
@@ -169,16 +288,16 @@ export default function Settings() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>BEDTIME</Text>
-          <Text style={styles.hint}>Curfy activates at this time every night</Text>
+          <Text style={styles.label}>PROTECTION START</Text>
+          <Text style={styles.hint}>Curfy starts shielding your selected app at this time every day.</Text>
           <View style={{ marginTop: 12 }}>
-            <TimePicker value={localBedtime} onChange={setLocalBedtime} digitSize={48} />
+            <TimePicker value={localBedtime} onChange={value => { setLocalBedtime(value); setLocalRoutine(inferRoutineFromStart(value)); }} digitSize={48} />
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.label}>WAKE UP</Text>
-          <Text style={styles.hint}>Blocked apps unlock at this time every morning</Text>
+          <Text style={styles.label}>APPS AVAILABLE AGAIN</Text>
+          <Text style={styles.hint}>Your app becomes available again at {clockLabel(localWakeTime)} ({cutoffDayLabel(localBedtime, localWakeTime)}).</Text>
           <View style={{ marginTop: 12 }}>
             <TimePicker value={localWakeTime} onChange={setLocalWakeTime} digitSize={48} />
           </View>
@@ -186,9 +305,9 @@ export default function Settings() {
 
         <View style={styles.section}>
           <Text style={styles.label}>BLOCKED APPS</Text>
-          <Text style={styles.hint}>What Curfy locks during your bedtime window</Text>
+          <Text style={styles.hint}>Free protects one individual app. Premium protects multiple individual apps. Categories and websites aren't supported.</Text>
           <View style={{ gap: 8, marginTop: 12 }}>
-            {BLOCK_MODE_PRESETS.map((preset) => {
+            {BLOCK_MODE_PRESETS.filter((preset) => preset.id === "custom").map((preset) => {
               const isSelected = localBlockMode === preset.id;
               const count = appCounts[preset.id];
               return (
@@ -209,7 +328,7 @@ export default function Settings() {
                     <Text style={styles.presetTitle}>{preset.title}</Text>
                     <Text style={styles.presetDesc}>
                       {count != null
-                        ? `${count} app${count === 1 ? "" : "s"} selected — tap to change`
+                        ? `${count} selection${count === 1 ? "" : "s"}${entitlement === "owned" ? "" : " — free protects one app"}`
                         : "Tap to choose apps"}
                     </Text>
                   </View>
@@ -221,13 +340,53 @@ export default function Settings() {
             })}
           </View>
 
+          {stagedMode && pickerIssue && pickerIssue !== "choose-one-app" && (
+            <View style={styles.freeLimitNotice}>
+              <Text style={styles.freeLimitTitle}>{pickerIssue === "categories-and-websites-not-supported" ? "Choose individual apps" : "One app is included free"}</Text>
+              <Text style={styles.hint}>
+                {pickerIssue === "categories-and-websites-not-supported"
+                  ? "Remove categories and websites before saving. Choose apps individually."
+                  : "Keep one individual app, or verify Curfy Premium to save multiple apps."}
+              </Text>
+            </View>
+          )}
+
           {pickerMode && (
             <DeviceActivitySelectionSheetViewPersisted
               style={{ width: 1, height: 1, position: "absolute" }}
-              familyActivitySelectionId={selectionIdForMode(pickerMode)}
+              familyActivitySelectionId={draftSelectionIdForMode(pickerMode)}
+              includeEntireCategory={false}
               headerText={activePreset?.pickerHint}
               onSelectionChange={handleSelectionChange}
-              onDismissRequest={() => setPickerMode(null)}
+              onDismissRequest={() => {
+                if (pickerIsClosing.current) return;
+                pickerIsClosing.current = true;
+                const closingMode = pickerMode;
+                const commit = (async () => {
+                  await waitForPersistedPickerCommit(() => sawNativeSelectionEvent.current);
+                  const metadata = activitySelectionMetadata({
+                    activitySelectionId: draftSelectionIdForMode(closingMode),
+                  });
+                  if (!metadata) {
+                    throw new Error("iOS did not provide a saved app selection.");
+                  }
+                  applySelectionMetadata(closingMode, metadata);
+                  if (selectionIssue(metadata) === "categories-and-websites-not-supported") {
+                    Alert.alert("Choose individual apps",
+                      "Remove categories and websites before saving Curfy protection.");
+                  }
+                })();
+                pendingPickerCommit.current = commit;
+                void commit.catch(error => {
+                  console.warn("[Curfy] Settings picker save/metadata unavailable", error);
+                  Alert.alert("Selection wasn't confirmed",
+                    "Curfy couldn't verify Apple's saved app choice. Reopen the picker and try again.");
+                }).finally(() => {
+                  if (pendingPickerCommit.current === commit) pendingPickerCommit.current = null;
+                  setPickerMode(null);
+                  pickerIsClosing.current = false;
+                });
+              }}
             />
           )}
         </View>
@@ -235,13 +394,13 @@ export default function Settings() {
         <View style={styles.section}>
           <Text style={styles.label}>WHY ARE YOU DOING THIS?</Text>
           <Text style={styles.hint}>
-            Shown back to you on the nights this is hard. Optional.
+            An optional reminder of why you chose this boundary.
           </Text>
           <TextInput
             style={[styles.input, styles.motivationInput]}
             value={localMotivation}
             onChangeText={setLocalMotivation}
-            placeholder="e.g. I want to actually feel rested"
+            placeholder="e.g. I want to start the day on my terms"
             placeholderTextColor={Colors.textGhost}
             multiline
           />
@@ -249,8 +408,9 @@ export default function Settings() {
 
         <View style={styles.notice}>
           <Text style={styles.noticeText}>
-            Notifications are sent 10 and 2 minutes before your bedtime. Make
-            sure notifications are enabled in your device settings.
+            {localRoutine === "morning"
+              ? "Morning-only mode doesn't send bedtime reminders."
+              : "Curfy can remind you 10 and 2 minutes before evening protection starts, if notifications are enabled."}
           </Text>
         </View>
 
@@ -262,10 +422,8 @@ export default function Settings() {
             <Text style={styles.previewBtnText}>Preview Lock Screen</Text>
           </TouchableOpacity>
           <Text style={styles.previewHint}>
-            Shows the real lock screen right now, without waiting for
-            bedtime. Completing the 120-second hold counts as a real unlock
-            for tonight — use the close button instead if you're just
-            looking.
+            Preview only — no apps will unlock, even after the full
+            120-second hold. Use Exit to return to Settings.
           </Text>
         </View>
 
@@ -293,18 +451,20 @@ export default function Settings() {
         <TouchableOpacity
           style={[styles.saveBtn, saved && styles.saveBtnSaved]}
           onPress={onSave}
-          disabled={saved}
+          disabled={saved || saving || deleting}
         >
-          <Text style={styles.saveBtnText}>{saved ? "Saved" : "Save"}</Text>
+          <Text style={styles.saveBtnText}>
+            {saved ? "Saved" : saving ? "Saving..." : "Save"}
+          </Text>
         </TouchableOpacity>
 
         <View style={styles.accountSection}>
-          <TouchableOpacity style={styles.signOutBtn} onPress={onSignOut}>
-            <Text style={styles.signOutText}>Sign Out</Text>
+          <TouchableOpacity style={styles.signOutBtn} onPress={onSignOut} disabled={deleting || saving}>
+            <Text style={styles.signOutText}>Restart Setup</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity style={styles.deleteLink} onPress={onDeleteAccount}>
-            <Text style={styles.deleteLinkText}>Delete Account</Text>
+          <TouchableOpacity style={styles.deleteLink} onPress={onDeleteAccount} disabled={deleting || saving}>
+            <Text style={styles.deleteLinkText}>{deleting ? "Deleting Account..." : "Delete Account"}</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -354,6 +514,14 @@ const styles = StyleSheet.create({
     padding: 12,
   },
   presetCardSelected: { borderColor: Colors.primaryCyan },
+  freeLimitNotice: {
+    marginTop: 12, borderRadius: 12, padding: 12, gap: 6,
+    borderWidth: 1, borderColor: Colors.warningAmber,
+    backgroundColor: "rgba(255,178,74,0.07)",
+  },
+  freeLimitTitle: {
+    fontFamily: Fonts.semiBold, color: Colors.warningAmber, fontSize: 14,
+  },
   presetIconWrap: {
     width: 34,
     height: 34,

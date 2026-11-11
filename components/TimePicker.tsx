@@ -1,228 +1,263 @@
 import { Colors, Fonts } from "@/constants/theme";
+import { clockString, swipeSteps, wrapTimeUnit } from "@/lib/timeWheelMath";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useMemo, useRef } from "react";
+import React, { useMemo, useRef } from "react";
 import {
-  FlatList,
-  LogBox,
-  NativeScrollEvent,
-  NativeSyntheticEvent,
+  PanResponder,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
 } from "react-native";
 
-// Settings screen wraps its whole form in a vertical ScrollView, and this
-// wheel is a vertical FlatList inside it — RN's real concern is that a
-// virtualized list can get windowed (items derendered off-screen) while
-// nested in a scroll parent that intercepts the scroll, corrupting which
-// rows are mounted. `initialNumToRender` below renders every row (24 or
-// 60 — trivial counts) up front, so nothing ever gets windowed away in
-// the first place, which is what actually neutralizes the risk the
-// warning describes. The warning itself is silenced here because at that
-// point it's a known false positive for this specific bounded case, not
-// because the underlying nesting is being ignored.
-LogBox.ignoreLogs([
-  "VirtualizedLists should never be nested inside plain ScrollViews",
-]);
-
 interface TimePickerProps {
-  value: string; // "HH:MM"
+  value: string; // "HH:MM" in local 24-hour time
   onChange: (time: string) => void;
   digitSize?: number;
 }
 
-function pad(n: number): string {
-  return n.toString().padStart(2, "0");
-}
-
 interface WheelProps {
   value: number;
-  count: number; // 24 for hours, 60 for minutes
+  count: number;
   onChange: (v: number) => void;
-  itemHeight: number;
   digitSize: number;
+  name: string;
 }
 
 /**
- * A single scrollable digit wheel. Clipped to exactly one row tall, so
- * only the current value is ever visible — no peeking neighbors like a
- * native iOS picker. Scroll to change it, or drive it externally via the
- * `value` prop (used by the up/down arrow buttons) and it'll snap there.
+ * A bounded touch-driven wheel rather than a vertical FlatList.
+ *
+ * Settings has its own vertical ScrollView. The old nested FlatList was
+ * clipped to one row and lost swipe gestures to the parent on real iPhones.
+ * PanResponder takes ownership on touch-down inside the clock column. The
+ * parent form remains scrollable everywhere else. A direct pan updates the
+ * selected time in steps; releasing a fast flick adds a small finite coast.
+ * No programmatic scroll, momentum race, or suppressed LogBox warnings.
  */
-function Wheel({ value, count, onChange, itemHeight, digitSize }: WheelProps) {
-  const listRef = useRef<FlatList<number>>(null);
-  // Descending, not ascending — so the value sitting below the current
-  // selection (further down the list, reached by scrolling up/dragging
-  // your finger up) is always the next-LOWER number. That's the "lower
-  // number below" behavior wheel pickers are expected to have; with an
-  // ascending list, scrolling up would reveal higher numbers instead.
-  const flip = (n: number) => count - 1 - n;
-  const data = useMemo(() => Array.from({ length: count }, (_, i) => flip(i)), [count]);
-  const isDragging = useRef(false);
-  const lastValue = useRef(value);
+function Wheel({ value, count, onChange, digitSize, name }: WheelProps) {
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const countRef = useRef(count);
+  countRef.current = count;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
-  // Keep the wheel's scroll position in sync when `value` changes from
-  // outside (arrow taps, or the parent resetting it) — but never fight
-  // the user's finger mid-drag.
-  useEffect(() => {
-    if (isDragging.current) return;
-    if (lastValue.current === value) return;
-    lastValue.current = value;
-    listRef.current?.scrollToOffset({ offset: flip(value) * itemHeight, animated: true });
-  }, [value, itemHeight]);
+  const startRef = useRef(value);
+  const lastCommitted = useRef(value);
+  const lastHapticAt = useRef(0);
+  const stepPixels = useRef(Math.max(20, Math.round(digitSize * 0.65)));
+  stepPixels.current = Math.max(20, Math.round(digitSize * 0.65));
 
-  const snapToNearest = (offsetY: number) => {
-    const index = Math.max(0, Math.min(count - 1, Math.round(offsetY / itemHeight)));
-    const newValue = flip(index);
-    isDragging.current = false;
-    if (newValue !== lastValue.current) {
-      lastValue.current = newValue;
-      Haptics.selectionAsync();
-      onChange(newValue);
-    } else {
-      // Rounding safety: make sure it's sitting exactly on the line.
-      listRef.current?.scrollToOffset({ offset: index * itemHeight, animated: true });
+  const emit = (next: number) => {
+    const normalized = wrapTimeUnit(next, countRef.current);
+    if (normalized === lastCommitted.current) return;
+    lastCommitted.current = normalized;
+    onChangeRef.current(normalized);
+    const now = Date.now();
+    if (now - lastHapticAt.current > 85) {
+      lastHapticAt.current = now;
+      void Haptics.selectionAsync().catch(() => {});
     }
   };
+  const emitRef = useRef(emit);
+  emitRef.current = emit;
 
-  const handleMomentumEnd = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    snapToNearest(e.nativeEvent.contentOffset.y);
-  };
+  const pan = useMemo(() => PanResponder.create({
+    // Own the touch as soon as it begins on a digit. The parent ScrollView
+    // must not steal it and turn a wheel swipe into a form scroll.
+    onStartShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponder: () => true,
+    onMoveShouldSetPanResponderCapture: (_, gesture) =>
+      Math.abs(gesture.dy) > 3 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+    onPanResponderTerminationRequest: () => false,
+    onPanResponderGrant: () => {
+      startRef.current = valueRef.current;
+      lastCommitted.current = valueRef.current;
+    },
+    onPanResponderMove: (_, gesture) => {
+      emitRef.current(
+        startRef.current + swipeSteps(gesture.dy, stepPixels.current)
+      );
+    },
+    onPanResponderRelease: (_, gesture) => {
+      // The old velocity-based coast snapped the clock several values after
+      // the user's finger stopped. Commit exactly what the wheel displays.
+      emitRef.current(startRef.current + swipeSteps(gesture.dy, stepPixels.current));
+    },
+    onPanResponderTerminate: () => {
+      // No more updates, even when a system-level gesture interrupts the pan.
+    },
+  }), []);
+
+  const selected = wrapTimeUnit(value, count);
+  const pad = (n: number) => String(wrapTimeUnit(n, count)).padStart(2, "0");
+  const columnWidth = Math.round(digitSize * 1.53);
 
   return (
-    <View style={{ height: itemHeight, overflow: "hidden" }}>
-      <FlatList
-        ref={listRef}
-        data={data}
-        keyExtractor={(item) => String(item)}
-        showsVerticalScrollIndicator={false}
-        snapToInterval={itemHeight}
-        decelerationRate="fast"
-        initialScrollIndex={flip(value)}
-        initialNumToRender={count}
-        nestedScrollEnabled
-        getItemLayout={(_, index) => ({
-          length: itemHeight,
-          offset: itemHeight * index,
-          index,
-        })}
-        onScrollBeginDrag={() => {
-          isDragging.current = true;
-        }}
-        onMomentumScrollEnd={handleMomentumEnd}
-        // A slow drag released with no fling doesn't always trigger a
-        // momentum phase, which would leave the wheel stuck un-snapped.
-        // Only handle it here if there's negligible velocity — if the
-        // release has real velocity, let onMomentumScrollEnd own the
-        // final snap so the two don't fight over the resting position.
-        onScrollEndDrag={(e) => {
-          const velocityY = e.nativeEvent.velocity?.y ?? 0;
-          if (Math.abs(velocityY) < 0.05) {
-            snapToNearest(e.nativeEvent.contentOffset.y);
-          }
-        }}
-        renderItem={({ item }) => (
-          <View style={[styles.wheelItem, { height: itemHeight }]}>
-            <Text style={[styles.digits, { fontSize: digitSize }]}>{pad(item)}</Text>
-          </View>
-        )}
-      />
+    <View
+      {...pan.panHandlers}
+      accessible
+      accessibilityRole="adjustable"
+      accessibilityLabel={name}
+      accessibilityValue={{ text: pad(selected) }}
+      accessibilityHint="Swipe up to increase or down to decrease. VoiceOver users can swipe up or down to adjust."
+      accessibilityActions={[
+        { name: "increment", label: `Increase ${name}` },
+        { name: "decrement", label: `Decrease ${name}` },
+      ]}
+      onAccessibilityAction={(event) => {
+        const delta = event.nativeEvent.actionName === "increment" ? 1
+          : event.nativeEvent.actionName === "decrement" ? -1 : 0;
+        if (delta) onChangeRef.current(wrapTimeUnit(valueRef.current + delta, countRef.current));
+      }}
+      style={[styles.wheel, { width: columnWidth }]}
+    >
+      <Text
+        importantForAccessibility="no"
+        style={[styles.neighbor, { fontSize: Math.round(digitSize * 0.46) }]}
+      >{pad(selected - 1)}</Text>
+      <View style={styles.activeWindow}>
+        <Text
+          importantForAccessibility="no"
+          style={[styles.digits, { fontSize: digitSize, lineHeight: digitSize * 1.25 }]}
+        >{pad(selected)}</Text>
+      </View>
+      <Text
+        importantForAccessibility="no"
+        style={[styles.neighbor, { fontSize: Math.round(digitSize * 0.46) }]}
+      >{pad(selected + 1)}</Text>
     </View>
   );
 }
 
 export function TimePicker({ value, onChange, digitSize = 56 }: TimePickerProps) {
   const [hStr, mStr] = value.split(":");
-  const hours = parseInt(hStr, 10);
-  const minutes = parseInt(mStr, 10);
-  const itemHeight = Math.round(digitSize * 1.15);
-  const columnWidth = digitSize * 1.4;
+  const hours = wrapTimeUnit(Number(hStr) || 0, 24);
+  const minutes = wrapTimeUnit(Number(mStr) || 0, 60);
 
-  const setHours = (delta: number) => {
-    const next = (((hours + delta) % 24) + 24) % 24;
-    onChange(`${pad(next)}:${pad(minutes)}`);
-  };
+  // Multiple move events can arrive between React renders. Keep the complete
+  // clock in a ref so a fast hour swipe can't overwrite a simultaneous minute.
+  const latestRef = useRef({ hours, minutes });
+  latestRef.current = { hours, minutes };
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
 
-  const setMinutes = (delta: number) => {
-    const next = (((minutes + delta) % 60) + 60) % 60;
-    onChange(`${pad(hours)}:${pad(next)}`);
+  const update = (unit: "hours" | "minutes", next: number) => {
+    const clock = latestRef.current;
+    const updated = {
+      hours: unit === "hours" ? wrapTimeUnit(next, 24) : clock.hours,
+      minutes: unit === "minutes" ? wrapTimeUnit(next, 60) : clock.minutes,
+    };
+    latestRef.current = updated;
+    onChangeRef.current(clockString(updated.hours, updated.minutes));
   };
 
   return (
-    <View style={styles.row}>
-      <View style={styles.column}>
-        <TouchableOpacity onPress={() => setHours(1)} style={styles.arrowBtn}>
-          <Text style={styles.arrow}>▲</Text>
-        </TouchableOpacity>
-        <View style={{ width: columnWidth }}>
+    <View style={styles.container}>
+      <Text style={styles.instructions}>SWIPE UP OR DOWN TO SET TIME</Text>
+      <View style={styles.row}>
+        <View style={styles.column}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="One hour earlier"
+            hitSlop={8}
+            onPress={() => update("hours", latestRef.current.hours - 1)}
+            style={styles.arrowBtn}
+          >
+            <Text style={styles.arrow}>▲</Text>
+          </TouchableOpacity>
           <Wheel
             value={hours}
             count={24}
-            onChange={(h) => onChange(`${pad(h)}:${pad(minutes)}`)}
-            itemHeight={itemHeight}
+            name="Hour"
             digitSize={digitSize}
+            onChange={(n) => update("hours", n)}
           />
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="One hour later"
+            hitSlop={8}
+            onPress={() => update("hours", latestRef.current.hours + 1)}
+            style={styles.arrowBtn}
+          >
+            <Text style={styles.arrow}>▼</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => setHours(-1)} style={styles.arrowBtn}>
-          <Text style={styles.arrow}>▼</Text>
-        </TouchableOpacity>
-      </View>
-
-      <Text style={[styles.colon, { fontSize: digitSize, lineHeight: itemHeight }]}>:</Text>
-
-      <View style={styles.column}>
-        <TouchableOpacity onPress={() => setMinutes(1)} style={styles.arrowBtn}>
-          <Text style={styles.arrow}>▲</Text>
-        </TouchableOpacity>
-        <View style={{ width: columnWidth }}>
+        <Text style={[styles.colon, { fontSize: digitSize }]}>:</Text>
+        <View style={styles.column}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="One minute earlier"
+            hitSlop={8}
+            onPress={() => update("minutes", latestRef.current.minutes - 1)}
+            style={styles.arrowBtn}
+          >
+            <Text style={styles.arrow}>▲</Text>
+          </TouchableOpacity>
           <Wheel
             value={minutes}
             count={60}
-            onChange={(m) => onChange(`${pad(hours)}:${pad(m)}`)}
-            itemHeight={itemHeight}
+            name="Minute"
             digitSize={digitSize}
+            onChange={(n) => update("minutes", n)}
           />
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel="One minute later"
+            hitSlop={8}
+            onPress={() => update("minutes", latestRef.current.minutes + 1)}
+            style={styles.arrowBtn}
+          >
+            <Text style={styles.arrow}>▼</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity onPress={() => setMinutes(-1)} style={styles.arrowBtn}>
-          <Text style={styles.arrow}>▼</Text>
-        </TouchableOpacity>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  container: { alignItems: "center", gap: 6 },
+  instructions: {
+    color: Colors.textMuted, fontFamily: Fonts.medium,
+    fontSize: 9, letterSpacing: 1.1, textAlign: "center",
+  },
   row: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
+    flexDirection: "row", alignItems: "center",
+    justifyContent: "center", gap: 6,
   },
-  column: {
-    alignItems: "center",
-    gap: 8,
-  },
+  column: { alignItems: "center", gap: 1 },
   arrowBtn: {
-    padding: 8,
+    minWidth: 44, minHeight: 36, padding: 7,
+    justifyContent: "center", alignItems: "center",
   },
-  arrow: {
-    color: Colors.textMuted,
-    fontSize: 16,
-  },
-  wheelItem: {
+  arrow: { color: Colors.textMuted, fontSize: 13 },
+  wheel: {
     alignItems: "center",
     justifyContent: "center",
+    paddingVertical: 4,
+    borderRadius: 14,
+    backgroundColor: "rgba(20,23,45,0.58)",
+    borderWidth: 1,
+    borderColor: "#343C5D",
+  },
+  activeWindow: {
+    width: "100%", alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(0,229,255,0.075)",
+    borderTopWidth: 1, borderBottomWidth: 1,
+    borderColor: "rgba(0,229,255,0.24)",
+    paddingVertical: 3,
+  },
+  neighbor: {
+    fontFamily: Fonts.medium, color: "#747A9B",
+    textAlign: "center", lineHeight: 26,
   },
   digits: {
-    color: Colors.textPrimary,
-    fontFamily: Fonts.bold,
-    letterSpacing: -2,
-    textAlign: "center",
+    color: Colors.textPrimary, fontFamily: Fonts.bold,
+    letterSpacing: -2, textAlign: "center",
   },
   colon: {
-    color: Colors.border,
-    fontFamily: Fonts.bold,
-    textAlignVertical: "center",
+    color: Colors.textMuted, fontFamily: Fonts.bold,
+    marginTop: 0,
   },
 });

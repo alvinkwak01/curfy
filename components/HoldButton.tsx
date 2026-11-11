@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import React, { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ActivityIndicator, AppState, StyleSheet, Text, View } from "react-native";
+import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Easing,
   useAnimatedProps,
@@ -20,6 +21,33 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 const SVG_SIZE = RADIUS * 2 + STROKE_WIDTH * 2;
 
 const AnimatedCircle = Animated.createAnimatedComponent(Circle);
+
+// The original Curfy control is deliberately minimal: one thin progress
+// ring around a quiet circular button. Reuse this same track/center for the
+// noninteractive onboarding preview; DO NOT use a different phone shield.
+function RingTrack() {
+  return (
+    <Circle cx={SVG_SIZE / 2} cy={SVG_SIZE / 2} r={RADIUS}
+      stroke={Colors.border} strokeWidth={STROKE_WIDTH} fill="none" />
+  );
+}
+function IdleCenter() {
+  return <Ionicons name="lock-closed" size={24} color={Colors.textMuted} />;
+}
+
+/** Source-matched visual-only example. This never grants access or starts a timer. */
+export function HoldRingPreview() {
+  return (
+    <View pointerEvents="none" style={styles.buttonWrap}>
+      <Svg width={SVG_SIZE} height={SVG_SIZE} style={StyleSheet.absoluteFill}>
+        <RingTrack />
+      </Svg>
+      <View style={styles.innerButton}>
+        <IdleCenter />
+      </View>
+    </View>
+  );
+}
 
 // 28 rotating guilt messages, 4 escalating stages of 7, per the DUSK blueprint.
 const GUILT_MESSAGES: string[][] = [
@@ -72,12 +100,25 @@ function pickMessage(progress: number): string {
 }
 
 interface HoldButtonProps {
-  onUnlock: () => void;
+  onUnlock: () => void | Promise<void>;
   unlockCount: number;
+  onHoldingChange?: (holding: boolean) => void;
+  /** A single compact instruction beneath the ring; hold duration stays 120 seconds. */
+  idleHint?: string;
+  /** Preview/escape pages can omit the nonessential exception counter. */
+  showUnlockCount?: boolean;
+  /** Suppress only the idle phrase; keep live hold messages and errors visible. */
+  showIdleMessage?: boolean;
 }
 
-export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
+export function HoldButton({
+  onUnlock, unlockCount, onHoldingChange,
+  idleHint = "Hold for the full 120 seconds",
+  showUnlockCount = true,
+  showIdleMessage = true,
+}: HoldButtonProps) {
   const [isHolding, setIsHolding] = useState(false);
+  const [isUnlocking, setIsUnlocking] = useState(false);
   const [displaySeconds, setDisplaySeconds] = useState(120);
   const [message, setMessage] = useState("Hold to unlock");
 
@@ -85,6 +126,10 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
   const scale = useSharedValue(1);
 
   const startTimeRef = useRef<number | null>(null);
+  const unlockPendingRef = useRef(false);
+  const onUnlockRef = useRef(onUnlock);
+  onUnlockRef.current = onUnlock;
+  const mountedRef = useRef(true);
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const messageTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -112,7 +157,10 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
   };
 
   const handlePressIn = () => {
+    if (unlockPendingRef.current || startTimeRef.current !== null ||
+        AppState.currentState !== "active") return;
     setIsHolding(true);
+    onHoldingChange?.(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     scale.value = withSpring(0.95);
     startTimeRef.current = Date.now();
@@ -125,21 +173,45 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
 
     tickRef.current = setInterval(() => {
       if (!startTimeRef.current) return;
+      // DISPLAY ONLY: the JavaScript clock must never grant a real unlock.
+      // Only Gesture.LongPress().minDuration(120000).onStart authorizes it.
       const elapsed = Date.now() - startTimeRef.current;
-      const remaining = Math.max(0, HOLD_DURATION_MS - elapsed);
-      setDisplaySeconds(Math.ceil(remaining / 1000));
-      if (elapsed >= HOLD_DURATION_MS) {
-        clearTimers();
-        startTimeRef.current = null;
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        onUnlock();
-      }
+      setDisplaySeconds(Math.ceil(Math.max(0, HOLD_DURATION_MS - elapsed) / 1000));
     }, 200);
+  };
+
+  const handleNativeHoldComplete = () => {
+    // Native recognizer has observed one continuous finger on the control
+    // for the entire duration; a suspended JS timer is never sufficient.
+    if (!startTimeRef.current || unlockPendingRef.current ||
+        AppState.currentState !== "active") return;
+    clearTimers();
+    startTimeRef.current = null;
+    unlockPendingRef.current = true;
+    setIsHolding(false);
+    onHoldingChange?.(false);
+    setIsUnlocking(true);
+    Promise.resolve()
+      .then(() => onUnlockRef.current())
+      .then(() => Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success))
+      .catch(() => {
+        progress.value = withSpring(0);
+        scale.value = withSpring(1);
+        if (mountedRef.current) {
+          setDisplaySeconds(120);
+          setMessage("iOS couldn't unlock the apps. Try again.");
+        }
+      })
+      .finally(() => {
+        unlockPendingRef.current = false;
+        if (mountedRef.current) setIsUnlocking(false);
+      });
   };
 
   const handlePressOut = () => {
     if (!startTimeRef.current) return; // already completed via the interval
     setIsHolding(false);
+    onHoldingChange?.(false);
     startTimeRef.current = null;
     clearTimers();
     scale.value = withSpring(1);
@@ -148,7 +220,34 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
     setMessage("Hold to unlock");
   };
 
-  useEffect(() => clearTimers, []);
+  // Backgrounding or an incoming call must terminate an in-progress hold.
+  // A paused JS interval must never finish the hold after returning to Curfy.
+  useEffect(() => {
+    mountedRef.current = true;
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") handlePressOut();
+    });
+    return () => {
+      mountedRef.current = false;
+      startTimeRef.current = null;
+      sub.remove();
+      clearTimers();
+    };
+  }, []);
+
+  // This is a native iOS/Android recognizer. Unlike setInterval, it fails
+  // when touch ends, the app backgrounds, or the gesture is cancelled.
+  // JS remains responsible only for the animated visual countdown.
+  const holdGesture = useMemo(() =>
+    Gesture.LongPress()
+      .minDuration(HOLD_DURATION_MS)
+      .maxDistance(26)
+      .shouldCancelWhenOutside(true)
+      .runOnJS(true)
+      .onBegin(() => handlePressIn())
+      .onStart(() => handleNativeHoldComplete())
+      .onFinalize(() => handlePressOut()),
+  []);
 
   const animatedCircleProps = useAnimatedProps(() => ({
     strokeDashoffset: CIRCUMFERENCE * (1 - progress.value),
@@ -160,25 +259,21 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
 
   return (
     <View style={styles.wrap}>
-      {unlockCount > 0 && (
-        <Text style={styles.unlockBadge}>Unlocked {unlockCount}x tonight</Text>
+      {showUnlockCount && unlockCount > 0 && (
+        <Text style={styles.unlockBadge}>Temporary exceptions this window: {unlockCount}</Text>
       )}
-      <Text style={styles.message}>{message}</Text>
+      <Text style={styles.message}>
+        {showIdleMessage || message !== "Hold to unlock" ? message : ""}
+      </Text>
 
+      <GestureDetector gesture={holdGesture}>
       <Animated.View style={[styles.buttonWrap, animatedButtonStyle]}>
         <Svg
           width={SVG_SIZE}
           height={SVG_SIZE}
           style={StyleSheet.absoluteFill}
         >
-          <Circle
-            cx={SVG_SIZE / 2}
-            cy={SVG_SIZE / 2}
-            r={RADIUS}
-            stroke={Colors.border}
-            strokeWidth={STROKE_WIDTH}
-            fill="none"
-          />
+          <RingTrack />
           <AnimatedCircle
             cx={SVG_SIZE / 2}
             cy={SVG_SIZE / 2}
@@ -194,21 +289,30 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
           />
         </Svg>
 
-        <Pressable
-          onPressIn={handlePressIn}
-          onPressOut={handlePressOut}
+        <View
+          accessible
+          accessibilityRole="button"
+          accessibilityLabel="Hold continuously for 120 seconds to request a temporary unlock"
+          accessibilityHint="Releasing early or leaving Curfy resets the full timer"
           style={styles.innerButton}
         >
-          {isHolding ? (
-            <Text style={styles.countdown}>{displaySeconds}</Text>
+          {isUnlocking ? (
+            <ActivityIndicator size="large" color={Colors.primaryCyan} />
+          ) : isHolding ? (
+            <>
+              <Text style={styles.countdown}>{displaySeconds}</Text>
+            </>
           ) : (
-            <Ionicons name="lock-closed" size={24} color={Colors.textMuted} />
+            <>
+              <IdleCenter />
+            </>
           )}
-        </Pressable>
+        </View>
       </Animated.View>
+      </GestureDetector>
 
       <Text style={styles.hint}>
-        {isHolding ? "Keep holding..." : "Hold for 120 seconds"}
+        {isUnlocking ? "Checking with iOS..." : isHolding ? "Don't lift your finger" : idleHint}
       </Text>
     </View>
   );
@@ -217,7 +321,8 @@ export function HoldButton({ onUnlock, unlockCount }: HoldButtonProps) {
 const styles = StyleSheet.create({
   wrap: {
     alignItems: "center",
-    gap: 16,
+    justifyContent: "center",
+    gap: 14,
   },
   unlockBadge: {
     color: Colors.dangerRed,
@@ -226,10 +331,11 @@ const styles = StyleSheet.create({
   },
   message: {
     color: Colors.textPrimary,
-    fontSize: 16,
+    fontSize: 15,
     fontFamily: Fonts.medium,
     textAlign: "center",
     maxWidth: 280,
+    minHeight: 21,
   },
   buttonWrap: {
     width: SVG_SIZE,
@@ -248,9 +354,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     shadowColor: Colors.primaryCyan,
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.35,
-    shadowRadius: 20,
-    elevation: 8,
+    shadowOpacity: 0.15,
+    shadowRadius: 13,
+    elevation: 2,
   },
   countdown: {
     color: Colors.primaryCyan,
@@ -258,8 +364,9 @@ const styles = StyleSheet.create({
     fontFamily: Fonts.bold,
   },
   hint: {
-    color: Colors.textMuted,
-    fontSize: 13,
-    fontFamily: Fonts.regular,
+    color: "#A4A4C5",
+    fontSize: 12,
+    fontFamily: Fonts.medium,
+    letterSpacing: 0.2,
   },
 });

@@ -1,0 +1,12 @@
+Curfy local unsigned compilation evidence, 2026-11-07
+Code checkpoint: a1a400b324bf244f0d6b2fe336647cad0a60bb5f
+Xcode 26.6 (17F113); iOS Simulator SDK 26.5
+ActivityMonitor Swift blob: edf61864153b7ba17cfc977a6d1adbf345807a4a
+Command: xcodebuild -workspace ios/Curfy.xcworkspace -scheme Curfy -configuration Debug -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath /tmp/curfy-derived-data CODE_SIGNING_ALLOWED=NO build
+Exit status: 0
+NOT signed; NOT physical-device Screen Time or StoreKit verification.
+Full local log: /tmp/curfy-xcodebuild-final.log
+Selected verbatim compilation log lines:
+SwiftCompile normal x86_64 Compiling\ DeviceActivityMonitorExtension.swift,\ Shared.swift /Users/alvin/.codex/.chatgpt-projects/g-p-6ada5b891b4c8191974cf453fd5cfbc3/curfy/targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift /Users/alvin/.codex/.chatgpt-projects/g-p-6ada5b891b4c8191974cf453fd5cfbc3/curfy/targets/ActivityMonitorExtension/Shared.swift (in target 'ActivityMonitorExtension' from project 'Curfy')
+SwiftCompile normal arm64 Compiling\ DeviceActivityMonitorExtension.swift,\ Shared.swift /Users/alvin/.codex/.chatgpt-projects/g-p-6ada5b891b4c8191974cf453fd5cfbc3/curfy/targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift /Users/alvin/.codex/.chatgpt-projects/g-p-6ada5b891b4c8191974cf453fd5cfbc3/curfy/targets/ActivityMonitorExtension/Shared.swift (in target 'ActivityMonitorExtension' from project 'Curfy')
+** BUILD SUCCEEDED **

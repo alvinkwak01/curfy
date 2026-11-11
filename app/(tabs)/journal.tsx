@@ -85,13 +85,22 @@ function buildMonthMatrix(monthStart: Date): (Date | null)[][] {
 function Composer({ date }: { date: string }) {
   const { addEntry } = useJournal();
   const [text, setText] = useState("");
+  const [saving, setSaving] = useState(false);
   const canSave = text.trim().length > 0;
 
   const save = async () => {
-    if (!canSave) return;
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    await addEntry(date, text.trim());
-    setText("");
+    if (!canSave || saving) return;
+    setSaving(true);
+    try {
+      await addEntry(date, text.trim());
+      setText("");
+      void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    } catch {
+      Alert.alert("Couldn't save this thought",
+        "Your text is still here. Check storage and try again.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -107,8 +116,8 @@ function Composer({ date }: { date: string }) {
       />
       <TouchableOpacity
         onPress={save}
-        disabled={!canSave}
-        style={[styles.saveChip, !canSave && styles.saveChipDisabled]}
+        disabled={!canSave || saving}
+        style={[styles.saveChip, (!canSave || saving) && styles.saveChipDisabled]}
       >
         <Text style={[styles.saveChipText, !canSave && styles.saveChipTextDisabled]}>
           Save thought
@@ -159,8 +168,13 @@ function EntryEditor({
       remove();
       return;
     }
-    await updateEntry(entry.id, trimmed);
-    onClose();
+    try {
+      await updateEntry(entry.id, trimmed);
+      onClose();
+    } catch {
+      Alert.alert("Couldn't save the edit",
+        "Your changes are still here. Please try again.");
+    }
   };
 
   const remove = () => {
@@ -170,8 +184,13 @@ function EntryEditor({
         text: "Delete",
         style: "destructive",
         onPress: async () => {
-          await deleteEntry(entry.id);
-          onClose();
+          try {
+            await deleteEntry(entry.id);
+            onClose();
+          } catch {
+            Alert.alert("Couldn't delete this thought",
+              "Your original entry is still saved. Please try again.");
+          }
         },
       },
     ]);
@@ -226,14 +245,12 @@ function JournalIntroModal({ visible, onClose }: { visible: boolean; onClose: ()
     <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
       <View style={styles.introBackdrop}>
         <View style={styles.introCard}>
-          <Text style={styles.introTitle}>Why journal before bed?</Text>
+          <Text style={styles.introTitle}>Why write it down?</Text>
           <Text style={styles.introBody}>
-            Writing down what's on your mind — worries, loose ends,
-            tomorrow's to-dos — is a real technique called cognitive
-            offloading, the same idea behind CBT-I (cognitive behavioral
-            therapy for insomnia). Getting it out of your head and onto the
-            page signals to your brain that it's been saved, so it can stop
-            running the loop and let you actually fall asleep.
+            Got a thought, a worry, or tomorrow's to-do list on your mind?
+            Write it here so you don't have to keep it all in your head.
+            Journaling is optional. Curfy protects selected apps at bedtime;
+            it doesn't measure, diagnose, or promise anything about sleep.
           </Text>
           <TouchableOpacity onPress={onClose} style={styles.introBtn}>
             <Text style={styles.introBtnText}>Got it</Text>
@@ -403,7 +420,7 @@ function JournalCalendarView({ onOpenEntry }: { onOpenEntry: (e: JournalEntry) =
 }
 
 export default function Journal() {
-  const { isLoading, hasSeenIntro, markIntroSeen } = useJournal();
+  const { isLoading, loadError, retryLoad, hasSeenIntro, markIntroSeen } = useJournal();
   const [mode, setMode] = useState<ViewMode>("list");
   const [editingEntry, setEditingEntry] = useState<JournalEntry | null>(null);
   const [introVisible, setIntroVisible] = useState(false);
@@ -417,8 +434,32 @@ export default function Journal() {
 
   const closeIntro = () => {
     setIntroVisible(false);
-    markIntroSeen();
+    void markIntroSeen().catch(error => {
+      console.warn("[Curfy] Could not remember journal introduction", error);
+    });
   };
+
+  if (isLoading || loadError) {
+    return (
+      <SafeAreaView style={styles.container} edges={["top"]}>
+        <StarBackground />
+        <View style={styles.journalRecovery}>
+          <Text style={styles.title}>{loadError ? "Journal unavailable" : "Loading journal"}</Text>
+          {loadError && (
+            <>
+              <Text style={styles.journalRecoveryText}>{loadError}</Text>
+              <TouchableOpacity accessibilityRole="button"
+                accessibilityLabel="Retry loading saved journal entries"
+                style={styles.journalRecoveryButton}
+                onPress={() => { void retryLoad(); }}>
+                <Text style={styles.journalRecoveryButtonText}>Try again</Text>
+              </TouchableOpacity>
+            </>
+          )}
+        </View>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={["top"]}>
@@ -455,6 +496,21 @@ export default function Journal() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
+  journalRecovery: {
+    flex: 1, justifyContent: "center", alignItems: "center",
+    paddingHorizontal: 28, gap: 18,
+  },
+  journalRecoveryText: {
+    color: Colors.textMuted, fontFamily: Fonts.regular,
+    fontSize: 15, lineHeight: 22, textAlign: "center",
+  },
+  journalRecoveryButton: {
+    backgroundColor: Colors.primaryCyan, borderRadius: 12,
+    paddingHorizontal: 28, paddingVertical: 14, minHeight: 48,
+  },
+  journalRecoveryButtonText: {
+    color: Colors.background, fontFamily: Fonts.semiBold, fontSize: 15,
+  },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
