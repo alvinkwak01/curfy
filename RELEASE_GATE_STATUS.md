@@ -19,7 +19,7 @@ Updated 2026-11-11. Draft PR #2, `feat/ios-shield-from-august` → `backup/local
 | Apple agreements | Owner reports updated Developer Program agreement accepted on 2026-11-09; Paid Apps, banking, tax and DSA verified Active | Apple session expired; fresh owner sign-in needed to recheck portal notice clearance |
 | StoreKit setup | Source ID com.alvinkwak.curfy.premium; approved $5.99 USD non-consumable | Create/verify product after app record; localized metadata, price, review screenshot and sandbox test |
 | Privacy manifests | App-group defaults reason added to all four targets; generated resource checks PASS; all three unsigned Release simulator extension bundles contain manifest | Ten SDK manifests reviewed/aggregated and linked nontracking data disclosures added; all four built simulator bundle manifests checked. Signed archive report/provider retention/App Store validation remain |
-| Privacy/support | Draft pages prepared; verified backend facts updated | Real monitored public contact, operator confirmation, retention details, public URLs and in-app policy link |
+| Privacy/support | Draft pages prepared; verified backend facts updated | Owner supplied sleepingcurfy@gmail.com; added to drafts. Remaining: operator confirmation, retention details, published URLs, in-app policy link and mailbox delivery check |
 | Accessibility/design | Existing Welcome + nine steps, ring, branding and 120-second hold preserved | VoiceOver, large text, Reduce Motion, small iPhone; explicit hold accommodation decision |
 | Submission | Draft package and consolidated device matrix maintained | Final screenshots, name clearance, age/territory decisions, actual acceptance, TestFlight/App Review |
 

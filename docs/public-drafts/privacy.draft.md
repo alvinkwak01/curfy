@@ -1,6 +1,6 @@
 # Curfy Privacy Policy — working draft
 
-**Editorial notice — do not publish:** operator identity, contact address, effective date, provider/log retention and deployed behavior still require verification. The draft below describes the intended release behavior reflected in current source. No public policy URL exists yet.
+**Editorial notice — do not publish:** operator identity, effective date, provider/log retention and deployed behavior still require verification. The draft below describes the intended release behavior reflected in current source. No public policy URL exists yet.
 
 ## About Curfy
 Curfy helps you set a boundary with selected distracting iPhone apps. It uses Apple's Screen Time controls to protect your chosen apps during your configured hours. Curfy does not measure sleep or lock your whole phone.
@@ -38,4 +38,6 @@ Settings includes controls to leave the leaderboard or request Delete Everything
 Exact retention periods for support correspondence, service logs and backups must be confirmed and included in the final policy. Do not promise immediate erasure from all backups or providers without evidence.
 
 ## Contact and updates
-The final published policy will identify Curfy's operator and provide the monitored support/privacy email address, effective date, and how material changes are communicated. These details have not yet been supplied.
+For support and privacy requests, email [sleepingcurfy@gmail.com](mailto:sleepingcurfy@gmail.com).
+
+The final published policy still needs operator confirmation, an effective date, and the process for communicating material changes.

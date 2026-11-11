@@ -12,6 +12,11 @@ Updated 2026-11-11. This replaces the long, contradictory historical handoff; pr
 
 Latest checkpoint: **120518d69f4e9ff9a347194beaaec292d672414c**; [GitHub CI 43071652613](https://github.com/alvinkwak01/curfy/actions/runs/43071652613) SUCCESS. PR #2 remains draft and mergeable; no merge performed. All source/backend changes described below are saved on the PR branch. Waiting for owner Apple sign-in and public contact/operator answer; no background work promised.
 
+## Owner contact and renewed access — 2026-11-11
+- Owner supplied **sleepingcurfy@gmail.com** in response to the public support/privacy contact request. Authorized for public-facing drafts; added mailto links to support and privacy drafts. No credentials received and mailbox delivery not tested. No domain purchase required.
+- Owner signed into Apple again; session verified under H735Q3WW8K. Main app's App Group assignment explicitly verified as group.com.alvinkwak.curfy selected; remaining ShieldAction/ShieldConfiguration inspection continues. ActivityMonitor assignment was previously verified. No capability changes made.
+- Public pages remain drafts pending operator confirmation, final policy details and hosting. Do not ask for the email again.
+
 ## SDK privacy and backend permissions — 2026-11-11 (current)
 - Started from live ddfd951faa1554aac3d8cb792970c7f8de4a57d4; that checkpoint's GitHub CI 43067653944 passed.
 - app.json now includes the reason union from ten installed SDK manifests plus app-group defaults. Added linked/nontracking app-functionality disclosures for Name, User ID, Other User Content, Product Interaction and Other Data Types (service metadata). No new collection or runtime behavior added. See docs/release-evidence/app-privacy-mapping.md and sdk-privacy-inventory.json for evidence and limitations.

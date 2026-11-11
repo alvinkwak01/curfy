@@ -1,6 +1,6 @@
 # Curfy Support — working draft
 
-**Editorial notice — do not publish:** add a real monitored support email and verified policy link before making this page public. Validate the troubleshooting instructions on the final signed iPhone build. No support mailbox or public support URL has been created.
+**Editorial notice — do not publish:** add a verified policy link before making this page public. Validate the troubleshooting instructions on the final signed iPhone build. The owner supplied sleepingcurfy@gmail.com for public support on 2026-11-11; no public support URL exists yet. Inbox delivery has not been tested.
 
 ## App protection
 Curfy protects only the apps you select, during your configured protection window. It does not lock your whole phone or measure sleep.
@@ -20,6 +20,6 @@ Leaderboard participation is optional. You can leave from Settings without losin
 Delete Everything requests removal of your cloud account and local Curfy data. It is different from leaving the leaderboard. If deletion reports an error, keep the error message and contact support if retry does not resolve it. Never send authentication tokens or passwords.
 
 ## Contact support
-The owner must supply the monitored email before publication. In a support request, include your Curfy version, iPhone model, iOS version, what you expected, what happened, and the approximate time/time zone. A redacted screenshot can help. Do not include private journal text, passwords, payment-card details or access tokens.
+Email [sleepingcurfy@gmail.com](mailto:sleepingcurfy@gmail.com) for support and privacy requests. In a support request, include your Curfy version, iPhone model, iOS version, what you expected, what happened, and the approximate time/time zone. A redacted screenshot can help. Do not include private journal text, passwords, payment-card details or access tokens.
 
 No response-time promise is made until the owner establishes a support schedule.

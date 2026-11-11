@@ -22,3 +22,6 @@ The user requested our recommendation and authorized continuing independent prep
 - Apple privacy-policy, consent-withdrawal and account-deletion requirements: https://developer.apple.com/app-store/review/guidelines/#privacy
 
 A GitHub Pages website logs visitors' IP addresses for security. Include that website-host disclosure if this hosting choice is used. Do not claim the public website collects no data.
+
+## Contact confirmed 2026-11-11
+Owner supplied sleepingcurfy@gmail.com for public support/privacy use. Drafts now include it. Inbox delivery has not been tested. Operator identity, final policy details and hosting remain pending; do not request the contact address again.
