@@ -10,6 +10,8 @@ Updated 2026-11-11. This replaces the long, contradictory historical handoff; pr
 - Integrated engineering checkpoint: **`a1a400b324bf244f0d6b2fe336647cad0a60bb5f`**, `feat(ios): integrate per-app Premium and consented leaderboard participation`. Later documentation/disclosure clarification commits may follow; re-fetch live HEAD.
 - **NOT App Store-ready. No signed candidate built, no EAS initiated, no paid cloud build, no device/purchase/backend claims.**
 
+Latest checkpoint: **120518d69f4e9ff9a347194beaaec292d672414c**; [GitHub CI 43071652613](https://github.com/alvinkwak01/curfy/actions/runs/43071652613) SUCCESS. PR #2 remains draft and mergeable; no merge performed. All source/backend changes described below are saved on the PR branch. Waiting for owner Apple sign-in and public contact/operator answer; no background work promised.
+
 ## SDK privacy and backend permissions — 2026-11-11 (current)
 - Started from live ddfd951faa1554aac3d8cb792970c7f8de4a57d4; that checkpoint's GitHub CI 43067653944 passed.
 - app.json now includes the reason union from ten installed SDK manifests plus app-group defaults. Added linked/nontracking app-functionality disclosures for Name, User ID, Other User Content, Product Interaction and Other Data Types (service metadata). No new collection or runtime behavior added. See docs/release-evidence/app-privacy-mapping.md and sdk-privacy-inventory.json for evidence and limitations.

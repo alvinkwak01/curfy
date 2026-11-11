@@ -5,7 +5,7 @@ Updated 2026-11-11. Draft PR #2, `feat/ios-shield-from-august` → `backup/local
 
 | Gate | Verified evidence | Remaining work |
 |---|---|---|
-| Code checks | 374/374 tests, TypeScript, iOS production export PASS; CI 42667878535 SUCCESS on 1a3bf11 | Recheck changes as needed; mocks do not prove iPhone behavior |
+| Code checks | 374/374 tests, TypeScript, iOS production export PASS; CI 43071652613 SUCCESS on 120518d | Recheck changes as needed; mocks do not prove iPhone behavior |
 | Settings persistence | Recovery journal, native commit/abort receipt, verified local writes and restart tests | Real storage/process-kill/reboot/permission recovery |
 | Native configuration | Prebuild/autolinking, four-target entitlement configuration PASS | Signed matching profiles and installed binary |
 | Native compilation | 2026-11-11 full unsigned Debug simulator app + three extensions BUILD SUCCEEDED; all four built manifests inspected | Current signed archive/device proof; SDK26.5+ is required and now has a read-only preflight script |
