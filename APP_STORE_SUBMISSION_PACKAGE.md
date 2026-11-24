@@ -6,7 +6,7 @@ Updated 2026-11-24. Draft package, NOT approved/submitted/published.
 - Bundle ID `com.alvinkwak.curfy`, Team `H735Q3WW8K`, App Group `group.com.alvinkwak.curfy`.
 - Extensions: `com.alvinkwak.curfy.ShieldConfiguration`, `com.alvinkwak.curfy.ShieldAction`, `com.alvinkwak.curfy.ActivityMonitor`.
 - Source version 1.0.0. Production build number is remotely managed in EAS; actual next build number UNKNOWN.
-- Premium: non-consumable; proposed product ID `com.alvinkwak.curfy.premium`; US price $5.99 once; localized StoreKit pricing elsewhere. Product 6838811684 created Nov 24 with matching ID, approved US price and English metadata; availability/review screenshot/sandbox acceptance pending. Paid Apps, banking, tax and DSA verified Active; owner reports accepting updated Developer Program agreement.
+- Premium: non-consumable; product ID `com.alvinkwak.curfy.premium`; US price $5.99 once; localized StoreKit pricing elsewhere. Product 6838811684 created Nov 24 with matching ID, approved US price and English metadata; availability saved for 175 current storefronts; review screenshot/sandbox acceptance pending. Paid Apps, banking, tax and DSA verified Active; owner reports accepting updated Developer Program agreement.
 
 ## Listing draft (owner approval and actual screenshots still required)
 Name: Curfy: Bedtime. For real. (owner approved; Apple accepted app record 6838811413 on Nov 24)
@@ -55,3 +55,6 @@ Full unsigned simulator app + three extensions compiled; required-reason manifes
 
 ## November 24 App Store setup
 App record 6838811413 and Non-Consumable product 6838811684 exist in Prepare for Submission. No build uploaded or review submitted. English IAP description: “Protect multiple apps. One-time purchase.” United States base price $5.99 saved with Apple comparable international prices; pricing does not select sale territories. Family Sharing remains off. Exact App Group assignments now inspected for all four targets; updated agreement acceptance verified. Signed archive/profiles and physical acceptance still open.
+
+## November 24 follow-up
+Owner approved worldwide launch and legal-only operator identification. Free download ($0.00), all 175 current storefronts and manual release configured; Mac/Vision Pro disabled. Premium availability saved for the same 175. Automatic future-country opt-in disabled. China mainland compliance still requires assessment; no filings invented. Leaderboard public-name moderation is an open App Review 1.2 gate. Backend restored from pause to ACTIVE_HEALTHY; ongoing free-plan pausing remains a release operations consideration. Public website prepared locally, not published; resolve personal-name-containing default hostname and final retention details before inserting URLs. Local app verification now 383 tests, TypeScript and production JS export PASS.

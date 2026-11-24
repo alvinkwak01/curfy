@@ -370,7 +370,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       .select("id,display_name,current_streak,longest_streak")
       .order(metric, { ascending: false })
       .limit(50);
-    if (error || !data) return [];
+    if (error || !data) throw new Error("Curfy couldn't load the leaderboard. Please retry.");
     return data;
   };
 
