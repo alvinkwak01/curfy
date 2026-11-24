@@ -1,4 +1,5 @@
 import { protectionOperationPending } from "@/lib/protectionOperation";
+import { CURFY_PRIVACY_URL, CURFY_SUPPORT_URL } from "@/lib/publicLinks";
 import { LeaderboardSettings } from "@/components/LeaderboardConsent";
 import { PremiumSettings } from "@/components/PremiumSettings";
 import { usePremium } from "@/context/PremiumContext";
@@ -34,6 +35,7 @@ import {
 } from "react-native-device-activity";
 import {
   Alert,
+  Linking,
   NativeSyntheticEvent,
   ScrollView,
   StyleSheet,
@@ -46,6 +48,10 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 
 export default function Settings() {
+  const openPublicPage = async (url: string) => {
+    try { await Linking.openURL(url); }
+    catch { Alert.alert("Couldn't open the page", `Please try again, or contact sleepingcurfy@gmail.com.\n\n${url}`); }
+  };
   const { entitlement } = usePremium();
   const selectionIssue = (metadata: ActivitySelectionMetadata | null | undefined) => selectionIssueForEntitlement(metadata, entitlement);
   const {
@@ -459,6 +465,12 @@ export default function Settings() {
         </TouchableOpacity>
 
         <View style={styles.accountSection}>
+          <TouchableOpacity style={styles.signOutBtn} accessibilityRole="link" onPress={() => void openPublicPage(CURFY_SUPPORT_URL)}>
+            <Text style={styles.signOutText}>Help & Support</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.signOutBtn} accessibilityRole="link" onPress={() => void openPublicPage(CURFY_PRIVACY_URL)}>
+            <Text style={styles.signOutText}>Privacy Policy</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.signOutBtn} onPress={onSignOut} disabled={deleting || saving}>
             <Text style={styles.signOutText}>Restart Setup</Text>
           </TouchableOpacity>

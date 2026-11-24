@@ -58,3 +58,8 @@ App record 6838811413 and Non-Consumable product 6838811684 exist in Prepare for
 
 ## November 24 follow-up
 Owner approved worldwide launch and legal-only operator identification. Free download ($0.00), all 175 current storefronts and manual release configured; Mac/Vision Pro disabled. Premium availability saved for the same 175. Automatic future-country opt-in disabled. China mainland compliance still requires assessment; no filings invented. Leaderboard public-name moderation is an open App Review 1.2 gate. Backend restored from pause to ACTIVE_HEALTHY; ongoing free-plan pausing remains a release operations consideration. Public website prepared locally, not published; resolve personal-name-containing default hostname and final retention details before inserting URLs. Local app verification now 383 tests, TypeScript and production JS export PASS.
+
+## Public URLs — November 24
+Support: https://curfy-support.alvin-kwak.chatgpt.site/support/
+Privacy: https://curfy-support.alvin-kwak.chatgpt.site/privacy/
+Both published publicly and checked with unauthenticated HTTPS and browser rendering. Owner approves temporary hostname and legal-only identification as Alvin Kwak, operating Curfy. App Store privacy URL saved; Settings links implemented. Policy uses retention criteria, not invented fixed provider erasure periods; final operational/territorial review and signed runtime validation remain.
