@@ -11,12 +11,21 @@
 // SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY are
 // auto-injected into every Edge Function by the platform; nothing to
 // configure manually for this to run once deployed.
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.110.7";
 
 Deno.serve(async (req: Request) => {
+  // Account deletion is a destructive command, never a cacheable/readable
+  // resource. A prefetch, scanner, or navigation must not be able to delete
+  // someone's account with an authenticated GET request.
+  if (req.method !== "POST") {
+    return new Response(JSON.stringify({ error: "Method not allowed" }), {
+      status: 405,
+      headers: { "Content-Type": "application/json", "Allow": "POST", "Cache-Control": "no-store" },
+    });
+  }
   try {
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader || !/^Bearer\s+\S+$/i.test(authHeader)) {
       return new Response(JSON.stringify({ error: "Missing Authorization header" }), {
         status: 401,
         headers: { "Content-Type": "application/json" },

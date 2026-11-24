@@ -1,4 +1,4 @@
--- DUSK — leaderboard schema
+-- Curfy — leaderboard schema
 -- Run this once in your Supabase project's SQL Editor (Dashboard > SQL Editor > New query).
 -- Safe to re-run: uses IF NOT EXISTS / drop-and-recreate for policies.
 
@@ -38,3 +38,12 @@ create policy "Users can update their own profile"
   on public.profiles for update
   using (auth.uid() = id)
   with check (auth.uid() = id);
+
+-- Explicit minimum client grants. Authenticated anonymous users are covered
+-- by the same ownership policies; unauthenticated readers cannot write.
+revoke insert, update, delete, truncate, references, trigger on table public.profiles from anon;
+revoke delete, truncate, references, trigger on table public.profiles from authenticated;
+grant select on table public.profiles to anon;
+grant select, insert, update on table public.profiles to authenticated;
+-- This project's deployed PostgreSQL version is 17.
+revoke maintain on table public.profiles from anon, authenticated;

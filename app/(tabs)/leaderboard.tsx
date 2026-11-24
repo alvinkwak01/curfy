@@ -4,7 +4,9 @@ import { Colors, Fonts } from "@/constants/theme";
 import { useAuth } from "@/context/AuthContext";
 import { SleepEntry, useSleep } from "@/context/SleepContext";
 import { isSupabaseConfigured, LeaderboardProfile } from "@/lib/supabase";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useLeaderboard } from "@/lib/useLeaderboard";
+import { leaderboardRanks } from "@/lib/leaderboardRanks";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -123,23 +125,9 @@ function GlobalLeaderboard() {
   const { isSignedIn, session, fetchLeaderboard, fetchMyRank } = useAuth();
   const { streak, longestStreak, userName } = useSleep();
   const [metric, setMetric] = useState<Metric>("current_streak");
-  const [profiles, setProfiles] = useState<LeaderboardProfile[]>([]);
-  const [loading, setLoading] = useState(false);
+  const { profiles, loading, failed, retry } = useLeaderboard(metric, fetchLeaderboard);
   const [expanded, setExpanded] = useState(false);
   const [myRank, setMyRank] = useState<number | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    const data = await fetchLeaderboard(metric);
-    setProfiles(data);
-    setLoading(false);
-  }, [metric, fetchLeaderboard]);
-
-  // The board itself is public — load it whether or not the viewer is
-  // signed in. Only *appearing* on it requires an account.
-  useEffect(() => {
-    load();
-  }, [load]);
 
   // Collapse back to the compact top-4 view whenever the sort changes —
   // "expanded" for Current Streak shouldn't silently carry over to All-Time.
@@ -148,6 +136,7 @@ function GlobalLeaderboard() {
   }, [metric]);
 
   const myValue = metric === "current_streak" ? streak : longestStreak;
+  const ranks = useMemo(() => leaderboardRanks(profiles, metric), [profiles, metric]);
   const topFour = profiles.slice(0, 4);
   const rest = profiles.slice(4);
   const isYouInTopFour = topFour.some((p) => p.id === session?.user.id);
@@ -157,11 +146,11 @@ function GlobalLeaderboard() {
       setMyRank(null);
       return;
     }
-    // Already in the fetched top-50 — its index is the real rank, no
-    // extra query needed.
+    // Already in the fetched top-50 — count strictly greater streaks,
+    // matching the remote rank query even when scores tie.
     const idxInFetched = profiles.findIndex((p) => p.id === session.user.id);
     if (idxInFetched !== -1) {
-      setMyRank(idxInFetched + 1);
+      setMyRank(ranks.get(session.user.id) ?? null);
       return;
     }
     let cancelled = false;
@@ -171,7 +160,7 @@ function GlobalLeaderboard() {
     return () => {
       cancelled = true;
     };
-  }, [isSignedIn, session, profiles, metric, myValue, fetchMyRank]);
+  }, [isSignedIn, session, profiles, ranks, metric, myValue, fetchMyRank]);
 
   return (
     <View style={{ gap: 14 }}>
@@ -210,17 +199,24 @@ function GlobalLeaderboard() {
         <Text style={styles.lbEmpty}>Leaderboard isn't set up yet — check back soon.</Text>
       ) : loading ? (
         <ActivityIndicator color={Colors.primaryCyan} style={{ marginVertical: 20 }} />
+      ) : failed ? (
+        <View style={{ gap: 8 }}>
+          <Text style={styles.lbEmpty}>Couldn't load the leaderboard. Your app protection is unaffected.</Text>
+          <TouchableOpacity onPress={retry} style={styles.viewAllBtn} accessibilityRole="button">
+            <Text style={styles.viewAllText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
       ) : profiles.length === 0 ? (
         <Text style={styles.lbEmpty}>
           Nobody's on the board yet. Be the first — start a streak.
         </Text>
       ) : (
         <View style={{ gap: 8 }}>
-          {topFour.map((p, i) => (
+          {topFour.map((p) => (
             <LeaderboardRow
               key={p.id}
               profile={p}
-              rank={i + 1}
+              rank={ranks.get(p.id)!}
               metric={metric}
               isYou={p.id === session?.user.id}
             />
@@ -244,11 +240,11 @@ function GlobalLeaderboard() {
           )}
 
           {expanded &&
-            rest.map((p, i) => (
+            rest.map((p) => (
               <LeaderboardRow
                 key={p.id}
                 profile={p}
-                rank={i + 5}
+                rank={ranks.get(p.id)!}
                 metric={metric}
                 isYou={p.id === session?.user.id}
               />
@@ -377,16 +373,17 @@ export default function Leaderboard() {
           <View style={{ gap: 20, marginBottom: 20 }}>
             <View>
               <Text style={styles.title}>Leaderboard</Text>
-              <Text style={styles.subtitle}>Everyone's streaks. Judge freely.</Text>
+              <Text style={styles.subtitle}>Curfy protection windows logged — not measured sleep.</Text>
             </View>
 
             <GlobalLeaderboard />
 
             <View style={styles.divider} />
 
-            <CommunityStats />
-
-            <View style={styles.divider} />
+            {/* Mixed Evening/Morning/Both windows cannot produce a meaningful
+                "average bedtime" or comparable histogram without a
+                routine-specific server cohort. Keep the global streak
+                leaderboard but do not display misleading aggregate hours. */}
 
             <View>
               <Text style={styles.sectionTitle}>YOUR RECORD</Text>
@@ -399,27 +396,27 @@ export default function Leaderboard() {
               <Text style={styles.heroLabel}>CURRENT STREAK</Text>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 8 }}>
                 <Text style={styles.heroNumber}>{streak}</Text>
-                <Text style={styles.heroUnit}>nights</Text>
+                <Text style={styles.heroUnit}>windows</Text>
               </View>
               {streak === 0 && (
-                <Text style={styles.heroHint}>Start tonight to build your streak.</Text>
+                <Text style={styles.heroHint}>Log your first protection window to build a streak.</Text>
               )}
             </View>
 
             <View style={styles.statsGrid}>
               <View style={styles.statBlock}>
                 <Text style={styles.statValue}>{totalNights}</Text>
-                <Text style={styles.statLabel}>Total nights</Text>
+                <Text style={styles.statLabel}>Windows logged</Text>
               </View>
               <View style={styles.gridDivider} />
               <View style={styles.statBlock}>
                 <Text style={[styles.statValue, { color: Colors.primaryCyan }]}>{cleanNights}</Text>
-                <Text style={styles.statLabel}>Clean nights</Text>
+                <Text style={styles.statLabel}>No-exception windows</Text>
               </View>
               <View style={styles.gridDivider} />
               <View style={styles.statBlock}>
                 <Text style={[styles.statValue, { color: cleanRateColor }]}>{cleanRate}%</Text>
-                <Text style={styles.statLabel}>Clean rate</Text>
+                <Text style={styles.statLabel}>No-exception rate</Text>
               </View>
               <View style={styles.gridDivider} />
               <View style={styles.statBlock}>
@@ -435,15 +432,15 @@ export default function Leaderboard() {
               </View>
             </View>
 
-            <Text style={styles.sectionTitle}>NIGHT BY NIGHT</Text>
+            <Text style={styles.sectionTitle}>WINDOW BY WINDOW</Text>
           </View>
         }
         renderItem={({ item, index }) => <EntryRow entry={item} index={index} />}
         ListEmptyComponent={
           <View style={styles.emptyState}>
-            <Text style={styles.emptyTitle}>No nights logged yet</Text>
+            <Text style={styles.emptyTitle}>No windows logged yet</Text>
             <Text style={styles.emptySub}>
-              Your first locked-in bedtime will show up here.
+              Your first recorded Curfy protection window will show up here.
             </Text>
           </View>
         }

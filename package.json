@@ -6,7 +6,8 @@
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "test:unit": "node --test tests/*.test.cjs"
   },
   "dependencies": {
     "@expo-google-fonts/space-grotesk": "^0.4.1",
@@ -14,10 +15,10 @@
     "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/native": "^7.1.8",
     "@supabase/supabase-js": "^2.110.7",
-    "expo": "~54.0.36",
+    "expo": "~54.0.37",
     "expo-build-properties": "~1.0.10",
-    "expo-constants": "~18.0.13",
-    "expo-dev-client": "^57.0.10",
+    "expo-constants": "~18.0.14",
+    "expo-dev-client": "~6.0.21",
     "expo-font": "~14.0.12",
     "expo-haptics": "~15.0.8",
     "expo-linking": "~8.0.12",

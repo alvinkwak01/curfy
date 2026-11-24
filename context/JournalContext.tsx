@@ -1,8 +1,10 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, {
   createContext,
+  useCallback,
   useContext,
   useEffect,
+  useRef,
   useState,
 } from "react";
 
@@ -12,9 +14,6 @@ const JOURNAL_INTRO_SEEN_KEY = "@dusk/journal_intro_seen";
 
 export interface JournalEntry {
   id: string;
-  // "YYYY-MM-DD" — the night this thought belongs to, not necessarily
-  // the calendar day it was physically typed (lets a 1am entry still
-  // count toward "tonight" rather than rolling into tomorrow).
   date: string;
   text: string;
   createdAt: number;
@@ -24,98 +23,144 @@ export interface JournalEntry {
 interface JournalContextType {
   entries: JournalEntry[];
   isLoading: boolean;
+  loadError: string | null;
+  retryLoad: () => Promise<void>;
   addEntry: (date: string, text: string) => Promise<JournalEntry>;
   updateEntry: (id: string, text: string) => Promise<void>;
   deleteEntry: (id: string) => Promise<void>;
   getEntriesForDate: (date: string) => JournalEntry[];
-  // Local-only by design (see CONTEXT.md) — diary content never touches
-  // Supabase or the public profiles table, unlike streaks/leaderboard
-  // data. Wiped alongside everything else on deleteAccount().
+  // Local-only by design: journal text never syncs to Supabase.
+  // Wiped with the rest of Curfy only after Delete Account is confirmed.
   clearAll: () => Promise<void>;
-  // Whether the one-time "why journal before bed" intro card has already
-  // been shown. The Journal tab also exposes a help icon that reopens the
-  // same card on demand regardless of this flag.
   hasSeenIntro: boolean;
   markIntroSeen: () => Promise<void>;
 }
 
 const JournalContext = createContext<JournalContextType | null>(null);
 
+function sortEntries(entries: JournalEntry[]): JournalEntry[] {
+  return [...entries].sort((a, b) => b.createdAt - a.createdAt);
+}
+
+function parseEntries(raw: string | null): JournalEntry[] {
+  if (!raw) return [];
+  const parsed: unknown = JSON.parse(raw);
+  if (!Array.isArray(parsed) || !parsed.every(item => {
+    if (!item || typeof item !== "object") return false;
+    const entry = item as Partial<JournalEntry>;
+    return typeof entry.id === "string" && typeof entry.date === "string" &&
+      typeof entry.text === "string" &&
+      Number.isFinite(entry.createdAt) && Number.isFinite(entry.updatedAt);
+  })) {
+    throw new Error("Saved journal entries are unreadable.");
+  }
+  return sortEntries(parsed as JournalEntry[]);
+}
+
 export function JournalProvider({ children }: { children: React.ReactNode }) {
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [hasSeenIntro, setHasSeenIntro] = useState(false);
+  const entriesRef = useRef<JournalEntry[]>([]);
+  const loadedRef = useRef(false);
+  // Serialize writes so two fast actions cannot overwrite one another or
+  // resurrect entries after Delete Account has wiped local history.
+  const writeQueue = useRef<Promise<void>>(Promise.resolve());
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const [raw, introSeen] = await Promise.all([
-          AsyncStorage.getItem(JOURNAL_KEY),
-          AsyncStorage.getItem(JOURNAL_INTRO_SEEN_KEY),
-        ]);
-        if (raw) {
-          const parsed: JournalEntry[] = JSON.parse(raw);
-          setEntries(parsed.sort((a, b) => b.createdAt - a.createdAt));
-        }
-        if (introSeen === "true") setHasSeenIntro(true);
-      } catch (_) {}
+  const retryLoad = useCallback(async () => {
+    setIsLoading(true);
+    setLoadError(null);
+    try {
+      await writeQueue.current;
+      const [raw, introSeen] = await Promise.all([
+        AsyncStorage.getItem(JOURNAL_KEY),
+        AsyncStorage.getItem(JOURNAL_INTRO_SEEN_KEY),
+      ]);
+      const loaded = parseEntries(raw);
+      entriesRef.current = loaded;
+      setEntries(loaded);
+      setHasSeenIntro(introSeen === "true");
+      loadedRef.current = true;
+    } catch (error) {
+      loadedRef.current = false;
+      console.warn("[Curfy] Could not load local journal", error);
+      // Never show an empty editable journal after failed hydration:
+      // doing so would overwrite legitimate saved entries on the next write.
+      setLoadError("Curfy couldn't read your journal. Your entries were not erased.");
+    } finally {
       setIsLoading(false);
-    })();
+    }
   }, []);
 
-  const persist = (next: JournalEntry[]) => {
-    const sorted = [...next].sort((a, b) => b.createdAt - a.createdAt);
-    setEntries(sorted);
-    AsyncStorage.setItem(JOURNAL_KEY, JSON.stringify(sorted));
+  useEffect(() => { void retryLoad(); }, [retryLoad]);
+
+  const persist = (update: (current: JournalEntry[]) => JournalEntry[]): Promise<void> => {
+    const operation = writeQueue.current.then(async () => {
+      if (!loadedRef.current) {
+        throw new Error("Journal isn't ready. Retry loading it before editing.");
+      }
+      const next = sortEntries(update(entriesRef.current));
+      // Write FIRST: never tell the user a diary change succeeded when
+      // AsyncStorage rejected it. The old entries remain intact on error.
+      await AsyncStorage.setItem(JOURNAL_KEY, JSON.stringify(next));
+      entriesRef.current = next;
+      setEntries(next);
+    });
+    // A failed operation must not poison the next write queue forever.
+    writeQueue.current = operation.catch(() => {});
+    return operation;
   };
 
-  const addEntry = async (date: string, text: string) => {
+  const addEntry = async (date: string, text: string): Promise<JournalEntry> => {
+    const at = Date.now();
     const entry: JournalEntry = {
-      id: Date.now().toString() + Math.random().toString(36).substr(2, 6),
-      date,
-      text,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+      id: at.toString() + Math.random().toString(36).substr(2, 6),
+      date, text, createdAt: at, updatedAt: at,
     };
-    persist([entry, ...entries]);
+    await persist(current => [entry, ...current]);
     return entry;
   };
 
-  const updateEntry = async (id: string, text: string) => {
-    persist(
-      entries.map((e) => (e.id === id ? { ...e, text, updatedAt: Date.now() } : e))
-    );
+  const updateEntry = async (id: string, text: string): Promise<void> => {
+    await persist(current => current.map(entry =>
+      entry.id === id ? { ...entry, text, updatedAt: Date.now() } : entry
+    ));
   };
 
-  const deleteEntry = async (id: string) => {
-    persist(entries.filter((e) => e.id !== id));
+  const deleteEntry = async (id: string): Promise<void> => {
+    await persist(current => current.filter(entry => entry.id !== id));
   };
 
-  const getEntriesForDate = (date: string) => entries.filter((e) => e.date === date);
+  const getEntriesForDate = (date: string): JournalEntry[] =>
+    entries.filter(entry => entry.date === date);
 
-  const clearAll = async () => {
-    setEntries([]);
-    setHasSeenIntro(false);
-    await AsyncStorage.multiRemove([JOURNAL_KEY, JOURNAL_INTRO_SEEN_KEY]);
+  const clearAll = async (): Promise<void> => {
+    const operation = writeQueue.current.then(async () => {
+      // Wait for all earlier saves. Clearing first would allow an in-flight
+      // save to resurrect data after the user chose Delete Account.
+      await AsyncStorage.multiRemove([JOURNAL_KEY, JOURNAL_INTRO_SEEN_KEY]);
+      entriesRef.current = [];
+      setEntries([]);
+      setHasSeenIntro(false);
+      loadedRef.current = true;
+      setLoadError(null);
+    });
+    writeQueue.current = operation.catch(() => {});
+    await operation;
   };
 
-  const markIntroSeen = async () => {
-    setHasSeenIntro(true);
+  const markIntroSeen = async (): Promise<void> => {
     await AsyncStorage.setItem(JOURNAL_INTRO_SEEN_KEY, "true");
+    setHasSeenIntro(true);
   };
 
   return (
     <JournalContext.Provider
       value={{
-        entries,
-        isLoading,
-        addEntry,
-        updateEntry,
-        deleteEntry,
-        getEntriesForDate,
-        clearAll,
-        hasSeenIntro,
-        markIntroSeen,
+        entries, isLoading, loadError, retryLoad,
+        addEntry, updateEntry, deleteEntry, getEntriesForDate,
+        clearAll, hasSeenIntro, markIntroSeen,
       }}
     >
       {children}

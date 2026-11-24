@@ -173,6 +173,18 @@ func handleAction(
 ) {
   CFPreferencesAppSynchronize(kCFPreferencesCurrentApplication)
 
+  // This system response opens Curfy; it never changes shields, selections,
+  // exceptions, or monitor deadlines. The existing in-app hold remains the
+  // only path to a temporary unlock. No URL-opening extension workaround.
+  if action == .secondaryButtonPressed {
+    if #available(iOS 26.5, *) {
+      completionHandler(.openParentalControlsApp)
+    } else {
+      completionHandler(.none)
+    }
+    return
+  }
+
   if let shieldActionConfig = getActivitySelectionPrefixedConfigFromUserDefaults(
     keyPrefix: SHIELD_ACTIONS_FOR_SELECTION_PREFIX,
     fallbackKey: SHIELD_ACTIONS_KEY,

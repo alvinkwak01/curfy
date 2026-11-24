@@ -1,6 +1,21 @@
-import React, { useEffect, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { StarBackground } from "@/components/StarBackground";
+import { HoldButton } from "@/components/HoldButton";
 import {
+  CurfyAppLabel,
+  readProtectedAppChoices,
+  prepareProtectedAppChoice,
+  type CurfyProtectedAppsSnapshot,
+} from "@/modules/curfy-protected-apps";
+import { selectionIdForMode, type BlockModeId } from "@/lib/screenTime";
+import { Colors, Fonts } from "@/constants/theme";
+import { useSleep } from "@/context/SleepContext";
+import { router, useFocusEffect } from "expo-router";
+import React, { useCallback, useState } from "react";
+import {
+  Alert,
   Platform,
+  ScrollView,
   StatusBar,
   StyleSheet,
   Text,
@@ -8,239 +23,195 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { HoldButton } from "@/components/HoldButton";
-import { StarBackground } from "@/components/StarBackground";
-import { Colors, Fonts } from "@/constants/theme";
-import { useSleep } from "@/context/SleepContext";
 
-function formatTime(date: Date): string {
-  const h = date.getHours().toString().padStart(2, "0");
-  const m = date.getMinutes().toString().padStart(2, "0");
-  return `${h}:${m}`;
-}
+type LockScreenProps = {
+  mode?: "preview" | "escape";
+  /** Leaving never grants access or alters the selected-app shield. */
+  onExit?: () => void;
+  choice?: { index: number; revision: string };
+};
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-  });
-}
+/**
+ * The circular 120-second hold runs inside Curfy, not Apple's shield extension.
+ * A single top-right X is the only exit action. It never unlocks any app.
+ */
+export function LockScreen({ mode = "preview", onExit, choice }: LockScreenProps) {
+  const { unlockScreen, devDismissLock, blockMode } = useSleep();
+  const { top, bottom } = useSafeAreaInsets();
+  const [ticketId, setTicketId] = useState<string | undefined>();
+  const [choiceError, setChoiceError] = useState<string | null>(null);
+  const choiceIndex = choice?.index;
+  const choiceRevision = choice?.revision;
+  const [unlockPending, setUnlockPending] = useState(false);
+  const [isHolding, setIsHolding] = useState(false);
+  const isPreview = mode === "preview";
+  const [protectedApp, setProtectedApp] = useState<CurfyProtectedAppsSnapshot | null>(null);
+  const selectedMode: BlockModeId | null =
+    blockMode === "social" || blockMode === "most" || blockMode === "custom"
+      ? blockMode : null;
 
-function getStreakMessage(streak: number, unlocks: number): string {
-  if (streak === 0 && unlocks === 0) return "First night. Let's see what you've got.";
-  if (streak === 0 && unlocks > 0) return "You broke your streak. Start over. Actually try this time.";
-  if (unlocks > 2) return `${streak}-night streak and you've already escaped tonight. Wow.`;
-  if (unlocks > 0) return `${streak}-night streak. You slipped once. Don't make me say something.`;
-  if (streak >= 30) return `${streak} nights. Genuinely impressive. Don't blow it now.`;
-  if (streak >= 14) return `${streak}-night streak. Okay. I see you.`;
-  if (streak >= 7) return `${streak} nights straight. You're actually doing it.`;
-  if (streak >= 3) return `${streak}-night streak. Don't get comfortable.`;
-  if (streak === 1) return "One night down. Let's make it two.";
-  return `${streak}-night streak. Hold the line.`;
-}
+  useFocusEffect(useCallback(() => {
+    if (isPreview || !selectedMode) {
+      setProtectedApp(null);
+      return;
+    }
+    setTicketId(undefined); setChoiceError(null);
+    try {
+      const snapshot = readProtectedAppChoices(selectionIdForMode(selectedMode));
+      if (choiceRevision !== undefined && choiceRevision !== snapshot.revision) {
+        throw new Error("Your protected apps changed. Choose the app again from Home.");
+      }
+      if (snapshot.count > 1) {
+        if (choiceIndex === undefined || choiceRevision !== snapshot.revision || choiceIndex >= snapshot.count) {
+          throw new Error("Choose one protected app from Home before starting a hold.");
+        }
+        setTicketId(prepareProtectedAppChoice(selectionIdForMode(selectedMode), snapshot.revision, choiceIndex));
+      }
+      setProtectedApp(snapshot);
+    } catch (error) {
+      setChoiceError(error instanceof Error ? error.message : "Choose your protected app again from Home.");
+      // Missing/revoked Screen Time selection: never guess the app name.
+      setProtectedApp(null);
+    }
+  }, [isPreview, selectedMode, choiceIndex, choiceRevision]));
 
-function getStreakEmoji(streak: number): string {
-  if (streak === 0) return "💤";
-  if (streak < 3) return "🌙";
-  if (streak < 7) return "⭐";
-  if (streak < 14) return "🔥";
-  if (streak < 30) return "✨";
-  return "🌟";
-}
-
-export function LockScreen() {
-  const { unlockScreen, todayUnlocks, streak, devDismissLock } = useSleep();
-  const insets = useSafeAreaInsets();
-  const [now, setNow] = useState(new Date());
-
-  useEffect(() => {
-    const interval = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(interval);
-  }, []);
-
-  const topPad = Platform.OS === "web" ? 67 : insets.top;
-  const bottomPad = Platform.OS === "web" ? 34 : insets.bottom;
-
-  const streakMsg = getStreakMessage(streak, todayUnlocks);
-  const emoji = getStreakEmoji(streak);
+  const finishHold = async () => {
+    if (isPreview) {
+      Alert.alert("Preview complete", "This was a preview. No apps were unlocked.");
+      return;
+    }
+    if (choiceError || !protectedApp || (protectedApp.count > 1 && !ticketId)) {
+      throw new Error(choiceError ?? "Choose your protected app again from Home.");
+    }
+    setUnlockPending(true);
+    try {
+      // Only navigate after iOS confirms the protected-app exception.
+      await unlockScreen(ticketId);
+      setUnlockPending(false);
+      router.replace("/(tabs)");
+    } catch (error) {
+      setUnlockPending(false);
+      Alert.alert(
+        "Couldn't unlock selected apps",
+        error instanceof Error ? error.message : "Please try again."
+      );
+      // Propagate failure so the ring resets, rather than faking success.
+      throw error;
+    }
+  };
 
   return (
-    <View style={[styles.container, { paddingTop: topPad + 16, paddingBottom: bottomPad + 16 }]}>
+    <View style={styles.screen}>
       {Platform.OS !== "web" && <StatusBar barStyle="light-content" />}
       <StarBackground />
-
-      {/* Dev-build-only escape hatch — real users never see this, since
-          `__DEV__` compiles to `false` in production. Settings has a
-          "Disable auto-lock" switch, but Settings is unreachable while
-          this modal covers the whole app, so the first-ever dismissal
-          needs a way out that doesn't route through Settings. */}
-      {__DEV__ && (
-        <TouchableOpacity
-          style={[styles.devSkip, { top: topPad + 16 }]}
-          onPress={devDismissLock}
-          hitSlop={10}
-        >
-          <Text style={styles.devSkipText}>DEV: Skip Lock</Text>
-        </TouchableOpacity>
-      )}
-
-      <View style={styles.header}>
+      <ScrollView
+        scrollEnabled={!isHolding}
+        contentContainerStyle={[
+          styles.content,
+          {
+            paddingTop: (Platform.OS === "web" ? 42 : top) + 12,
+            paddingBottom: (Platform.OS === "web" ? 24 : bottom) + 18,
+          },
+        ]}
+        showsVerticalScrollIndicator={false}
+        bounces={false}
+      >
         <View style={styles.topBar}>
-          <View>
-            <Text style={styles.appName}>CURFY</Text>
-            <Text style={styles.tagline}>Bedtime. For real.</Text>
+          <View style={styles.brand}>
+            <Ionicons name="moon-outline" size={18} color={Colors.primaryCyan} />
+            <Text style={styles.brandName}>CURFY</Text>
           </View>
-          {streak > 0 && (
-            <View style={styles.streakPill}>
-              <Text style={styles.streakEmoji}>{emoji}</Text>
-              <Text style={styles.streakCount}>{streak}</Text>
-              <Text style={styles.streakNights}>{streak === 1 ? "night" : "nights"}</Text>
-            </View>
+          {(onExit || __DEV__) && (
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Close unlock screen without unlocking"
+              accessibilityHint="Returns to Curfy. Your app remains protected."
+              disabled={unlockPending}
+              onPress={onExit ?? devDismissLock}
+              activeOpacity={0.7}
+              style={[styles.closeControl, unlockPending && styles.closeDisabled]}
+              hitSlop={10}
+            >
+              <Ionicons name="close" size={23} color={Colors.textPrimary} />
+            </TouchableOpacity>
           )}
         </View>
-      </View>
 
-      <View style={styles.clockSection}>
-        <Text style={styles.time}>{formatTime(now)}</Text>
-        <Text style={styles.date}>{formatDate(now)}</Text>
-      </View>
-
-      <View style={styles.messageSection}>
-        <Text style={styles.streakMessage}>{streakMsg}</Text>
-      </View>
-
-      <View style={styles.buttonSection}>
-        <HoldButton onUnlock={unlockScreen} unlockCount={todayUnlocks} />
-      </View>
-
-      <View style={styles.footer}>
-        <Text style={styles.footerNote}>Returns in 15 min if unlocked</Text>
-        <Text style={styles.callNote}>📞 Incoming calls always come through</Text>
-      </View>
+        <View style={styles.holdArea}>
+          <View style={styles.unlockTitleRow}>
+            <Text style={styles.unlockTitle}>
+              {isPreview ? "Hold preview" : "Unlocking"}
+            </Text>
+            {!isPreview && protectedApp && selectedMode ? (
+              <CurfyAppLabel
+                key={protectedApp.revision}
+                selectionId={selectionIdForMode(selectedMode)}
+                revision={protectedApp.revision}
+                index={protectedApp.count > 1 ? choiceIndex! : 0}
+                style={styles.nativeAppLabel}
+              />
+            ) : !isPreview ? (
+              <Text style={styles.appFallback}>your app</Text>
+            ) : null}
+          </View>
+          {choiceError && !isPreview ? <Text style={styles.appFallback}>{choiceError}</Text> : <HoldButton
+            onUnlock={finishHold}
+            unlockCount={0}
+            onHoldingChange={setIsHolding}
+            idleHint={isPreview
+              ? "Preview only · no app access granted"
+              : "Hold 120s · up to 15 min access"}
+            showIdleMessage={false}
+            showUnlockCount={false}
+          />}
+        </View>
+      </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-    alignItems: "center",
-    justifyContent: "space-between",
+  screen: { flex: 1, backgroundColor: Colors.background },
+  content: {
+    flexGrow: 1,
     paddingHorizontal: 24,
   },
-  header: {
-    width: "100%",
-  },
-  devSkip: {
-    position: "absolute",
-    right: 20,
-    zIndex: 10,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.warningAmber,
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  devSkipText: {
-    color: Colors.warningAmber,
-    fontSize: 11,
-    fontFamily: Fonts.bold,
-    letterSpacing: 0.5,
-  },
   topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    width: "100%",
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    minHeight: 46,
   },
-  appName: {
-    color: Colors.primaryCyan,
-    fontSize: 13,
-    fontFamily: Fonts.bold,
-    letterSpacing: 6,
-    opacity: 0.8,
-  },
-  tagline: {
-    color: Colors.textGhost,
-    fontSize: 10,
-    fontFamily: Fonts.regular,
-    letterSpacing: 1,
-    marginTop: 2,
-  },
-  streakPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-  },
-  streakEmoji: {
-    fontSize: 14,
-  },
-  streakCount: {
-    color: Colors.primaryCyan,
-    fontSize: 15,
-    fontFamily: Fonts.bold,
-  },
-  streakNights: {
-    color: Colors.textMuted,
-    fontSize: 12,
-    fontFamily: Fonts.regular,
-  },
-  clockSection: {
-    alignItems: "center",
-    gap: 6,
-  },
-  time: {
+  brand: { flexDirection: "row", alignItems: "center", gap: 9 },
+  brandName: {
+    fontFamily: Fonts.bold, fontSize: 12, letterSpacing: 3.1,
     color: Colors.textPrimary,
-    fontSize: 64,
-    fontFamily: Fonts.bold,
-    letterSpacing: -2,
   },
-  date: {
-    color: Colors.textMuted,
-    fontSize: 15,
-    fontFamily: Fonts.regular,
-    letterSpacing: 0.3,
+  closeControl: {
+    width: 44, height: 44, borderRadius: 22,
+    borderWidth: 1, borderColor: "#373954",
+    backgroundColor: "rgba(22,24,44,0.82)",
+    alignItems: "center", justifyContent: "center",
   },
-  messageSection: {
-    alignItems: "center",
-    gap: 12,
-    paddingHorizontal: 20,
+  closeDisabled: { opacity: 0.4 },
+  holdArea: {
+    flexGrow: 1, minHeight: 300,
+    alignItems: "center", justifyContent: "center",
+    paddingBottom: 35, gap: 30,
   },
-  streakMessage: {
-    color: "#8A8ABF",
-    fontSize: 14,
-    fontFamily: Fonts.regular,
-    textAlign: "center",
-    lineHeight: 20,
+  unlockTitleRow: {
+    alignSelf: "stretch", flexDirection: "row",
+    alignItems: "center", justifyContent: "center",
+    paddingHorizontal: 4, gap: 9, minHeight: 37,
   },
-  buttonSection: {
-    alignItems: "center",
+  unlockTitle: {
+    color: Colors.textPrimary, fontFamily: Fonts.semiBold,
+    fontSize: 23, letterSpacing: -0.45,
   },
-  footer: {
-    alignItems: "center",
-    gap: 6,
+  nativeAppLabel: {
+    flex: 1, minWidth: 0, height: 36,
+    maxWidth: 215,
   },
-  footerNote: {
-    color: Colors.textGhost,
-    fontSize: 12,
-    fontFamily: Fonts.regular,
-    textAlign: "center",
-    letterSpacing: 0.3,
-  },
-  callNote: {
-    color: Colors.textGhost,
-    fontSize: 11,
-    fontFamily: Fonts.regular,
-    textAlign: "center",
-    letterSpacing: 0.2,
+  appFallback: {
+    color: Colors.primaryCyan, fontFamily: Fonts.medium,
+    fontSize: 20, flexShrink: 1,
   },
 });

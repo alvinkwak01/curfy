@@ -1,0 +1,136 @@
+{
+  "reviewDate": "2026-11-11",
+  "scope": "Installed locked native SDK manifests; archive aggregation still requires inspection",
+  "manifests": [
+    {
+      "path": "@react-native-async-storage/async-storage/ios/PrivacyInfo.xcprivacy",
+      "requiredReasons": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "C617.1"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "expo/node_modules/expo-file-system/ios/PrivacyInfo.xcprivacy",
+      "requiredReasons": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "0A2A.1",
+            "3B52.1"
+          ]
+        },
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryDiskSpace",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "E174.1",
+            "85F4.1"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "expo-application/ios/PrivacyInfo.xcprivacy",
+      "requiredReasons": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "C617.1"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "expo-constants/ios/PrivacyInfo.xcprivacy",
+      "requiredReasons": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "CA92.1"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "expo-notifications/ios/PrivacyInfo.xcprivacy",
+      "requiredReasons": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "CA92.1"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "react-native/React/Resources/PrivacyInfo.xcprivacy",
+      "requiredReasons": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "C617.1"
+          ]
+        },
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "CA92.1"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "react-native/ReactCommon/cxxreact/PrivacyInfo.xcprivacy",
+      "requiredReasons": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "C617.1"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "react-native/third-party-podspecs/RCT-Folly/PrivacyInfo.xcprivacy",
+      "requiredReasons": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "C617.1"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "react-native/third-party-podspecs/boost/PrivacyInfo.xcprivacy",
+      "requiredReasons": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "C617.1"
+          ]
+        },
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategorySystemBootTime",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "35F9.1"
+          ]
+        }
+      ]
+    },
+    {
+      "path": "react-native/third-party-podspecs/glog/PrivacyInfo.xcprivacy",
+      "requiredReasons": [
+        {
+          "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryFileTimestamp",
+          "NSPrivacyAccessedAPITypeReasons": [
+            "C617.1"
+          ]
+        }
+      ]
+    }
+  ]
+}
