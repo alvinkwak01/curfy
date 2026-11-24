@@ -1,5 +1,5 @@
 # Curfy — current release gates
-Updated 2026-11-11. Draft PR #2, `feat/ios-shield-from-august` → `backup/local-curfy-august`. Read CURRENT_HANDOFF.md first. Historical checkpoints remain in Git and the handoff; this register describes current evidence only.
+Updated 2026-11-24. Draft PR #2, `feat/ios-shield-from-august` → `backup/local-curfy-august`. Read CURRENT_HANDOFF.md first. Historical checkpoints remain in Git and the handoff; this register describes current evidence only.
 
 **NOT App Store-ready. No signed candidate has been requested.**
 
@@ -15,9 +15,9 @@ Updated 2026-11-11. Draft PR #2, `feat/ios-shield-from-august` → `backup/local
 | Leaderboard consent | Disclosure before uploads, leave/retry preserves local protection/history, provider tests PASS | Actual signed app consent/leave/rejoin and legacy-state matrix |
 | Public profile privacy | Deployed RLS and own-write predicates, full-profile public SELECT, auth→profile cascade verified | Live client privileges narrowed and verified: anon SELECT; authenticated SELECT/INSERT/UPDATE. Final retention/App Privacy and signed-app acceptance remain |
 | Family Controls distribution | Apple portal shows Distribution ENABLED for main, ShieldAction, ShieldConfiguration and ActivityMonitor under team H735Q3WW8K | Portal has Ad Hoc profiles for four targets; main active through 2027/01/07 with capability. No Curfy App Store profile visible. Verify all signed entitlements/App Group and prepare correct distribution profiles |
-| App Store record/name | Curfy is absent from current team app list. Creation attempt rejected: name “Curfy” already in use | Owner submitted Apple support case 30000010262818; await investigation. No rename approved; no app record/product created |
-| Apple agreements | Owner reports updated Developer Program agreement accepted on 2026-11-09; Paid Apps, banking, tax and DSA verified Active | Apple session expired; fresh owner sign-in needed to recheck portal notice clearance |
-| StoreKit setup | Source ID com.alvinkwak.curfy.premium; approved $5.99 USD non-consumable | Create/verify product after app record; localized metadata, price, review screenshot and sandbox test |
+| App Store record/name | Owner-approved Curfy: Bedtime. For real. accepted; app ID 6838811413 created Nov 24, Prepare for Submission | Name setup gate closed; app branding/bundle unchanged. Final metadata and release checks remain |
+| Apple agreements | Developer portal explicitly shows updated agreement accepted Nov 9, verified Nov 24; Paid Apps/banking/tax/DSA previously Active | Recheck commercial status at final submission; no legal acceptance by agent |
+| StoreKit setup | Non-Consumable product 6838811684 created; source ID com.alvinkwak.curfy.premium matches; $5.99 US base price and English name/description saved | Availability pending owner territories; actual review screenshot, app-version submission and signed sandbox acceptance still required |
 | Privacy manifests | App-group defaults reason added to all four targets; generated resource checks PASS; all three unsigned Release simulator extension bundles contain manifest | Ten SDK manifests reviewed/aggregated and linked nontracking data disclosures added; all four built simulator bundle manifests checked. Signed archive report/provider retention/App Store validation remain |
 | Privacy/support | Draft pages prepared; verified backend facts updated | Owner supplied sleepingcurfy@gmail.com; added to drafts. Remaining: operator confirmation, retention details, published URLs, in-app policy link and mailbox delivery check |
 | Accessibility/design | Existing Welcome + nine steps, ring, branding and 120-second hold preserved | VoiceOver, large text, Reduce Motion, small iPhone; explicit hold accommodation decision |
@@ -26,6 +26,6 @@ Updated 2026-11-11. Draft PR #2, `feat/ios-shield-from-august` → `backup/local
 ## Controls
 No EAS development builds, paid action, main merge or submission without the required explicit authorization. Complete applicable code and external preflight first, then propose ONE consolidated signed candidate. No unsigned/mocked result passes a signed-device gate.
 
-Team H735Q3WW8K. App `com.alvinkwak.curfy`; extensions `.ShieldConfiguration`, `.ShieldAction`, `.ActivityMonitor`. App Group `group.com.alvinkwak.curfy` (observed assigned to ActivityMonitor; all four show App Groups enabled, remaining exact assignments require verification).
+Team H735Q3WW8K. App `com.alvinkwak.curfy`; extensions `.ShieldConfiguration`, `.ShieldAction`, `.ActivityMonitor`. App Group `group.com.alvinkwak.curfy` (exact assignment observed for main and ActivityMonitor previously, and ShieldAction/ShieldConfiguration on Nov 24; all four verified).
 
 Evidence: `docs/release-evidence/deletion-live-2026-11-09.json`, `RELEASE_PREFLIGHT_EVIDENCE.md`, current `CURRENT_HANDOFF.md`. Device test package: `CONSOLIDATED_DEVICE_ACCEPTANCE.md`; submission draft: `APP_STORE_SUBMISSION_PACKAGE.md`.

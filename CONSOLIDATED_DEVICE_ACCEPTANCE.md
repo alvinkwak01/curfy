@@ -1,5 +1,5 @@
 # Curfy — one consolidated signed-device acceptance
-Updated 2026-11-07. ALL rows below are NOT TESTED on the new code. Source mocks and unsigned simulator compilation do not pass these gates.
+Updated 2026-11-24. ALL rows below are NOT TESTED on the new code. Source mocks and unsigned simulator compilation do not pass these gates.
 
 ## Before authorizing a signed build
 After prebuild, run `node scripts/verify-ios-privacy.cjs` and inspect the signed archive privacy report. Run `node scripts/verify-ios-sdk.cjs` on the selected Xcode (SDK26.5+ required). This read-only check does not authorize a build. Record exact Git SHA, version/build, iPhone model/iOS, Apple Team, four approved distribution entitlements/profiles, App Group, configured non-consumable product, verified test backend, policy/support URL and tester. Keep PR #2 draft. No EAS request until code checks and external preflight are complete; explicit user approval required.
@@ -24,7 +24,7 @@ After prebuild, run `node scripts/verify-ios-privacy.cjs` and inspect the signed
 | Time/device | Midnight, cutoff, repeated day, reboot, force-quit, offline, time-zone/manual-clock change, DST. No unbounded restriction or stale next-day reblock. |
 | Consent | Fresh/legacy session uploads nothing before disclosure. Not now preserves local protection/history. Join creates one profile and syncs automatically. New onboarding appearance remains intact. |
 | Leave/rejoin | Leave pauses uploads, removes cloud profile/auth, preserves local history/journal/native protection/Premium. Offline failure says pending removal and can retry across restart. Withdrawal during signup cannot orphan a new identity. |
-| Deletion interruptions | Block candidate until authenticated lost-response recovery is implemented. Then drop a successful server response; terminate before saving the receipt; retry with invalidated/expired session; reject forged recovery proof. Fail `leaving`, receipt-removal and `declined` writes independently; restart must not recreate a profile. Failed final cleanup retains a visible retry. |
+| Deletion interruptions | Recovery is implemented and backend-tested; signed-device proof remains required. Drop a successful server response; terminate before saving the receipt; retry with invalidated/expired session; reject forged recovery proof. Fail `leaving`, receipt-removal and `declined` writes independently; restart must not recreate a profile. Failed final cleanup retains a visible retry. |
 | Delete Everything | Authenticated backend removes only caller; cascade verified. Remote failure retains local state. Native stop/clear failure preserves recovery. Retry after server success/local signout failure works. |
 | Accessibility | Small iPhone and largest Dynamic Type; new disclosure scrolls; native app names distinguish rows with VoiceOver; controls reachable; Reduce Motion; approved hold accommodation verified. |
 | Public metadata | Actual privacy/support links, App Privacy responses, screenshots and Review Notes match signed build. No health or whole-phone-locking claims. |

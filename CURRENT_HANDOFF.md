@@ -1,6 +1,6 @@
 # Curfy — current handoff (read first)
 
-Updated 2026-11-11. This replaces the long, contradictory historical handoff; prior versions remain in Git history. Do not restart or redesign the app.
+Updated 2026-11-24. This replaces the long, contradictory historical handoff; prior versions remain in Git history. Do not restart or redesign the app.
 
 ## Branch and checkpoint
 - Repository: `alvinkwak01/curfy`; draft [PR #2](https://github.com/alvinkwak01/curfy/pull/2).
@@ -11,6 +11,15 @@ Updated 2026-11-11. This replaces the long, contradictory historical handoff; pr
 - **NOT App Store-ready. No signed candidate built, no EAS initiated, no paid cloud build, no device/purchase/backend claims.**
 
 Latest checkpoint: **120518d69f4e9ff9a347194beaaec292d672414c**; [GitHub CI 43071652613](https://github.com/alvinkwak01/curfy/actions/runs/43071652613) SUCCESS. PR #2 remains draft and mergeable; no merge performed. All source/backend changes described below are saved on the PR branch. Waiting for owner Apple sign-in and public contact/operator answer; no background work promised.
+
+## App Store record and Premium created — 2026-11-24 (current)
+- Owner explicitly approved App Store listing title **Curfy: Bedtime. For real.**; Home Screen/in-app Curfy branding and bundle ID remain unchanged. Apple accepted creation: app ID **6838811413**, iOS, English (U.S.), SKU curfy-ios-001, Limited Access (owner/admin retained). Status Prepare for Submission. https://appstoreconnect.apple.com/apps/6838811413/distribution
+- Created **Curfy Premium**, type Non-Consumable, product ID **com.alvinkwak.curfy.premium**, Apple product ID **6838811684**. Saved United States base price **$5.99**, Apple-equivalent other storefront prices, English (U.S.) name Curfy Premium and description “Protect multiple apps. One-time purchase.” Availability remains unset pending territory choice. No review submission, purchase, Family Sharing enablement or public release.
+- Naming no longer blocks setup. Original support case 30000010262818 (Nov 9) and follow-up 30000018671539 (Nov 17) have only acknowledgment emails found as of Nov 24. No additional follow-up required to proceed with accepted title.
+- Verified exact group.com.alvinkwak.curfy selected for ShieldAction and ShieldConfiguration; both still show Family Controls Distribution enabled. Combined with prior main/ActivityMonitor observations, all four exact assignments have now been inspected. No capability changes. Signed profiles/archive remain unverified.
+- Developer account explicitly lists updated Program License Agreement issued Oct 29, 2026, **accepted Nov 9, 2026**. Agreement acceptance gate closed; no agreement accepted by agent.
+- Live PR #2 and local HEAD verified c80894ed0f9731f838a24a24e8732a25319d338d before this slice. Source product constant matches created product; app.json name remains Curfy. Documentation-only changes; prior 374-test/native evidence is unchanged, not rerun.
+- Asked owner to confirm public operator “Alvin Kwak” and launch territories. sleepingcurfy@gmail.com already authorized; do not ask for it again. Remaining: public policy/support hosting and retention review, IAP availability/review screenshot, matching App Store profiles, signed device/purchase/accessibility acceptance and final metadata. No EAS, paid action, main merge, build or submission.
 
 ## Owner contact and renewed access — 2026-11-11
 - Owner supplied **sleepingcurfy@gmail.com** in response to the public support/privacy contact request. Authorized for public-facing drafts; added mailto links to support and privacy drafts. No credentials received and mailbox delivery not tested. No domain purchase required.
@@ -170,12 +179,12 @@ Latest checkpoint: **120518d69f4e9ff9a347194beaaec292d672414c**; [GitHub CI 4307
 `app/(tabs)/index.tsx`, `app/_layout.tsx`, `app/escape.tsx`, `app/settings.tsx`; `components/LockScreen.tsx`, new `components/PremiumSettings.tsx`, new `components/LeaderboardConsent.tsx`; `context/AuthContext.tsx`, `context/PremiumContext.tsx`, `context/SleepContext.tsx`; `lib/screenTime.ts`, `lib/premiumAppException.ts`, `lib/premiumExceptionRecovery.ts`, `lib/premiumStore.ts`, new `lib/premiumProtection.ts`, new `lib/protectionOperation.ts`; `targets/ActivityMonitorExtension/DeviceActivityMonitorExtension.swift`; tests `premiumAppException`, `premiumExceptionRecovery`, `protectedAppChoices`, `remoteDeletionRecovery`, `screenTimeException`, `uxArchitecture`, and new `premiumHoldRoute`, `premiumProtection`, `premiumProvider`.
 
 ## Remaining release blockers / next work
-1. Await Apple support case **30000010262818** for listing-name conflict; owner has not approved a rename. Recheck agreement notice after owner-reported acceptance.
+1. App record/title and agreement are now verified; finish IAP availability/review screenshot and remaining submission metadata. See November 24 evidence above.
 2. Finish exact App Group/profile inspection and signed distribution preparation for all four targets; distribution capabilities already verified enabled.
 3. Complete backend least-privilege and privacy/SDK/retention review. Recovery and legacy deletion endpoints are already deployed with 18 live checks; do not repeat setup.
 4. Confirm a real monitored public contact/operator and publish approved privacy/support pages before adding real in-app links. A paid domain is not required for this preparation.
 5. Resolve explicit accessibility accommodation and test VoiceOver/Dynamic Type/Reduce Motion without silently changing the 120-second mechanic.
-6. Once an app record exists, configure the approved one-time StoreKit product and prepare sandbox acceptance.
+6. Product now exists with approved price and English metadata; complete availability/review screenshot and prepare sandbox acceptance.
 7. Use CONSOLIDATED_DEVICE_ACCEPTANCE.md and APP_STORE_SUBMISSION_PACKAGE.md. Complete applicable preflight before proposing one signed candidate. No EAS/paid action/main merge/publication without required approval.
 
 ## Handoff discipline
