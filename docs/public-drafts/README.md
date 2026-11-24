@@ -1,4 +1,4 @@
-> Superseded November 24, 2026: public support/privacy pages are live at https://curfy-support.alvin-kwak.chatgpt.site . These markdown drafts are historical. Current website source is the sibling curfy-public-site checkout, Sites project appgprj_6b05bfa776008191b59230eb5d0b2b71; see CURRENT_HANDOFF.md before editing.
+> Superseded November 24, 2026: public support/privacy pages are live at https://curfy-support.pages.dev . These markdown drafts are historical. Current website source is the sibling curfy-public-site checkout, Sites project appgprj_6b05bfa776008191b59230eb5d0b2b71; see CURRENT_HANDOFF.md before editing.
 
 # Curfy public-page preparation — 2026-11-07
 

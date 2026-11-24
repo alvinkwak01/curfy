@@ -12,6 +12,12 @@ Updated 2026-11-24. This replaces the long, contradictory historical handoff; pr
 
 Latest checkpoint: **120518d69f4e9ff9a347194beaaec292d672414c**; [GitHub CI 43071652613](https://github.com/alvinkwak01/curfy/actions/runs/43071652613) SUCCESS. PR #2 remains draft and mergeable; no merge performed. All source/backend changes described below are saved on the PR branch. See latest audit below for current decisions and remaining work; no background work promised.
 
+## Name-free hosting migration — 2026-11-24 (latest)
+- Owner revoked temporary personal-name hostname approval. Published unchanged Curfy design to https://curfy-support.pages.dev/ using Cloudflare Pages Direct Upload, project curfy-support, account 14701ae3cac2791c0c6f5ba161f2dae4. No purchase or paid upgrade.
+- Current support/privacy URLs use /support/ and /privacy/ on that origin; Apple URLs saved and verified, Settings constants updated. Legal operator name remains only in privacy policy as authorized. Hosting disclosure now says Cloudflare Pages.
+- Old Sites project appgprj_6b05bfa776008191b59230eb5d0b2b71 is owner-only (custom, no other viewers/groups), NOT public. Do not republish or restore public access. Historical URLs below are superseded.
+- Deployment source preserved in website/ in this repository. Upload its contents (not the parent folder) to the existing Cloudflare Pages project for future updates. No app screen/design changes, no build/submission/main merge.
+
 ## Public support/privacy launch — 2026-11-24 (latest)
 - Owner explicitly allowed personal-name-containing free hostname temporarily, and “Alvin Kwak, operating Curfy” in the privacy legal section only. Brand and public support remain Curfy / sleepingcurfy@gmail.com.
 - Published public Sites version 1, project appgprj_6b05bfa776008191b59230eb5d0b2b71, deployment appgdep_6b05c1271aa88191a062eb1acd598326 SUCCEEDED. Site source commit 753b3bb3ff438dbc6b96b6d84a496771bb4db60d in sibling curfy-public-site. Reuse its manifest/project and source repository, do not create another.
